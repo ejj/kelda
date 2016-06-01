@@ -5,16 +5,17 @@ import "errors"
 // The Minion table is instantiated on the minions with one row.  That row contains the
 // configuration that minion needs to operate, including its ID, Role, and IP address
 type Minion struct {
-	ID int
+	ID int `json:"-"`
 
+	Self bool   `json:"-"`
+	Spec string `json:"-"`
+
+	// Below fields are included in the JSON encoding.
 	Role      Role
 	PrivateIP string
-	Spec      string
-	Self      bool
-
-	Provider string
-	Size     string
-	Region   string
+	Provider  string
+	Size      string
+	Region    string
 }
 
 // InsertMinion creates a new Minion and inserts it into 'db'.
@@ -87,4 +88,17 @@ func (m Minion) String() string {
 
 func (m Minion) less(r row) bool {
 	return m.ID < r.(Minion).ID
+}
+
+// MinionSlice is an alias for []Minion to allow for joins
+type MinionSlice []Minion
+
+// Get returns the value contained at the given index
+func (m MinionSlice) Get(ii int) interface{} {
+	return m[ii]
+}
+
+// Len returns the number of items in the slice
+func (m MinionSlice) Len() int {
+	return len(m)
 }

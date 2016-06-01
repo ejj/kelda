@@ -15,7 +15,8 @@ func Run(conn db.Conn) {
 	createMinionDir(store)
 
 	go runElection(conn, store)
-	runNetwork(conn, store)
+	go runNetwork(conn, store)
+	runMinionSync(conn, store)
 }
 
 func createMinionDir(store Store) {

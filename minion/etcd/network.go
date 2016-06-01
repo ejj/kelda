@@ -175,7 +175,7 @@ func updateEtcdContainer(s Store, etcdData storeData, containers []db.Container)
 		return etcdData, nil
 	}
 
-	if err := s.Set(containerStore, string(dbContainers)); err != nil {
+	if err := s.Set(containerStore, string(dbContainers), 0); err != nil {
 		return etcdData, err
 	}
 
@@ -247,7 +247,7 @@ func updateEtcdLabel(s Store, etcdData storeData, containers []db.Container) (st
 	}
 
 	newLabelJSON, _ := json.Marshal(newMultiHosts)
-	if err := s.Set(labelToIPStore, string(newLabelJSON)); err != nil {
+	if err := s.Set(labelToIPStore, string(newLabelJSON), 0); err != nil {
 		return etcdData, err
 	}
 

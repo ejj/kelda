@@ -47,7 +47,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	}
 
 	testContainers, _ := json.Marshal(cs)
-	err := store.Set(containerStore, string(testContainers))
+	err := store.Set(containerStore, string(testContainers), 0)
 	if err != nil {
 		t.Fatal("Failed to write to store.")
 	}
@@ -113,7 +113,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	})
 
 	badTestContainers, _ := json.Marshal(badEtcdSlice)
-	err = store.Set(containerStore, string(badTestContainers))
+	err = store.Set(containerStore, string(badTestContainers), 0)
 	if err != nil {
 		t.Fatalf("Failed to write to store.")
 	}
@@ -175,7 +175,7 @@ func TestUpdateEtcdLabel(t *testing.T) {
 
 	labelStruct := map[string]string{}
 	testLabel, _ := json.Marshal(labelStruct)
-	err := store.Set(labelToIPStore, string(testLabel))
+	err := store.Set(labelToIPStore, string(testLabel), 0)
 	if err != nil {
 		t.Fatal("Failed to write to store.")
 	}
@@ -215,7 +215,7 @@ func TestUpdateEtcdLabel(t *testing.T) {
 	// Label 2 is now multhost, so if etcd knows that, it should get etcd's ip
 	labelStruct["2"] = "10.1.0.11"
 	testLabel, _ = json.Marshal(labelStruct)
-	err = store.Set(labelToIPStore, string(testLabel))
+	err = store.Set(labelToIPStore, string(testLabel), 0)
 	if err != nil {
 		t.Fatal("Failed to write to store.")
 	}

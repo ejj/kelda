@@ -19,7 +19,7 @@ type Store interface {
 	Delete(path string) error
 	Create(path, value string, ttl time.Duration) error
 	Update(path, value string, ttl time.Duration) error
-	Set(path, value string) error
+	Set(path, value string, ttl time.Duration) error
 }
 
 type store struct {
@@ -130,12 +130,11 @@ func (s store) Create(path, value string, ttl time.Duration) error {
 }
 
 func (s store) Update(path, value string, ttl time.Duration) error {
-	_, err := s.kapi.Set(ctx(), path, value,
-		&client.SetOptions{PrevExist: client.PrevExist, TTL: ttl})
+	_, err := s.kapi.Set(ctx(), path, value, &client.SetOptions{TTL: ttl})
 	return err
 }
 
-func (s store) Set(path, value string) error {
+func (s store) Set(path, value string, ttl time.Duration) error {
 	_, err := s.kapi.Set(ctx(), path, value, nil)
 	return err
 }

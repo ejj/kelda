@@ -170,7 +170,7 @@ func (m mock) Delete(path string) error {
 	return nil
 }
 
-func (m mock) Set(path, value string) error {
+func (m mock) Set(path, value string, ttl time.Duration) error {
 	m.Lock()
 	defer m.Unlock()
 

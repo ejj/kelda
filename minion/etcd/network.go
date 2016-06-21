@@ -40,12 +40,16 @@ type storeData struct {
 }
 
 type storeContainer struct {
-	DockerID string
 	StitchID int
-	IP       string
-	Command  []string
-	Labels   []string
-	Env      map[string]string
+
+	Minion  string
+	Image   string
+	Command []string
+	Env     map[string]string
+
+	Labels []string
+
+	IP string
 }
 
 type storeContainerSlice []storeContainer
@@ -95,7 +99,7 @@ func runNetwork(conn db.Conn, store Store) {
 		conn.Transact(func(view db.Database) error {
 			leader = view.EtcdLeader()
 			containers = view.SelectFromContainer(func(c db.Container) bool {
-				return c.DockerID != ""
+				return c.Minion != ""
 			})
 
 			// It would likely be more efficient to perform the etcd write
@@ -110,9 +114,15 @@ func runNetwork(conn db.Conn, store Store) {
 					log.WithError(err).Error("Etcd update failed.")
 					return nil
 				}
+
+				updateLeaderDBC(view, containers, etcdData)
 			}
 
-			updateDBContainers(view, etcdData)
+			minion, err := view.MinionSelf()
+			if err == nil && minion.Role == db.Worker {
+				updateWorkerDBC(view, etcdData)
+			}
+
 			updateDBLabels(view, etcdData)
 			return nil
 		})
@@ -137,8 +147,8 @@ func readEtcd(store Store) (storeData, error) {
 	return storeData{etcdContainerSlice, multiHostMap}, err
 }
 
-func updateEtcd(s Store, etcdData storeData, containers []db.Container) (storeData,
-	error) {
+func updateEtcd(s Store, etcdData storeData,
+	containers []db.Container) (storeData, error) {
 
 	if etcdData, err := updateEtcdContainer(s, etcdData, containers); err != nil {
 		return etcdData, err
@@ -157,16 +167,17 @@ func updateEtcdContainer(s Store, etcdData storeData, containers []db.Container)
 	dbContainerSlice := []storeContainer{}
 	for _, c := range containers {
 		sc := storeContainer{
-			DockerID: c.DockerID,
 			StitchID: c.StitchID,
-			IP:       "",
+			Minion:   c.Minion,
+			Image:    c.Image,
 			Command:  c.Command,
 			Labels:   c.Labels,
 			Env:      c.Env,
+			IP:       "",
 		}
 		dbContainerSlice = append(dbContainerSlice, sc)
 	}
-	dbContainerSlice = updateEtcdIPs(etcdData, dbContainerSlice)
+	dbContainerSlice = updateContainerIPs(etcdData, dbContainerSlice)
 	sort.Sort(storeContainerSlice(dbContainerSlice))
 
 	dbContainers, _ := json.Marshal(dbContainerSlice)
@@ -183,25 +194,28 @@ func updateEtcdContainer(s Store, etcdData storeData, containers []db.Container)
 	return etcdData, nil
 }
 
-func updateEtcdIPs(etcdData storeData, dbContainers []storeContainer) []storeContainer {
+func updateContainerIPs(etcdData storeData,
+	dbContainers []storeContainer) []storeContainer {
+
+	score := func(left, right interface{}) int {
+		return containerJoinScore(left.(storeContainer), right.(storeContainer))
+	}
+	pairs, _, _ := join.Join(dbContainers, etcdData.containers, score)
 
 	newIPMap := map[string]string{}
 	for _, c := range dbContainers {
-		newIPMap[c.DockerID] = ""
+		newIPMap[string(c.StitchID)] = ""
 	}
 
-	// Etcd is the source of truth for IPs, so sync the DB and ensure that it is up
-	// to date. It's simpler to update the db since it may have containers that etcd
-	// doesn't know about.
-	for _, c := range etcdData.containers {
-		if _, ok := newIPMap[c.DockerID]; ok {
-			newIPMap[c.DockerID] = c.IP
-		}
+	for _, pair := range pairs {
+		dbc := pair.L.(storeContainer)
+		sdc := pair.R.(storeContainer)
+		newIPMap[string(dbc.StitchID)] = sdc.IP
 	}
+
 	syncIPs(newIPMap, net.IPv4(10, 0, 0, 0))
-
 	for i := range dbContainers {
-		dbContainers[i].IP = newIPMap[dbContainers[i].DockerID]
+		dbContainers[i].IP = newIPMap[string(dbContainers[i].StitchID)]
 	}
 
 	return dbContainers
@@ -255,44 +269,65 @@ func updateEtcdLabel(s Store, etcdData storeData, containers []db.Container) (st
 	return etcdData, nil
 }
 
-func updateDBContainers(view db.Database, etcdData storeData) {
-	minion, err := view.MinionSelf()
-	worker := err == nil && minion.Role == db.Worker
-
-	etcdKey := func(sc interface{}) interface{} {
-		return sc.(storeContainer).DockerID
-	}
-	dbKey := func(c interface{}) interface{} {
-		return c.(db.Container).DockerID
+func updateLeaderDBC(view db.Database, dbcs []db.Container, etcdData storeData) {
+	ipMap := map[int]string{}
+	for _, etcdc := range etcdData.containers {
+		ipMap[etcdc.StitchID] = etcdc.IP
 	}
 
-	pairs, dbcs, _ := join.HashJoin(db.ContainerSlice(view.SelectFromContainer(nil)),
-		storeContainerSlice(etcdData.containers), dbKey, etcdKey)
-
-	// If etcd hasn't heard of the container, clear its IP
 	for _, dbc := range dbcs {
-		c := dbc.(db.Container)
-		c.IP = ""
-		view.Commit(c)
+		ip := ipMap[dbc.StitchID]
+		mac := macFromIP(ip)
+		if dbc.IP != ip || dbc.Mac != mac {
+			dbc.IP = ip
+			dbc.Mac = mac
+			view.Commit(dbc)
+		}
+	}
+}
+
+func updateWorkerDBC(view db.Database, etcdData storeData) {
+	pairs, dbcs, etcdcs := join.Join(
+		view.SelectFromContainer(nil),
+		etcdData.containers,
+		func(left, right interface{}) int {
+			dbc := left.(db.Container)
+			l := storeContainer{
+				StitchID: dbc.StitchID,
+				Minion:   dbc.Minion,
+				Image:    dbc.Image,
+				Command:  dbc.Command,
+				Env:      dbc.Env,
+				Labels:   dbc.Labels,
+				IP:       dbc.IP,
+			}
+			return containerJoinScore(l, right.(storeContainer))
+		})
+
+	for _, i := range dbcs {
+		dbc := i.(db.Container)
+		view.Remove(dbc)
+	}
+
+	for _, etcdc := range etcdcs {
+		pairs = append(pairs, join.Pair{
+			L: view.InsertContainer(),
+			R: etcdc,
+		})
 	}
 
 	for _, pair := range pairs {
 		dbc := pair.L.(db.Container)
 		etcdc := pair.R.(storeContainer)
 
-		// Workers and masters get their IP from Etcd
+		dbc.StitchID = etcdc.StitchID
+		dbc.Minion = etcdc.Minion
+		dbc.Image = etcdc.Image
+		dbc.Command = etcdc.Command
+		dbc.Env = etcdc.Env
+		dbc.Labels = etcdc.Labels
 		dbc.IP = etcdc.IP
-		ip := net.ParseIP(dbc.IP).To4()
-		if ip != nil {
-			dbc.Mac = fmt.Sprintf("02:00:%02x:%02x:%02x:%02x", ip[0], ip[1],
-				ip[2], ip[3])
-		}
-
-		// Workers get their info from Etcd
-		if worker {
-			dbc.Labels = etcdc.Labels
-			dbc.StitchID = etcdc.StitchID
-		}
+		dbc.Mac = macFromIP(dbc.IP)
 
 		view.Commit(dbc)
 	}
@@ -344,6 +379,24 @@ func updateDBLabels(view db.Database, etcdData storeData) {
 
 		view.Commit(dbl)
 	}
+}
+
+func containerJoinScore(left, right storeContainer) int {
+	if left.Minion != right.Minion ||
+		left.Image != right.Image ||
+		!util.StrSliceEqual(left.Command, right.Command) ||
+		!util.StrStrMapEqual(left.Env, right.Env) {
+		return -1
+	}
+
+	score := util.EditDistance(left.Labels, right.Labels)
+	if left.IP != right.IP {
+		score += 10
+	}
+	if left.StitchID != right.StitchID {
+		score++
+	}
+	return score
 }
 
 // syncIPs takes a map of IDs to IPs and creates an IP address for every entry that's
@@ -408,18 +461,24 @@ func randomIP(conflicts map[uint32]struct{}, prefix, mask uint32) uint32 {
 	return 0
 }
 
+func macFromIP(ipStr string) string {
+	parsedIP := net.ParseIP(ipStr)
+	if parsedIP == nil {
+		return ""
+	}
+
+	ip := parsedIP.To4()
+	return fmt.Sprintf("02:00:%02x:%02x:%02x:%02x", ip[0], ip[1], ip[2], ip[3])
+}
+
 func (cs storeContainerSlice) Len() int {
 	return len(cs)
 }
 
 func (cs storeContainerSlice) Less(i, j int) bool {
-	return cs[i].DockerID < cs[j].DockerID
+	return cs[i].StitchID < cs[j].StitchID
 }
 
 func (cs storeContainerSlice) Swap(i, j int) {
 	cs[i], cs[j] = cs[j], cs[i]
-}
-
-func (cs storeContainerSlice) Get(i int) interface{} {
-	return cs[i]
 }

@@ -28,7 +28,7 @@ func main() {
 	dk := docker.New("unix:///var/run/docker.sock")
 	go minionServerRun(conn)
 	go supervisor.Run(conn, dk)
-	go scheduler.Run(conn)
+	go scheduler.Run(conn, dk)
 	go network.Run(conn, dk)
 	go etcd.Run(conn)
 

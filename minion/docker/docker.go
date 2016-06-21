@@ -16,30 +16,6 @@ import (
 	dkc "github.com/fsouza/go-dockerclient"
 )
 
-const (
-	// The root namespace for all labels
-	labelBase = "q."
-
-	// This is the namespace for user defined labels
-	userLabelPrefix = labelBase + "user.label."
-
-	// This is the namespace for system defined labels
-	systemLabelPrefix = labelBase + "system.label."
-
-	// LabelTrueValue is needed because a label has to be a key/value pair, hence
-	// this is the value that will be used if we're only interested in the key
-	LabelTrueValue = "1"
-
-	// SchedulerLabelKey is the key, used by the scheduler.
-	SchedulerLabelKey = systemLabelPrefix + "Quilt"
-
-	// SchedulerLabelValue is the value, used by the scheduler.
-	SchedulerLabelValue = "Scheduler"
-
-	// SchedulerLabelPair is the key/value pair, used by the scheduler.
-	SchedulerLabelPair = SchedulerLabelKey + "=" + SchedulerLabelValue
-)
-
 // ErrNoSuchContainer is the error returned when an operation is requested on a
 // non-existent container.
 var ErrNoSuchContainer = errors.New("container does not exist")
@@ -73,7 +49,7 @@ type RunOptions struct {
 	Image  string
 	Args   []string
 	Labels map[string]string
-	Env    map[string]struct{}
+	Env    map[string]string
 
 	NetworkMode string
 	PidMode     string
@@ -113,13 +89,18 @@ func New(sock string) Client {
 
 // Run creates and starts a new container in accordance RunOptions.
 func (dk Client) Run(opts RunOptions) (string, error) {
+	env := map[string]struct{}{}
+	for k, v := range opts.Env {
+		env[k+"="+v] = struct{}{}
+	}
+
 	hc := dkc.HostConfig{
 		NetworkMode: opts.NetworkMode,
 		PidMode:     opts.PidMode,
 		Privileged:  opts.Privileged,
 		VolumesFrom: opts.VolumesFrom,
 	}
-	id, err := dk.create(opts.Name, opts.Image, opts.Args, opts.Labels, opts.Env, &hc)
+	id, err := dk.create(opts.Name, opts.Image, opts.Args, opts.Labels, env, &hc)
 	if err != nil {
 		return "", err
 	}
@@ -380,26 +361,6 @@ func (dk Client) getID(name string) (string, error) {
 	}
 
 	return "", ErrNoSuchContainer
-}
-
-// UserLabel returns the supplied label tagged with the user prefix.
-func UserLabel(label string) string {
-	return userLabelPrefix + label
-}
-
-// IsUserLabel returns whether the supplied label represents a Quilt user label.
-func IsUserLabel(label string) bool {
-	return strings.HasPrefix(label, userLabelPrefix)
-}
-
-// ParseUserLabel returns the supplied label with the user prefix stripped.
-func ParseUserLabel(label string) string {
-	return strings.TrimPrefix(label, userLabelPrefix)
-}
-
-// SystemLabel returns the supplied label tagged with the system prefix.
-func SystemLabel(label string) string {
-	return systemLabelPrefix + label
 }
 
 // Get returns the value contained at the given index

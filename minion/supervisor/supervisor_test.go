@@ -3,7 +3,6 @@ package supervisor
 import (
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 
@@ -182,7 +181,6 @@ func TestWorker(t *testing.T) {
 		Ovncontroller: {"ovn-controller"},
 		Ovsvswitchd:   {"ovs-vswitchd"},
 		Swarm:         swarmArgsWorker(ip),
-		QuiltTag:      nil,
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -222,7 +220,6 @@ func TestChange(t *testing.T) {
 		Ovncontroller: {"ovn-controller"},
 		Ovsvswitchd:   {"ovs-vswitchd"},
 		Swarm:         swarmArgsWorker(ip),
-		QuiltTag:      nil,
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -274,7 +271,6 @@ func TestChange(t *testing.T) {
 		Ovncontroller: {"ovn-controller"},
 		Ovsvswitchd:   {"ovs-vswitchd"},
 		Swarm:         swarmArgsWorker(ip),
-		QuiltTag:      nil,
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -388,55 +384,6 @@ func TestEtcdRemove(t *testing.T) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
 			spew.Sdump(exp))
 	}
-}
-
-func TestRunAppTransact(t *testing.T) {
-	ctx := initTest()
-
-	ctx.conn.Transact(func(view db.Database) error {
-		ctx.sv.runAppTransact(view, []docker.Container{
-			{ID: "1"},
-			{ID: "2"},
-		})
-
-		var ids []string
-		dbcs := view.SelectFromContainer(nil)
-		for _, dbc := range dbcs {
-			ids = append(ids, dbc.DockerID)
-		}
-		sort.Sort(sort.StringSlice(ids))
-
-		expected := []string{"1", "2"}
-		if !eq(ids, expected) {
-			t.Errorf("Container Ids = %s, expected %s", ids, expected)
-		}
-
-		ctx.sv.runAppTransact(view, []docker.Container{
-			{ID: "3"},
-			{ID: "1"},
-		})
-
-		ids = nil
-		dbcs = view.SelectFromContainer(nil)
-		for _, dbc := range dbcs {
-			ids = append(ids, dbc.DockerID)
-		}
-		sort.Sort(sort.StringSlice(ids))
-
-		expected = []string{"1", "3"}
-		if !eq(ids, expected) {
-			t.Errorf("Container Ids = %s, expected %s", ids, expected)
-		}
-
-		ctx.sv.runAppTransact(view, []docker.Container{})
-
-		dbcs = view.SelectFromContainer(nil)
-		if len(dbcs) > 0 {
-			t.Errorf(spew.Sprintf("Unexpected containers %s", dbcs))
-		}
-
-		return nil
-	})
 }
 
 type testCtx struct {
@@ -556,7 +503,6 @@ func validateImage(image string) {
 	case Ovncontroller:
 	case Ovsvswitchd:
 	case Ovsdb:
-	case QuiltTag:
 	default:
 		panic("Bad Image")
 	}

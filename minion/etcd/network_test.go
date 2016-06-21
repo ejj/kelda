@@ -22,7 +22,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 		for i := 2; i < 5; i++ {
 			c := view.InsertContainer()
 			si := strconv.Itoa(i)
-			c.DockerID = si
+			c.StitchID = i
 			c.IP = fmt.Sprintf("10.0.0.%s", si)
 			c.Command = []string{"echo", si}
 			c.Labels = []string{"red", "blue"}
@@ -37,7 +37,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	for i := 2; i < 5; i++ {
 		si := strconv.Itoa(i)
 		storeTemp := storeContainer{
-			DockerID: si,
+			StitchID: i,
 			IP:       fmt.Sprintf("10.0.0.%s", si),
 			Command:  []string{"echo", si},
 			Labels:   []string{"red", "blue"},
@@ -76,7 +76,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	}
 
 	for i := range cs {
-		if cs[i].DockerID == "3" {
+		if cs[i].StitchID == 3 {
 			cs[i].IP = "10.0.0.7"
 		}
 	}
@@ -85,7 +85,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	for i := 2; i < 6; i++ {
 		si := strconv.Itoa(i)
 		badEtcd := storeContainer{
-			DockerID: si,
+			StitchID: i,
 			Command:  []string{"echo", si},
 			Labels:   []string{"red", "blue"},
 			Env:      map[string]string{"i": si},
@@ -99,13 +99,13 @@ func TestUpdateEtcdContainers(t *testing.T) {
 
 	// add a new container with a bad ip to test ip syncing
 	badEtcdSlice = append(badEtcdSlice, storeContainer{
-		DockerID: "8",
+		StitchID: 8,
 		IP:       "10.0.0.0",
 	})
-	cs = append(cs, storeContainer{DockerID: "8", IP: "10.0.0.0"})
+	cs = append(cs, storeContainer{StitchID: 8, IP: "10.0.0.0"})
 	conn.Transact(func(view db.Database) error {
 		c := view.InsertContainer()
-		c.DockerID = "8"
+		c.StitchID = 8
 		c.IP = "junk"
 		view.Commit(c)
 		containers = append([]db.Container{c}, containers...)
@@ -262,76 +262,126 @@ func TestUpdateEtcdLabel(t *testing.T) {
 	}
 }
 
-func TestUpdateDBContainers(t *testing.T) {
+func TestUpdateLeaderDBC(t *testing.T) {
 	conn := db.New()
 	conn.Transact(func(view db.Database) error {
-		testUpdateDBContainers(t, view)
+		dbc := view.InsertContainer()
+		dbc.StitchID = 1
+		view.Commit(dbc)
+
+		updateLeaderDBC(view, view.SelectFromContainer(nil), storeData{
+			containers: []storeContainer{{StitchID: 1, IP: "foo"}},
+		})
+
+		dbcs := view.SelectFromContainer(nil)
+		if len(dbcs) != 1 || dbcs[0].StitchID != 1 || dbcs[0].IP != "foo" ||
+			dbcs[0].Mac != "" {
+			t.Error(spew.Sprintf("Unexpected dbc: %v", dbc))
+		}
+
 		return nil
 	})
 }
 
-func testUpdateDBContainers(t *testing.T, view db.Database) {
+func TestUpdateWorkerDBC(t *testing.T) {
+	conn := db.New()
+	conn.Transact(func(view db.Database) error {
+		testUpdateWorkerDBC(t, view)
+		return nil
+	})
+}
+
+func testUpdateWorkerDBC(t *testing.T, view db.Database) {
 	minion := view.InsertMinion()
 	minion.Role = db.Worker
 	minion.Self = true
 	view.Commit(minion)
 
-	for _, id := range []string{"a", "b"} {
+	for id := 1; id < 3; id++ {
 		container := view.InsertContainer()
-		container.DockerID = id
+		container.StitchID = id
 		view.Commit(container)
 	}
 
 	container := view.InsertContainer()
-	container.DockerID = "c"
+	container.StitchID = 3
 	container.IP = "junk"
 	view.Commit(container)
 
 	cs := storeContainerSlice{
 		{
-			DockerID: "a",
+			StitchID: 1,
 			IP:       "1.1.1.1",
 			Command:  []string{"echo", "hi"},
 			Labels:   []string{"red", "blue"},
 			Env:      map[string]string{"GOPATH": "~/gocode"},
 		}, {
-			DockerID: "b",
+			StitchID: 2,
 			IP:       "2.2.2.2",
 			Command:  []string{"echo", "bye"},
 			Labels:   []string{"blue", "green"},
 			Env:      map[string]string{"GOPATH": "~"},
 		}}
 
-	updateDBContainers(view, storeData{containers: cs})
+	updateWorkerDBC(view, storeData{containers: cs})
 
-	ipMap := map[string]string{}
-	labelMap := map[string][]string{}
+	ipMap := map[int]string{}
+	labelMap := map[int][]string{}
 	commandMap := map[string][]string{}
 	envMap := map[string]map[string]string{}
 	for _, c := range view.SelectFromContainer(nil) {
-		ipMap[c.DockerID] = c.IP
-		labelMap[c.DockerID] = c.Labels
+		ipMap[c.StitchID] = c.IP
+		labelMap[c.StitchID] = c.Labels
 		commandMap[c.DockerID] = c.Command
 		envMap[c.DockerID] = c.Env
 	}
 
-	expIPMap := map[string]string{
-		"a": "1.1.1.1",
-		"b": "2.2.2.2",
-		"c": "",
+	expIPMap := map[int]string{
+		1: "1.1.1.1",
+		2: "2.2.2.2",
 	}
 	if !eq(ipMap, expIPMap) {
-		t.Error(spew.Sprintf("Found %s, Expected: %s", ipMap, expIPMap))
+		t.Error(spew.Sprintf("\nGot: %v\nExp: %v\n", ipMap, expIPMap))
 	}
 
-	expLabelMap := map[string][]string{
-		"a": {"red", "blue"},
-		"b": {"blue", "green"},
-		"c": nil,
+	expLabelMap := map[int][]string{
+		1: {"red", "blue"},
+		2: {"blue", "green"},
 	}
 
 	if !eq(labelMap, expLabelMap) {
-		t.Error(spew.Sprintf("Found %s, Expected: %s", labelMap, expLabelMap))
+		t.Error(spew.Sprintf("\nGot: %v\nExp: %v\n", labelMap, expLabelMap))
+	}
+}
+
+func TestContainerJoinScore(t *testing.T) {
+	t.Parallel()
+
+	a := storeContainer{
+		Minion:   "Minion",
+		Image:    "Image",
+		IP:       "IP",
+		StitchID: 1,
+	}
+	b := a
+
+	score := containerJoinScore(a, b)
+	if score != 0 {
+		t.Errorf("Unexpected score: %d", score)
+	}
+
+	b.Image = "Wrong"
+	score = containerJoinScore(a, b)
+	if score != -1 {
+		t.Errorf("Unexpected score: %d", score)
+	}
+	b = a
+
+	b.IP = "Wrong"
+	b.StitchID = 3
+	score = containerJoinScore(a, b)
+	if score != 11 {
+		t.Errorf("Unexpected score: %d", score)
 	}
 }
 
@@ -347,12 +397,12 @@ func testUpdateDBLabels(t *testing.T, view db.Database) {
 	labelStruct := map[string]string{"a": "10.0.0.2"}
 	containerSlice := []storeContainer{
 		{
-			DockerID: "hi",
+			StitchID: 1,
 			Labels:   []string{"a", "b"},
 			IP:       "10.0.0.3",
 		},
 		{
-			DockerID: "bye",
+			StitchID: 2,
 			Labels:   []string{"a"},
 			IP:       "10.0.0.4",
 		},

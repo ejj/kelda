@@ -203,6 +203,28 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestRunEnv(t *testing.T) {
+	t.Parallel()
+	_, dk := NewMock()
+
+	env := map[string]string{
+		"a": "b",
+		"c": "d",
+	}
+	id, err := dk.Run(RunOptions{Name: "name1", Env: env})
+	if err != nil {
+		t.Errorf("Unexpected error %v", err)
+	}
+
+	container, err := dk.Get(id)
+	if err != nil {
+		t.Errorf("Unexpected error %v", err)
+	}
+	if !reflect.DeepEqual(container.Env, env) {
+		t.Errorf(spew.Sprintf("Got: %v\nExp: %v\n", container.Env, env))
+	}
+}
+
 func TestRemove(t *testing.T) {
 	t.Parallel()
 	md, dk := NewMock()

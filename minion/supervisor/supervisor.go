@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/minion/docker"
 
 	log "github.com/Sirupsen/logrus"
@@ -30,9 +29,6 @@ const (
 
 	// Swarm is the name of the docker swarm.
 	Swarm = "swarm"
-
-	// QuiltTag is the name of the container used to tag the machine for placement.
-	QuiltTag = "quilt-tag"
 )
 
 const ovsImage = "quilt/ovs"
@@ -44,7 +40,6 @@ var images = map[string]string{
 	Ovsdb:         ovsImage,
 	Ovsvswitchd:   ovsImage,
 	Swarm:         "swarm:1.2.3",
-	QuiltTag:      "google/pause",
 }
 
 const etcdHeartbeatInterval = "500"
@@ -67,100 +62,7 @@ type supervisor struct {
 // Run blocks implementing the supervisor module.
 func Run(conn db.Conn, dk docker.Client) {
 	sv := supervisor{conn: conn, dk: dk}
-	go sv.runSystem()
-	sv.runApp()
-}
-
-// Synchronize locally running "application" containers with the database.
-func (sv *supervisor) runApp() {
-	for range sv.conn.TriggerTick(10, db.MinionTable, db.ContainerTable).C {
-		minion, err := sv.conn.MinionSelf()
-		if err != nil || minion.Role != db.Worker {
-			continue
-		}
-
-		if err := delStopped(sv.dk); err != nil {
-			log.WithError(err).Error("Failed to clean up stopped containers")
-		}
-
-		dkcs, err := sv.dk.List(map[string][]string{
-			"label": {docker.SchedulerLabelPair},
-		})
-		if err != nil {
-			log.WithError(err).Error("Failed to list local containers.")
-			continue
-		}
-
-		sv.conn.Transact(func(view db.Database) error {
-			sv.runAppTransact(view, dkcs)
-			return nil
-		})
-	}
-}
-
-// Delete stopped containers
-//
-// We do this because Docker Swarm will account for stopped containers
-// when using its affinity filter, where our semantics don't consider
-// stopped containers in its scheduling decisions.
-func delStopped(dk docker.Client) error {
-	containers, err := dk.List(map[string][]string{"status": {"exited"}})
-	if err != nil {
-		return fmt.Errorf("error listing stopped containers: %s", err)
-	}
-	for _, dkc := range containers {
-		// Stopped containers show up with a "/" in front of the name
-		name := dkc.Name[1:]
-		if err := dk.Remove(name); err != nil {
-			log.WithFields(log.Fields{
-				"name": name,
-				"err":  err,
-			}).Error("error removing container")
-			continue
-		}
-	}
-	return nil
-}
-
-func (sv *supervisor) runAppTransact(view db.Database,
-	dkcsArgs []docker.Container) []string {
-
-	var tearDowns []string
-
-	dbKey := func(val interface{}) interface{} {
-		return val.(db.Container).DockerID
-	}
-	dkKey := func(val interface{}) interface{} {
-		return val.(docker.Container).ID
-	}
-
-	pairs, dbcs, dkcs := join.HashJoin(db.ContainerSlice(
-		view.SelectFromContainer(nil)),
-		docker.ContainerSlice(dkcsArgs), dbKey, dkKey)
-
-	for _, iface := range dbcs {
-		dbc := iface.(db.Container)
-
-		tearDowns = append(tearDowns, dbc.DockerID)
-		view.Remove(dbc)
-	}
-
-	for _, dkc := range dkcs {
-		pairs = append(pairs, join.Pair{L: view.InsertContainer(), R: dkc})
-	}
-
-	for _, pair := range pairs {
-		dbc := pair.L.(db.Container)
-		dkc := pair.R.(docker.Container)
-
-		dbc.DockerID = dkc.ID
-		dbc.Pid = dkc.Pid
-		dbc.Image = dkc.Image
-		dbc.Command = append([]string{dkc.Path}, dkc.Args...)
-		view.Commit(dbc)
-	}
-
-	return tearDowns
+	sv.runSystem()
 }
 
 // Manage system infrstracture containers that support the application.
@@ -224,39 +126,6 @@ func (sv *supervisor) runSystemOnce() {
 	sv.size = minion.Size
 }
 
-func (sv *supervisor) tagWorker(provider, region, size string) {
-	if sv.provider != provider || sv.region != region || sv.size != size {
-		sv.Remove(QuiltTag)
-	}
-
-	isRunning, err := sv.dk.IsRunning(QuiltTag)
-	if err != nil {
-		log.WithError(err).Warnf("Could not check QuiltTag running status")
-		return
-	}
-	if isRunning {
-		return
-	}
-
-	tags := map[string]string{
-		docker.SystemLabel("provider"): provider,
-		docker.SystemLabel("region"):   region,
-		docker.SystemLabel("size"):     size,
-	}
-
-	ro := docker.RunOptions{
-		Name:        QuiltTag,
-		Image:       images[QuiltTag],
-		Labels:      tags,
-		NetworkMode: "host",
-	}
-
-	_, err = sv.dk.Run(ro)
-	if err != nil {
-		log.WithError(err).Warn("Failed to tag minion.")
-	}
-}
-
 func (sv *supervisor) updateWorker(IP string, leaderIP string, etcdIPs []string) {
 	if !reflect.DeepEqual(sv.etcdIPs, etcdIPs) {
 		sv.Remove(Etcd)
@@ -280,12 +149,7 @@ func (sv *supervisor) updateWorker(IP string, leaderIP string, etcdIPs []string)
 
 	sv.run(Swarm, "join", fmt.Sprintf("--addr=%s:2375", IP), "etcd://127.0.0.1:2379")
 
-	minion, err := sv.conn.MinionSelf()
-	if err != nil {
-		return
-	}
-
-	err = sv.dk.Exec(Ovsvswitchd, "ovs-vsctl", "set", "Open_vSwitch", ".",
+	err := sv.dk.Exec(Ovsvswitchd, "ovs-vsctl", "set", "Open_vSwitch", ".",
 		fmt.Sprintf("external_ids:ovn-remote=\"tcp:%s:6640\"", leaderIP),
 		fmt.Sprintf("external_ids:ovn-encap-ip=%s", IP),
 		"external_ids:ovn-encap-type=\"geneve\"",
@@ -301,8 +165,6 @@ func (sv *supervisor) updateWorker(IP string, leaderIP string, etcdIPs []string)
 	 * So, we need to restart the container when the leader changes. */
 	sv.Remove(Ovncontroller)
 	sv.run(Ovncontroller, "ovn-controller")
-
-	sv.tagWorker(minion.Provider, minion.Region, minion.Size)
 }
 
 func (sv *supervisor) updateMaster(IP string, etcdIPs []string, leader bool) {

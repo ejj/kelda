@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 	"text/scanner"
@@ -271,33 +270,10 @@ func fired(c chan struct{}) bool {
 	}
 }
 
-type placementList []db.Placement
-
-func (l placementList) Len() int {
-	return len(l)
-}
-
-func (l placementList) Swap(i, j int) {
-	l[i], l[j] = l[j], l[i]
-}
-
-func (l placementList) Less(i, j int) bool {
-	left := l[i]
-	right := l[j]
-	switch {
-	case left.ID != right.ID:
-		return left.ID < right.ID
-	case left.TargetLabel != right.TargetLabel:
-		return left.TargetLabel < right.TargetLabel
-	default:
-		return left.Rule.AffinityStr() < right.Rule.AffinityStr()
-	}
-}
-
 func TestPlacementTxn(t *testing.T) {
 	conn := db.New()
 	checkPlacement := func(spec string, exp ...db.Placement) {
-		var placements []db.Placement
+		placements := map[db.Placement]struct{}{}
 		conn.Transact(func(view db.Database) error {
 			updatePolicy(view, db.Master, spec)
 			res := view.SelectFromPlacement(nil)
@@ -305,17 +281,23 @@ func TestPlacementTxn(t *testing.T) {
 			// Set the ID to 0 so that we can use reflect.DeepEqual.
 			for _, p := range res {
 				p.ID = 0
-				placements = append(placements, p)
+				placements[p] = struct{}{}
 			}
 
 			return nil
 		})
 
-		sort.Sort(placementList(placements))
-		sort.Sort(placementList(exp))
-		if !reflect.DeepEqual(placements, exp) {
+		if len(placements) != len(exp) {
 			t.Errorf("Placement error in %s. Expected %v, got %v",
 				spec, exp, placements)
+		}
+
+		for _, p := range exp {
+			if _, ok := placements[p]; !ok {
+				t.Errorf("Placement error in %s. Expected %v, got %v",
+					spec, exp, placements)
+				break
+			}
 		}
 	}
 
@@ -326,10 +308,8 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement(spec,
 		db.Placement{
 			TargetLabel: "bar",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "foo",
-			},
+			Exclusive:   true,
+			OtherLabel:  "foo",
 		},
 	)
 
@@ -340,10 +320,8 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement(spec,
 		db.Placement{
 			TargetLabel: "bar",
-			Rule: db.LabelRule{
-				Exclusive:  false,
-				OtherLabel: "foo",
-			},
+			Exclusive:   false,
+			OtherLabel:  "foo",
 		},
 	)
 
@@ -355,17 +333,13 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement(spec,
 		db.Placement{
 			TargetLabel: "bar",
-			Rule: db.LabelRule{
-				Exclusive:  false,
-				OtherLabel: "foo",
-			},
+			Exclusive:   false,
+			OtherLabel:  "foo",
 		},
 		db.Placement{
 			TargetLabel: "bar",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "bar",
-			},
+			Exclusive:   true,
+			OtherLabel:  "bar",
 		},
 	)
 
@@ -377,17 +351,13 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement(spec,
 		db.Placement{
 			TargetLabel: "bar",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "qux",
-			},
+			Exclusive:   true,
+			OtherLabel:  "qux",
 		},
 		db.Placement{
 			TargetLabel: "foo",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "qux",
-			},
+			Exclusive:   true,
+			OtherLabel:  "qux",
 		},
 	)
 
@@ -400,31 +370,23 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement(spec,
 		db.Placement{
 			TargetLabel: "baz",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "foo",
-			},
+			Exclusive:   true,
+			OtherLabel:  "foo",
 		},
 		db.Placement{
 			TargetLabel: "baz",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "bar",
-			},
+			Exclusive:   true,
+			OtherLabel:  "bar",
 		},
 		db.Placement{
 			TargetLabel: "qux",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "foo",
-			},
+			Exclusive:   true,
+			OtherLabel:  "foo",
 		},
 		db.Placement{
 			TargetLabel: "qux",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "bar",
-			},
+			Exclusive:   true,
+			OtherLabel:  "bar",
 		},
 	)
 
@@ -434,11 +396,8 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement(spec,
 		db.Placement{
 			TargetLabel: "foo",
-			Rule: db.MachineRule{
-				Exclusive: false,
-				Attribute: "size",
-				Value:     "m4.large",
-			},
+			Exclusive:   false,
+			Size:        "m4.large",
 		},
 	)
 
@@ -449,10 +408,8 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement(spec,
 		db.Placement{
 			TargetLabel: "foo",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "foo",
-			},
+			Exclusive:   true,
+			OtherLabel:  "foo",
 		},
 	)
 
@@ -468,42 +425,32 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement(spec,
 		db.Placement{
 			TargetLabel: "foo",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "foo",
-			},
+			Exclusive:   true,
+			OtherLabel:  "foo",
 		},
 
 		db.Placement{
 			TargetLabel: "bar",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "bar",
-			},
+			Exclusive:   true,
+			OtherLabel:  "bar",
 		},
 
 		db.Placement{
 			TargetLabel: "bar",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "foo",
-			},
+			Exclusive:   true,
+			OtherLabel:  "foo",
 		},
 
 		db.Placement{
 			TargetLabel: "baz",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "baz",
-			},
+			Exclusive:   true,
+			OtherLabel:  "baz",
 		},
 
 		db.Placement{
 			TargetLabel: "baz",
-			Rule: db.LabelRule{
-				Exclusive:  true,
-				OtherLabel: "bar",
-			},
+			Exclusive:   true,
+			OtherLabel:  "bar",
 		},
 	)
 }

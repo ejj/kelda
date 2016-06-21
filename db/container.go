@@ -16,6 +16,7 @@ type Container struct {
 	Pid      int
 	IP       string
 	Mac      string
+	Minion   string
 	DockerID string
 	StitchID int
 	Image    string
@@ -67,6 +68,10 @@ func (c Container) String() string {
 	if c.DockerID != "" {
 		id := util.ShortUUID(c.DockerID)
 		tags = append(tags, fmt.Sprintf("DockerID: %s", id))
+	}
+
+	if c.Minion != "" {
+		tags = append(tags, fmt.Sprintf("Minion: %s", c.Minion))
 	}
 
 	if c.StitchID != 0 {

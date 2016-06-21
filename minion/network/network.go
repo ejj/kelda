@@ -59,7 +59,7 @@ func runMaster(conn db.Conn) {
 		})
 
 		containers = view.SelectFromContainer(func(dbc db.Container) bool {
-			return dbc.DockerID != "" && dbc.Mac != "" && dbc.IP != ""
+			return dbc.Mac != "" && dbc.IP != ""
 		})
 
 		connections = view.SelectFromConnection(nil)

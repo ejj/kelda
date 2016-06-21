@@ -1,11 +1,5 @@
 package db
 
-import (
-	"fmt"
-
-	"github.com/NetSys/quilt/minion/docker"
-)
-
 // Placement represents a declaration about how containers should be placed.  These
 // directives can be made either relative to labels of other containers, or Machines
 // those containers run on.
@@ -13,72 +7,20 @@ type Placement struct {
 	ID int
 
 	TargetLabel string
-	Rule        PlacementRule
+
+	Exclusive bool
+
+	// Label Constraint
+	OtherLabel string
+
+	// Machine Constraints
+	Provider string
+	Size     string
+	Region   string
 }
 
 // PlacementSlice is an alias for []Placement to allow for joins
 type PlacementSlice []Placement
-
-// Applies returns true if this placement applies to the container c, false otherwise.
-func (p Placement) Applies(c Container) bool {
-	for _, label := range c.Labels {
-		if label == p.TargetLabel {
-			return true
-		}
-	}
-
-	return false
-}
-
-// A PlacementRule represents a declaration constraining container placement.
-type PlacementRule interface {
-	// Return the affinity string that represents this rule
-	AffinityStr() string
-
-	fmt.Stringer
-}
-
-// A LabelRule constrains placement relative to other container labels.
-type LabelRule struct {
-	OtherLabel string
-	Exclusive  bool
-}
-
-// AffinityStr is passed to Docker Swarm to implement the LabelRule.
-func (lr LabelRule) AffinityStr() string {
-	return toAffinity(docker.UserLabel(lr.OtherLabel), !lr.Exclusive,
-		docker.LabelTrueValue)
-}
-
-// String returns the AffinityStr of this label.
-func (lr LabelRule) String() string {
-	return lr.AffinityStr()
-}
-
-// A MachineRule constrains container placement relative to the machine it runs on.
-type MachineRule struct {
-	Attribute string
-	Value     string
-	Exclusive bool
-}
-
-// AffinityStr is passed to Docker Swarm to implement the MachineRule.
-func (mr MachineRule) AffinityStr() string {
-	return toAffinity(docker.SystemLabel(mr.Attribute), !mr.Exclusive, mr.Value)
-}
-
-// String returns the AffinityStr of 'mr'.
-func (mr MachineRule) String() string {
-	return mr.AffinityStr()
-}
-
-func toAffinity(left string, eq bool, right string) string {
-	eqStr := "!="
-	if eq {
-		eqStr = "=="
-	}
-	return fmt.Sprintf("affinity:%s%s%s", left, eqStr, right)
-}
 
 // InsertPlacement creates a new placement row and inserts it into the database.
 func (db Database) InsertPlacement() Placement {

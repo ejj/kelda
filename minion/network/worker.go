@@ -150,7 +150,8 @@ func runWorker(conn db.Conn, dk docker.Client) {
 	var connections []db.Connection
 	conn.Transact(func(view db.Database) error {
 		containers = view.SelectFromContainer(func(c db.Container) bool {
-			return c.DockerID != "" && c.IP != "" && c.Mac != ""
+			return c.DockerID != "" && c.IP != "" && c.Mac != "" &&
+				c.Pid != 0
 		})
 		labels = view.SelectFromLabel(func(l db.Label) bool {
 			return l.IP != ""

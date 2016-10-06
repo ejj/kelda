@@ -26,21 +26,7 @@ initialize_ovs() {
 }
 
 initialize_docker() {
-	# If getting the AWS internal IP works, then use that; otherwise, manually
-	# parse it ourselves.
-	PRIVATE_IPv4="$(curl -s --connect-timeout 5 http://instance-data/latest/meta-data/local-ipv4)"
-	if [ -z "$PRIVATE_IPv4" ]; then
-		PRIVATE_IPv4="$(ip address show eth1 | grep 'inet ' | sed -e 's/^.*inet //' -e 's/\/.*$//' | tr -d '\n')"
-	fi
-	if [ -z "$PRIVATE_IPv4" ]; then
-		PRIVATE_IPv4="$(hostname -i)"
-	fi
-
 	mkdir -p /etc/systemd/system/docker.service.d
-
-	echo '#!/bin/sh' > /usr/bin/swarm
-	echo "docker -H tcp://${PRIVATE_IPv4}:2377 \$@" >> /usr/bin/swarm
-	chmod 755 /usr/bin/swarm
 
 	cat <<- EOF > /etc/systemd/system/docker.service.d/override.conf
 	[Unit]
@@ -49,8 +35,7 @@ initialize_docker() {
 	[Service]
 	# The below empty ExecStart deletes the official one installed by docker daemon.
 	ExecStart=
-	ExecStart=/usr/bin/docker daemon --bridge=none \
-	-H "${PRIVATE_IPv4}:2375" -H unix:///var/run/docker.sock \
+	ExecStart=/usr/bin/docker daemon --bridge=none -H unix:///var/run/docker.sock
 
 	[Install]
 	WantedBy=multi-user.target

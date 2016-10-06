@@ -27,9 +27,6 @@ const (
 
 	// Ovsvswitchd is the name of the ovs-vswitchd container.
 	Ovsvswitchd = "ovs-vswitchd"
-
-	// Swarm is the name of the docker swarm.
-	Swarm = "swarm"
 )
 
 const ovsImage = "quilt/ovs"
@@ -40,7 +37,6 @@ var images = map[string]string{
 	Ovnnorthd:     ovsImage,
 	Ovsdb:         ovsImage,
 	Ovsvswitchd:   ovsImage,
-	Swarm:         "swarm:1.2.3",
 }
 
 const etcdHeartbeatInterval = "500"
@@ -135,10 +131,6 @@ func (sv *supervisor) updateWorker(IP string, leaderIP string, etcdIPs []string)
 		sv.Remove(Etcd)
 	}
 
-	if sv.leaderIP != leaderIP || sv.IP != IP {
-		sv.Remove(Swarm)
-	}
-
 	sv.run(Etcd, fmt.Sprintf("--initial-cluster=%s", initialClusterString(etcdIPs)),
 		"--heartbeat-interval="+etcdHeartbeatInterval,
 		"--election-timeout="+etcdElectionTimeout,
@@ -150,8 +142,6 @@ func (sv *supervisor) updateWorker(IP string, leaderIP string, etcdIPs []string)
 	if leaderIP == "" || IP == "" {
 		return
 	}
-
-	sv.run(Swarm, "join", fmt.Sprintf("--addr=%s:2375", IP), "etcd://127.0.0.1:2379")
 
 	err := sv.dk.Exec(Ovsvswitchd, "ovs-vsctl", "set", "Open_vSwitch", ".",
 		fmt.Sprintf("external_ids:ovn-remote=\"tcp:%s:6640\"", leaderIP),
@@ -176,10 +166,6 @@ func (sv *supervisor) updateMaster(IP string, etcdIPs []string, leader bool) {
 		sv.Remove(Etcd)
 	}
 
-	if sv.IP != IP {
-		sv.Remove(Swarm)
-	}
-
 	if IP == "" || len(etcdIPs) == 0 {
 		return
 	}
@@ -194,10 +180,6 @@ func (sv *supervisor) updateMaster(IP string, etcdIPs []string, leader bool) {
 		"--initial-cluster-state=new",
 		"--election-timeout="+etcdElectionTimeout)
 	sv.run(Ovsdb, "ovsdb-server")
-
-	swarmAddr := IP + ":2377"
-	sv.run(Swarm, "manage", "--replication", "--addr="+swarmAddr,
-		"--host="+swarmAddr, "etcd://127.0.0.1:2379")
 
 	if leader {
 		/* XXX: If we fail to boot ovn-northd, we should give up

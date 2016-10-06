@@ -119,7 +119,6 @@ You can run `docker ps` to list the containers running on your Worker VM.
 quilt@ip-172-31-1-198:~$ docker ps
 CONTAINER ID        IMAGE                        COMMAND                  CREATED             STATUS              PORTS               NAMES
 4ec5926bfbab        quilt/ovs                    "run ovn-northd"         2 hours ago         Up 2 hours                              ovn-northd
-70b785769fc8        swarm:1.2.3                  "/swarm manage --repl"   2 hours ago         Up 2 hours                              swarm
 855e6ff38345        quilt/ovs                    "run ovsdb-server"       2 hours ago         Up 2 hours                              ovsdb-server
 fb0f44812f30        quay.io/coreos/etcd:v2.3.6   "/etcd --name=master-"   2 hours ago         Up 2 hours                              etcd
 79ca96065912        quilt/quilt:latest           "/minion"                2 hours ago         Up 2 hours                              minion

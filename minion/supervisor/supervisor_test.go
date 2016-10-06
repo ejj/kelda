@@ -64,7 +64,6 @@ func TestMaster(t *testing.T) {
 	exp := map[string][]string{
 		Etcd:  etcdArgsMaster(ip, etcdIPs),
 		Ovsdb: {"ovsdb-server"},
-		Swarm: swarmArgsMaster(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -95,7 +94,6 @@ func TestMaster(t *testing.T) {
 	exp = map[string][]string{
 		Etcd:      etcdArgsMaster(ip, etcdIPs),
 		Ovsdb:     {"ovsdb-server"},
-		Swarm:     swarmArgsMaster(ip),
 		Ovnnorthd: {"ovn-northd"},
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
@@ -119,7 +117,6 @@ func TestMaster(t *testing.T) {
 	exp = map[string][]string{
 		Etcd:  etcdArgsMaster(ip, etcdIPs),
 		Ovsdb: {"ovsdb-server"},
-		Swarm: swarmArgsMaster(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -180,7 +177,6 @@ func TestWorker(t *testing.T) {
 		Ovsdb:         {"ovsdb-server"},
 		Ovncontroller: {"ovn-controller"},
 		Ovsvswitchd:   {"ovs-vswitchd"},
-		Swarm:         swarmArgsWorker(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -219,7 +215,6 @@ func TestChange(t *testing.T) {
 		Ovsdb:         {"ovsdb-server"},
 		Ovncontroller: {"ovn-controller"},
 		Ovsvswitchd:   {"ovs-vswitchd"},
-		Swarm:         swarmArgsWorker(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -246,7 +241,6 @@ func TestChange(t *testing.T) {
 	exp = map[string][]string{
 		Etcd:  etcdArgsMaster(ip, etcdIPs),
 		Ovsdb: {"ovsdb-server"},
-		Swarm: swarmArgsMaster(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -270,7 +264,6 @@ func TestChange(t *testing.T) {
 		Ovsdb:         {"ovsdb-server"},
 		Ovncontroller: {"ovn-controller"},
 		Ovsvswitchd:   {"ovs-vswitchd"},
-		Swarm:         swarmArgsWorker(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -305,7 +298,6 @@ func TestEtcdAdd(t *testing.T) {
 	exp := map[string][]string{
 		Etcd:  etcdArgsMaster(ip, etcdIPs),
 		Ovsdb: {"ovsdb-server"},
-		Swarm: swarmArgsMaster(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -328,7 +320,6 @@ func TestEtcdAdd(t *testing.T) {
 	exp = map[string][]string{
 		Etcd:  etcdArgsMaster(ip, etcdIPs),
 		Ovsdb: {"ovsdb-server"},
-		Swarm: swarmArgsMaster(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -355,7 +346,6 @@ func TestEtcdRemove(t *testing.T) {
 	exp := map[string][]string{
 		Etcd:  etcdArgsMaster(ip, etcdIPs),
 		Ovsdb: {"ovsdb-server"},
-		Swarm: swarmArgsMaster(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -378,7 +368,6 @@ func TestEtcdRemove(t *testing.T) {
 	exp = map[string][]string{
 		Etcd:  etcdArgsMaster(ip, etcdIPs),
 		Ovsdb: {"ovsdb-server"},
-		Swarm: swarmArgsMaster(ip),
 	}
 	if !reflect.DeepEqual(ctx.fd.running(), exp) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
@@ -449,17 +438,6 @@ func (f fakeDocker) running() map[string][]string {
 	return res
 }
 
-func swarmArgsMaster(ip string) []string {
-	addr := ip + ":2377"
-	return []string{"manage", "--replication", "--addr=" + addr,
-		"--host=" + addr, "etcd://127.0.0.1:2379"}
-}
-
-func swarmArgsWorker(ip string) []string {
-	addr := fmt.Sprintf("--addr=%s:2375", ip)
-	return []string{"join", addr, "etcd://127.0.0.1:2379"}
-}
-
 func etcdArgsMaster(ip string, etcdIPs []string) []string {
 	return []string{
 		fmt.Sprintf("--name=master-%s", ip),
@@ -498,7 +476,6 @@ func ovsExecArgs(ip, leader string) []string {
 func validateImage(image string) {
 	switch image {
 	case Etcd:
-	case Swarm:
 	case Ovnnorthd:
 	case Ovncontroller:
 	case Ovsvswitchd:

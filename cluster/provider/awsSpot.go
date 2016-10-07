@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/base64"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/NetSys/quilt/constants"
@@ -60,7 +61,7 @@ func groupByRegion(ids []awsID) map[string][]awsID {
 
 func (clst *amazonCluster) Connect(namespace string) error {
 	clst.sessions = make(map[string]*ec2.EC2)
-	clst.namespace = namespace
+	clst.namespace = strings.ToLower(namespace)
 
 	if _, err := clst.List(); err != nil {
 		return errors.New("AWS failed to connect")

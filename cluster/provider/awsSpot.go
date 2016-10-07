@@ -118,6 +118,11 @@ func (clst amazonCluster) Boot(bootSet []Machine) error {
 		}
 
 		session := clst.getSession(br.region)
+		groupID, _, err := clst.GetCreateSecurityGroup(session)
+		if err != nil {
+			return err
+		}
+
 		cloudConfig64 := base64.StdEncoding.EncodeToString([]byte(br.cfg))
 		resp, err := session.RequestSpotInstances(&ec2.RequestSpotInstancesInput{
 			SpotPrice: aws.String(spotPrice),
@@ -125,7 +130,7 @@ func (clst amazonCluster) Boot(bootSet []Machine) error {
 				ImageId:             aws.String(amis[br.region]),
 				InstanceType:        aws.String(br.size),
 				UserData:            &cloudConfig64,
-				SecurityGroups:      []*string{&clst.namespace},
+				SecurityGroupIds:    []*string{aws.String(groupID)},
 				BlockDeviceMappings: []*ec2.BlockDeviceMapping{bd},
 			},
 			InstanceCount: &count,
@@ -405,44 +410,55 @@ OuterLoop:
 	return errors.New("timed out")
 }
 
+func (clst *amazonCluster) GetCreateSecurityGroup(session *ec2.EC2) (
+	string, []*ec2.IpPermission, error) {
+
+	resp, err := session.DescribeSecurityGroups(
+		&ec2.DescribeSecurityGroupsInput{
+			Filters: []*ec2.Filter{
+				{
+					Name: aws.String("group-name"),
+					Values: []*string{
+						aws.String(clst.namespace),
+					},
+				},
+			},
+		})
+
+	if err != nil {
+		return "", nil, err
+	}
+
+	groups := resp.SecurityGroups
+	if len(groups) > 1 {
+		err := errors.New("Multiple Security Groups with the same name: " +
+			clst.namespace)
+		return "", nil, err
+	}
+
+	if len(groups) == 1 {
+		return *groups[0].GroupId, groups[0].IpPermissions, nil
+	}
+
+	csgResp, err := session.CreateSecurityGroup(
+		&ec2.CreateSecurityGroupInput{
+			Description: aws.String("Quilt Group"),
+			GroupName:   aws.String(clst.namespace),
+		})
+	if err != nil {
+		return "", nil, err
+	}
+
+	return *csgResp.GroupId, nil, nil
+}
+
 func (clst *amazonCluster) SetACLs(acls []string) error {
 	for region := range amis {
 		session := clst.getSession(region)
 
-		resp, err := session.DescribeSecurityGroups(
-			&ec2.DescribeSecurityGroupsInput{
-				Filters: []*ec2.Filter{
-					{
-						Name: aws.String("group-name"),
-						Values: []*string{
-							aws.String(clst.namespace),
-						},
-					},
-				},
-			})
-
+		groupID, ingress, err := clst.GetCreateSecurityGroup(session)
 		if err != nil {
 			return err
-		}
-
-		ingress := []*ec2.IpPermission{}
-		groups := resp.SecurityGroups
-		if len(groups) > 1 {
-			return errors.New(
-				"Multiple Security Groups with the same name: " +
-					clst.namespace)
-		} else if len(groups) == 0 {
-			_, err := session.CreateSecurityGroup(
-				&ec2.CreateSecurityGroupInput{
-					Description: aws.String("Quilt Group"),
-					GroupName:   aws.String(clst.namespace),
-				})
-			if err != nil {
-				return err
-			}
-		} else {
-			/* XXX: Deal with egress rules. */
-			ingress = groups[0].IpPermissions
 		}
 
 		permMap := make(map[string]bool)
@@ -488,11 +504,8 @@ func (clst *amazonCluster) SetACLs(acls []string) error {
 				}
 			}
 
-			if len(groups) == 0 {
-				continue
-			}
 			for _, grp := range p.UserIdGroupPairs {
-				if *grp.GroupId != *groups[0].GroupId {
+				if *grp.GroupId != groupID {
 					log.Debug("Amazon: Revoke "+
 						"ingress security group GroupID: ",
 						*grp.GroupId)

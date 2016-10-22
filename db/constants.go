@@ -61,15 +61,12 @@ const (
 
 	// Vagrant implements local virtual machines.
 	Vagrant = "Vagrant"
-
-	// Azure implements the Azure cloud provider.
-	Azure = "Azure"
 )
 
 // ParseProvider returns the Provider represented by 'name' or an error.
 func ParseProvider(name string) (Provider, error) {
 	switch name {
-	case "Amazon", "Google", "Vagrant", "Azure":
+	case "Amazon", "Google", "Vagrant":
 		return Provider(name), nil
 	default:
 		return "", errors.New("unknown provider")

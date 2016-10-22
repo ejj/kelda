@@ -41,8 +41,6 @@ func New(dbp db.Provider) Provider {
 		return &amazonCluster{}
 	case db.Google:
 		return &gceCluster{}
-	case db.Azure:
-		return &azureCluster{}
 	case db.Vagrant:
 		return &vagrantCluster{}
 	default:
@@ -78,8 +76,6 @@ func DefaultRegion(m db.Machine) db.Machine {
 		region = "us-west-1"
 	case "Google":
 		region = "us-east1-b"
-	case "Azure":
-		region = "centralus"
 	case "Vagrant":
 	default:
 		panic(fmt.Sprintf("Unknown Cloud Provider: %s", m.Provider))

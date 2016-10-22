@@ -32,14 +32,6 @@ func TestDefaultRegion(t *testing.T) {
 	}
 
 	m.Region = ""
-	m.Provider = "Azure"
-	exp = "centralus"
-	m = DefaultRegion(m)
-	if m.Region != exp {
-		t.Errorf("expected %s, found %s", exp, m.Region)
-	}
-
-	m.Region = ""
 	m.Provider = "Vagrant"
 	exp = ""
 	m = DefaultRegion(m)
@@ -120,7 +112,6 @@ func TestNewProviderSuccess(t *testing.T) {
 			t.Error("provider.New panicked on valid provider")
 		}
 	}()
-	New(db.Azure)
 	New(db.Amazon)
 	New(db.Google)
 	New(db.Vagrant)
@@ -138,16 +129,12 @@ func TestNewProviderFailure(t *testing.T) {
 func TestGroupBy(t *testing.T) {
 	machines := []Machine{
 		{Provider: db.Google}, {Provider: db.Amazon}, {Provider: db.Google},
-		{Provider: db.Google}, {Provider: db.Azure},
+		{Provider: db.Google},
 	}
 	grouped := GroupBy(machines)
 	m := grouped[db.Amazon]
 	if len(m) != 1 || m[0].Provider != machines[1].Provider {
 		t.Errorf("wrong Amazon machines: %v", m)
-	}
-	m = grouped[db.Azure]
-	if len(m) != 1 || m[0].Provider != machines[4].Provider {
-		t.Errorf("wrong Azure machines: %v", m)
 	}
 	m = grouped[db.Google]
 	if len(m) != 3 {

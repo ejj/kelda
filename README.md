@@ -15,7 +15,7 @@ their application up and running.
 Quilt takes a different approach.  It relies on a new domain specific language,
 Stitch, to _specify_ distributed applications, independent of the specific
 infrastructure they run on.  Given a stitch, Quilt can automatically deploy in
-a variety of environments: Amazon EC2, Microsoft Azure, and Google Compute
+a variety of environments: Amazon EC2, and Google Compute
 Engine, with more coming soon.  Furthermore it can do this with **no setup** --
 just point Quilt at a stitch and it will take care of the rest: booting virtual
 machines, starting containers on those VMs, and ensuring they can communicate.

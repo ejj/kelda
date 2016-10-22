@@ -5,7 +5,7 @@
 // Defines the set of addresses that are allowed to access Quilt VMs.
 (define AdminACL (list "local"))
 
-// Supported providers include "Amazon", "Azure", "Google", and "Vagrant".
+// Supported providers include "Amazon", "Google", and "Vagrant".
 (define Provider "Amazon")
 
 // We will apply this configuration to each VM.

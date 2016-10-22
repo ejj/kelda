@@ -225,7 +225,7 @@ func TestEngine(t *testing.T) {
 	(define Namespace "Namespace")
 	(list (machine (provider "Amazon") (size "m4.large") (role "Master"))
 	      (machine (provider "Vagrant") (size "v.large") (role "Master")))
-	(list (machine (provider "Azure") (size "a.large") (role "Worker"))
+	(list (machine (provider "Amazon") (size "m4.large") (role "Worker"))
 	      (machine (provider "Google") (size "g.large") (role "Worker")))
 	(define AdminACL (list "1.2.3.4/32"))`
 	UpdatePolicy(conn, prog(t, code))
@@ -241,7 +241,7 @@ func TestEngine(t *testing.T) {
 			return fmt.Errorf("bad masters: %s", spew.Sdump(masters))
 		}
 
-		if !providersInSlice(workers, db.ProviderSlice{db.Azure, db.Google}) {
+		if !providersInSlice(workers, db.ProviderSlice{db.Amazon, db.Google}) {
 			return fmt.Errorf("bad workers: %s", spew.Sdump(workers))
 		}
 		return nil
@@ -253,8 +253,7 @@ func TestEngine(t *testing.T) {
 	/* Test that machines with different providers don't match. */
 	code = `
 	(define Namespace "Namespace")
-	(list (machine (provider "Amazon") (size "m4.large") (role "Master"))
-	      (machine (provider "Azure") (size "a.large") (role "Master")))
+	(list (machine (provider "Amazon") (size "m4.large") (role "Master")))
 	(list (machine (provider "Amazon") (size "m4.large") (role "Worker")))
 	(define AdminACL (list "1.2.3.4/32"))`
 	UpdatePolicy(conn, prog(t, code))
@@ -263,7 +262,7 @@ func TestEngine(t *testing.T) {
 			return m.Role == db.Master
 		})
 
-		if !providersInSlice(masters, db.ProviderSlice{db.Amazon, db.Azure}) {
+		if !providersInSlice(masters, db.ProviderSlice{db.Amazon}) {
 			return fmt.Errorf("bad masters: %s", spew.Sdump(masters))
 		}
 		return nil

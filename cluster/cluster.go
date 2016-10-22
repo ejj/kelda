@@ -14,7 +14,7 @@ var myIP = util.MyIP
 var sleep = time.Sleep
 
 // Store the providers in a variable so we can change it in the tests
-var allProviders = []db.Provider{db.Amazon, db.Azure, db.Google, db.Vagrant}
+var allProviders = []db.Provider{db.Amazon, db.Google, db.Vagrant}
 
 type cluster struct {
 	conn    db.Conn

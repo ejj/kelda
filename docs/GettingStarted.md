@@ -36,10 +36,9 @@ follow the instructions
 ## Configure A Cloud Provider
 
 Below we discuss how to setup Quilt for Amazon EC2.  Other providers are
-supported as well, including [Vagrant](Vagrant.md), Microsoft Azure, and
-Google Compute Engine.  Since Quilt deploys systems consistently across
-providers, the details of the rest of this document will apply no matter what
-provider you choose.
+supported as well, including [Vagrant](Vagrant.md), and Google Compute Engine.
+Since Quilt deploys systems consistently across providers, the details of the
+rest of this document will apply no matter what provider you choose.
 
 For Amazon EC2, you'll first need to create an account with [Amazon Web
 Services](https://aws.amazon.com/ec2/) and then find your

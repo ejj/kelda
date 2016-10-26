@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	blockStart = "<!-- BEGIN CODE -->\n"
-	blockEnd   = "<!-- END CODE -->\n"
+	blockStart = "```javascript\n"
+	blockEnd   = "```\n"
 )
 
 var errUnbalanced = errors.New("unbalanced code blocks")

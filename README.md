@@ -39,12 +39,12 @@ communicate.
 To declare 3 docker containers with the latest Ubuntu image and a postgres
 database, one would use the following stitch:
 
-<!-- BEGIN CODE -->
+```javascript
     var containers = new Service("containers", new Container("ubuntu").replicate(3));
     var database = new Service("database", [new Container("postgres")]);
 
     deployment.deploy([containers, database]);
-<!-- END CODE -->
+```
 
 This will produce a simple network:
 
@@ -54,7 +54,7 @@ Next, suppose we'd like to expand with a batch processing system and 5 Apache
 containers. By default containers can't communicate, so we will have to add
 some network connections.
 
-<!-- BEGIN CODE -->
+```javascript
     // Create 5 Apache containers, and label them "webTier"
     var webTier = new Service("webTier", new Container("httpd").replicate(5));
 
@@ -79,7 +79,7 @@ some network connections.
 
     // Deploy our containers.
     deployment.deploy([webTier, batch, database]);
-<!-- END CODE -->
+```
 
 After the above commands, our application looks a lot more interesting:
 

@@ -92,6 +92,9 @@ tests:
 		done \
 	done
 
+docker-build-prod:
+	${DOCKER} build -t ${REPO}/quilt .
+
 docker-build-dev:
 	cd -P . && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build . \
 	    && ${DOCKER} build -t ${REPO}/quilt -f Dockerfile.Dev .

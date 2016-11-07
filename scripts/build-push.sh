@@ -9,4 +9,4 @@ set -e
 
 status_line "Begin build..."
 
-make all check lint format-check coverage
+make all check lint format-check coverage docker-build-prod

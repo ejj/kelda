@@ -2,7 +2,6 @@ package docker
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"errors"
 	"io"
@@ -61,8 +60,6 @@ type RunOptions struct {
 
 type client interface {
 	StartContainer(id string, hostConfig *dkc.HostConfig) error
-	CreateExec(opts dkc.CreateExecOptions) (*dkc.Exec, error)
-	StartExec(id string, opts dkc.StartExecOptions) error
 	UploadToContainer(id string, opts dkc.UploadToContainerOptions) error
 	DownloadFromContainer(id string, opts dkc.DownloadFromContainerOptions) error
 	RemoveContainer(opts dkc.RemoveContainerOptions) error
@@ -113,49 +110,6 @@ func (dk Client) Run(opts RunOptions) (string, error) {
 	}
 
 	return id, nil
-}
-
-// Exec executes a command within the container with the supplied name.
-func (dk Client) Exec(name string, cmd ...string) error {
-	_, err := dk.ExecVerbose(name, cmd...)
-	return err
-}
-
-// ExecVerbose executes a command within the container with the supplied name.  It also
-// returns the output of that command.
-func (dk Client) ExecVerbose(name string, cmd ...string) ([]byte, error) {
-	id, err := dk.getID(name)
-	if err != nil {
-		return nil, err
-	}
-
-	var inBuff, outBuff bytes.Buffer
-	exec, err := dk.CreateExec(dkc.CreateExecOptions{
-		Container:    id,
-		Cmd:          cmd,
-		AttachStdout: true})
-
-	if err != nil {
-		return nil, err
-	}
-
-	err = dk.StartExec(exec.ID, dkc.StartExecOptions{
-		OutputStream: &inBuff,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	scanner := bufio.NewScanner(bytes.NewReader(inBuff.Bytes()))
-	for scanner.Scan() {
-		outBuff.WriteString(scanner.Text() + "\n")
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return outBuff.Bytes(), nil
 }
 
 // WriteToContainer writes the contents of SRC into the file at path DST on the

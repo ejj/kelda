@@ -19,7 +19,6 @@ import (
 	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/minion/docker"
 	"github.com/NetSys/quilt/minion/ovsdb"
-	"github.com/NetSys/quilt/minion/supervisor"
 	"github.com/NetSys/quilt/stitch"
 	"github.com/NetSys/quilt/util"
 
@@ -178,7 +177,7 @@ func runWorker(conn db.Conn, dk docker.Client) {
 			wg.Add(1)
 			// XXX: Should be a go routine.
 			func() {
-				updateOpenFlow(dk, odb, containers, labels, connections)
+				updateOpenFlow(odb, containers, labels, connections)
 				wg.Done()
 			}()
 		} else if err != nil {
@@ -837,15 +836,15 @@ func generateCurrentRoutes(namespace string) (routeSlice, error) {
 //
 // XXX: The multipath action doesn't perform well.  We should migrate away from it
 // choosing datapath recirculation instead.
-func updateOpenFlow(dk docker.Client, odb ovsdb.Client, containers []db.Container,
+func updateOpenFlow(odb ovsdb.Client, containers []db.Container,
 	labels []db.Label, connections []db.Connection) {
 
-	targetOF, err := generateTargetOpenFlow(dk, odb, containers, labels, connections)
+	targetOF, err := generateTargetOpenFlow(odb, containers, labels, connections)
 	if err != nil {
 		log.WithError(err).Error("failed to get target OpenFlow flows")
 		return
 	}
-	currentOF, err := generateCurrentOpenFlow(dk)
+	currentOF, err := generateCurrentOpenFlow()
 	if err != nil {
 		log.WithError(err).Error("failed to get current OpenFlow flows")
 		return
@@ -853,23 +852,19 @@ func updateOpenFlow(dk docker.Client, odb ovsdb.Client, containers []db.Containe
 
 	_, flowsToDel, flowsToAdd := join.HashJoin(currentOF, targetOF, nil, nil)
 
-	if err := deleteOFRules(dk, flowsToDel); err != nil {
+	if err := addOrDelFlows(flowsToDel, false); err != nil {
 		log.WithError(err).Error("error deleting OpenFlow flow")
 	}
 
-	if err := addOFRules(dk, flowsToAdd); err != nil {
+	if err := addOrDelFlows(flowsToAdd, true); err != nil {
 		log.WithError(err).Error("error adding OpenFlow flow")
 	}
 }
 
-func generateCurrentOpenFlow(dk docker.Client) (OFRuleSlice, error) {
-	args := "ovs-ofctl dump-flows " + quiltBridge
-	stdout, err := dk.ExecVerbose(supervisor.Ovsvswitchd,
-		strings.Split(args, " ")...)
-
+func generateCurrentOpenFlow() (OFRuleSlice, error) {
+	stdout, err := exec.Command("ovs-ofctl", "dump-flows", quiltBridge).Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list OpenFlow flows: %s",
-			string(stdout))
+		return nil, fmt.Errorf("failed to list OpenFlow flows: %s", err)
 	}
 
 	scanner := bufio.NewScanner(bytes.NewReader(stdout))
@@ -901,9 +896,8 @@ func generateCurrentOpenFlow(dk docker.Client) (OFRuleSlice, error) {
 // The target flows must be in the same format as the output from ovs-ofctl
 // dump-flows. To achieve this, we have some rather ugly hacks that handle
 // a few special cases.
-func generateTargetOpenFlow(dk docker.Client, odb ovsdb.Client,
-	containers []db.Container, labels []db.Label,
-	connections []db.Connection) (OFRuleSlice, error) {
+func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
+	labels []db.Label, connections []db.Connection) (OFRuleSlice, error) {
 
 	dflGatewayMAC, err := getMac("", quiltBridge)
 	if err != nil {
@@ -1478,48 +1472,33 @@ func deleteRoute(namespace string, r route) error {
 	return nil
 }
 
-func addOFRules(dk docker.Client, flows []interface{}) error {
-	flowCommands := []string{}
+func addOrDelFlows(flows []interface{}, add bool) error {
+	args := []string{"add-flows", quiltBridge, "-"}
+	if !add {
+		args = []string{"del-flows", "--strict", quiltBridge, "-"}
+	}
+	cmd := exec.Command("ovs-ofctl", args...)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("error running ovs-ofctl: %s", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start ovs-ofctl: %s", err)
+	}
+
 	for _, f := range flows {
 		flow := f.(OFRule)
-		flowCommands = append(flowCommands, fmt.Sprintf("%s,%s,actions=%s",
-			flow.table, flow.match, flow.actions))
+		stdin.Write([]byte(fmt.Sprintf("%s,%s,actions=%s\n",
+			flow.table, flow.match, flow.actions)))
 	}
-	flowsString := strings.Join(flowCommands, "\n")
+	stdin.Close()
 
-	// XXX: We could skip the intermediary file by using a HEREDOC.
-	// add-flows can add all of our flows from a single file at one
-	// XXX: Cleanup the temp file.
-	flowsTempFile := ".wknet-OFadds"
-	err := dk.WriteToContainer(supervisor.Ovsvswitchd, flowsString, "/tmp",
-		flowsTempFile, 0644)
-	if err != nil {
-		return err
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("error running ovs-ofctl: %s", err)
 	}
 
-	args := fmt.Sprintf("ovs-ofctl add-flows %s %s", quiltBridge,
-		"/tmp/"+flowsTempFile)
-	err = dk.Exec(supervisor.Ovsvswitchd, strings.Split(args, " ")...)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func deleteOFRules(dk docker.Client, flows []interface{}) error {
-	flowCommands := []string{}
-	for _, f := range flows {
-		flow := f.(OFRule)
-		flowCommands = append(flowCommands, fmt.Sprintf("%s,%s",
-			flow.table, flow.match))
-	}
-	flowsString := strings.Join(flowCommands, " ")
-	args := fmt.Sprintf("ovs-ofctl del-flows --strict %s %s",
-		quiltBridge, flowsString)
-	err := dk.Exec(supervisor.Ovsvswitchd, strings.Split(args, " ")...)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	dkc "github.com/fsouza/go-dockerclient"
 )
 
 func TestPull(t *testing.T) {
@@ -316,60 +315,6 @@ func TestRemove(t *testing.T) {
 
 	if len(containers) > 0 {
 		t.Errorf(spew.Sprintf("Unexpected containers: %v", containers))
-	}
-}
-
-func TestExec(t *testing.T) {
-	t.Parallel()
-	md, dk := NewMock()
-
-	_, err := md.CreateExec(dkc.CreateExecOptions{Container: "Missing"})
-	if err == nil {
-		t.Error("Expected Error")
-	}
-
-	_, err = dk.Run(RunOptions{Name: "name"})
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-
-	cmd := []string{"cmd", "arg"}
-
-	err = dk.Exec("missing", cmd...)
-	if err == nil {
-		t.Error("Expected Error")
-	}
-
-	md.CreateExecError = true
-	err = dk.Exec("name", cmd...)
-	if err == nil {
-		t.Error("Expected Error")
-	}
-	md.CreateExecError = false
-
-	md.StartExecError = true
-	err = dk.Exec("name", cmd...)
-	if err == nil {
-		t.Error("Expected Error")
-	}
-	md.StartExecError = false
-
-	err = dk.Exec("name", cmd...)
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-
-	err = dk.Exec("name", append(cmd, "arg2")...)
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-
-	md.ResetExec()
-	if len(md.Executions) > 0 {
-		t.Errorf("Bad Executions %v", md.Executions)
-	}
-	if len(md.createdExecs) > 0 {
-		t.Errorf("Bad Executions %v", md.createdExecs)
 	}
 }
 

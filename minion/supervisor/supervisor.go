@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"fmt"
+	"os/exec"
 	"reflect"
 	"strings"
 
@@ -143,7 +144,7 @@ func (sv *supervisor) updateWorker(IP string, leaderIP string, etcdIPs []string)
 		return
 	}
 
-	err := sv.dk.Exec(Ovsvswitchd, "ovs-vsctl", "set", "Open_vSwitch", ".",
+	err := execRun("ovs-vsctl", "set", "Open_vSwitch", ".",
 		fmt.Sprintf("external_ids:ovn-remote=\"tcp:%s:6640\"", leaderIP),
 		fmt.Sprintf("external_ids:ovn-encap-ip=%s", IP),
 		"external_ids:ovn-encap-type=\"geneve\"",
@@ -206,16 +207,11 @@ func (sv *supervisor) run(name string, args ...string) {
 		Image:       images[name],
 		Args:        args,
 		NetworkMode: "host",
+		VolumesFrom: []string{"minion"},
 	}
 
-	switch name {
-	case Ovsvswitchd:
+	if name == Ovsvswitchd {
 		ro.Privileged = true
-		ro.VolumesFrom = []string{Ovsdb}
-	case Ovnnorthd:
-		ro.VolumesFrom = []string{Ovsdb}
-	case Ovncontroller:
-		ro.VolumesFrom = []string{Ovsdb}
 	}
 
 	log.Infof("Start Container: %s", name)
@@ -250,4 +246,9 @@ func initialClusterString(etcdIPs []string) string {
 
 func nodeName(IP string) string {
 	return fmt.Sprintf("master-%s", IP)
+}
+
+// execRun() is a global variable so that it can be mocked out by the unit tests.
+var execRun = func(name string, arg ...string) error {
+	return exec.Command(name, arg...).Run()
 }

@@ -3,7 +3,6 @@ package supervisor
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/NetSys/quilt/db"
@@ -18,9 +17,8 @@ func TestNone(t *testing.T) {
 		t.Errorf("fd.running = %s; want <empty>", spew.Sdump(ctx.fd.running()))
 	}
 
-	exec := ctx.fd.GetExec()
-	if len(exec) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(exec))
+	if len(ctx.execs) > 0 {
+		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
 	}
 
 	ctx.conn.Transact(func(view db.Database) error {
@@ -39,9 +37,8 @@ func TestNone(t *testing.T) {
 		t.Errorf("fd.running = %s; want <none>", spew.Sdump(ctx.fd.running()))
 	}
 
-	exec = ctx.fd.GetExec()
-	if len(exec) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(exec))
+	if len(ctx.execs) > 0 {
+		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
 	}
 }
 
@@ -70,9 +67,8 @@ func TestMaster(t *testing.T) {
 			spew.Sdump(exp))
 	}
 
-	exec := ctx.fd.GetExec()
-	if len(exec) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(exec))
+	if len(ctx.execs) > 0 {
+		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
 	}
 
 	/* Change IP, etcd IPs, and become the leader. */
@@ -100,9 +96,8 @@ func TestMaster(t *testing.T) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
 			spew.Sdump(exp))
 	}
-	exec = ctx.fd.GetExec()
-	if len(exec) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(exec))
+	if len(ctx.execs) > 0 {
+		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
 	}
 
 	/* Lose leadership. */
@@ -122,9 +117,8 @@ func TestMaster(t *testing.T) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
 			spew.Sdump(exp))
 	}
-	exec = ctx.fd.GetExec()
-	if len(exec) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(exec))
+	if len(ctx.execs) > 0 {
+		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
 	}
 }
 
@@ -153,9 +147,8 @@ func TestWorker(t *testing.T) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
 			spew.Sdump(exp))
 	}
-	exec := ctx.fd.GetExec()
-	if len(exec) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(exec))
+	if len(ctx.execs) > 0 {
+		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
 	}
 
 	leaderIP := "5.6.7.8"
@@ -183,12 +176,9 @@ func TestWorker(t *testing.T) {
 			spew.Sdump(exp))
 	}
 
-	exp = map[string][]string{
-		Ovsvswitchd: ovsExecArgs(ip, leaderIP),
-	}
-	exec = ctx.fd.GetExec()
-	if !reflect.DeepEqual(exec, exp) {
-		t.Errorf("fd.exec = %s\n\nwant %s", spew.Sdump(exec), spew.Sdump(exp))
+	execExp := [][]string{ovsExecArgs(ip, leaderIP)}
+	if !reflect.DeepEqual(ctx.execs, execExp) {
+		t.Errorf("execs = %s\n\nwant %s", spew.Sdump(ctx.execs), spew.Sdump(exp))
 	}
 }
 
@@ -221,12 +211,9 @@ func TestChange(t *testing.T) {
 			spew.Sdump(exp))
 	}
 
-	exp = map[string][]string{
-		Ovsvswitchd: ovsExecArgs(ip, leaderIP),
-	}
-	exec := ctx.fd.GetExec()
-	if !reflect.DeepEqual(exec, exp) {
-		t.Errorf("fd.exec = %s\n\nwant %s", spew.Sdump(exec), spew.Sdump(exp))
+	execExp := [][]string{ovsExecArgs(ip, leaderIP)}
+	if !reflect.DeepEqual(ctx.execs, execExp) {
+		t.Errorf("execs = %s\n\nwant %s", spew.Sdump(ctx.execs), spew.Sdump(exp))
 	}
 
 	ctx.fd.md.ResetExec()
@@ -246,9 +233,8 @@ func TestChange(t *testing.T) {
 		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
 			spew.Sdump(exp))
 	}
-	exec = ctx.fd.GetExec()
-	if len(exec) > 0 {
-		t.Errorf("fd.exec = %s\n\nwant <empty>", spew.Sdump(exec))
+	if len(ctx.execs) > 0 {
+		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
 	}
 
 	ctx.conn.Transact(func(view db.Database) error {
@@ -270,12 +256,9 @@ func TestChange(t *testing.T) {
 			spew.Sdump(exp))
 	}
 
-	exp = map[string][]string{
-		Ovsvswitchd: ovsExecArgs(ip, leaderIP),
-	}
-	exec = ctx.fd.GetExec()
-	if !reflect.DeepEqual(exec, exp) {
-		t.Errorf("fd.exec = %s\n\nwant %s", spew.Sdump(exec), spew.Sdump(exp))
+	execExp = [][]string{ovsExecArgs(ip, leaderIP)}
+	if !reflect.DeepEqual(ctx.execs, execExp) {
+		t.Errorf("execs = %s\n\nwant %s", spew.Sdump(ctx.execs), spew.Sdump(exp))
 	}
 }
 
@@ -376,17 +359,18 @@ func TestEtcdRemove(t *testing.T) {
 }
 
 type testCtx struct {
-	sv supervisor
-	fd fakeDocker
+	sv    supervisor
+	fd    fakeDocker
+	execs [][]string
 
 	conn  db.Conn
 	trigg db.Trigger
 }
 
-func initTest() testCtx {
+func initTest() *testCtx {
 	conn := db.New()
 	md, dk := docker.NewMock()
-	ctx := testCtx{supervisor{}, fakeDocker{dk, md}, conn,
+	ctx := testCtx{supervisor{}, fakeDocker{dk, md}, nil, conn,
 		conn.Trigger(db.MinionTable, db.EtcdTable)}
 	ctx.sv.conn = ctx.conn
 	ctx.sv.dk = ctx.fd.Client
@@ -401,10 +385,16 @@ func initTest() testCtx {
 	})
 	ctx.sv.runSystemOnce()
 
-	return ctx
+	execRun = func(name string, args ...string) error {
+		ctx.execs = append(ctx.execs, append([]string{name}, args...))
+		return nil
+	}
+
+	return &ctx
 }
 
-func (ctx testCtx) run() {
+func (ctx *testCtx) run() {
+	ctx.execs = nil
 	select {
 	case <-ctx.trigg.C:
 	}
@@ -414,18 +404,6 @@ func (ctx testCtx) run() {
 type fakeDocker struct {
 	docker.Client
 	md *docker.MockClient
-}
-
-func (f fakeDocker) GetExec() map[string][]string {
-	res := map[string][]string{}
-	for id, cmds := range f.md.Executions {
-		c, err := f.Get(id)
-		if err != nil {
-			continue
-		}
-		res[c.Name] = strings.Split(cmds[0], " ")
-	}
-	return res
 }
 
 func (f fakeDocker) running() map[string][]string {

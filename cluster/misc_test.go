@@ -23,6 +23,14 @@ func TestDefaultRegion(t *testing.T) {
 	}
 
 	m.Region = ""
+	m.Provider = "DigitalOcean"
+	exp = "sfo1"
+	m = DefaultRegion(m)
+	if m.Region != exp {
+		t.Errorf("expected %s, found %s", exp, m.Region)
+	}
+
+	m.Region = ""
 	m.Provider = "Google"
 	exp = "us-east1-b"
 	m = DefaultRegion(m)

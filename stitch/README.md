@@ -90,6 +90,7 @@ Its attributes are:
     - Worker
 - `provider` *string*: The machine provider. *required*
     - Amazon
+    - DigitalOcean
     - Google
 - `region` *string*: The region the machine will run in. *optional*
     - Provider-specific

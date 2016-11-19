@@ -59,6 +59,9 @@ const (
 	// Google implements Google Cloud Engine.
 	Google = "Google"
 
+	// DigitalOcean implements Digital Ocean Droplets.
+	DigitalOcean = "DigitalOcean"
+
 	// Vagrant implements local virtual machines.
 	Vagrant = "Vagrant"
 )
@@ -66,7 +69,7 @@ const (
 // ParseProvider returns the Provider represented by 'name' or an error.
 func ParseProvider(name string) (Provider, error) {
 	switch name {
-	case "Amazon", "Google", "Vagrant":
+	case "Amazon", "DigitalOcean", "Google", "Vagrant":
 		return Provider(name), nil
 	default:
 		return "", errors.New("unknown provider")

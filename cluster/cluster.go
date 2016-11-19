@@ -7,6 +7,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/quilt/quilt/cluster/acl"
 	"github.com/quilt/quilt/cluster/amazon"
+	"github.com/quilt/quilt/cluster/digitalocean"
 	"github.com/quilt/quilt/cluster/foreman"
 	"github.com/quilt/quilt/cluster/google"
 	"github.com/quilt/quilt/cluster/machine"
@@ -29,7 +30,7 @@ type provider interface {
 }
 
 // Store the providers in a variable so we can change it in the tests
-var allProviders = []db.Provider{db.Amazon, db.Google, db.Vagrant}
+var allProviders = []db.Provider{db.Amazon, db.DigitalOcean, db.Google, db.Vagrant}
 
 type instance struct {
 	provider db.Provider
@@ -458,6 +459,8 @@ func newProviderImpl(p db.Provider, namespace, region string) (provider, error) 
 		return amazon.New(namespace, region)
 	case db.Google:
 		return google.New(namespace, region)
+	case db.DigitalOcean:
+		return digitalocean.New(namespace, region)
 	case db.Vagrant:
 		return vagrant.New(namespace)
 	default:
@@ -471,6 +474,8 @@ func validRegionsImpl(p db.Provider) []string {
 		return amazon.Regions
 	case db.Google:
 		return google.Zones
+	case db.DigitalOcean:
+		return digitalocean.Regions
 	case db.Vagrant:
 		return []string{""} // Vagrant has no regions
 	default:

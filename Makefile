@@ -4,6 +4,7 @@ NOVENDOR=$(shell find . -path -prune -o -path ./vendor -prune -o -name '*.go' -p
 LINE_LENGTH_EXCLUDE=./api/pb/pb.pb.go \
 		    ./cluster/amazon/mock_client.go \
 		    ./cluster/cloudcfg/template.go \
+		    ./cluster/digitalocean/mock_client.go \
 		    ./cluster/google/mock_client_test.go \
 		    ./cluster/machine/amazon.go \
 		    ./cluster/machine/google.go \

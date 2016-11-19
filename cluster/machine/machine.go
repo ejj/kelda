@@ -38,6 +38,8 @@ func ChooseSize(provider db.Provider, ram, cpu stitch.Range, maxPrice float64) s
 	switch provider {
 	case db.Amazon:
 		return chooseBestSize(amazonDescriptions, ram, cpu, maxPrice)
+	case db.DigitalOcean:
+		return chooseBestSize(digitalOceanDescriptions, ram, cpu, maxPrice)
 	case db.Google:
 		return chooseBestSize(googleDescriptions, ram, cpu, maxPrice)
 	case db.Vagrant:

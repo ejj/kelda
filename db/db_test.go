@@ -285,6 +285,25 @@ func TestStringer(t *testing.T) {
 	}
 }
 
+func TestSortContainers(t *testing.T) {
+	containers := []Container{
+		{StitchID: 3},
+		{StitchID: 5},
+		{StitchID: 5},
+		{StitchID: 1},
+	}
+	expected := []Container{
+		{StitchID: 1},
+		{StitchID: 3},
+		{StitchID: 5},
+		{StitchID: 5},
+	}
+
+	if !reflect.DeepEqual(SortContainers(containers), expected) {
+		t.Errorf("Bad Container Sort: expected %q, got %q", expected, containers)
+	}
+}
+
 type mSort []Machine
 
 func (machines mSort) sort() {

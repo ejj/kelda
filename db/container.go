@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/NetSys/quilt/util"
@@ -101,8 +102,26 @@ func (c Container) String() string {
 	return fmt.Sprintf("Container-%d{%s}", c.ID, strings.Join(tags, ", "))
 }
 
+// SortContainers returns a slice of containers sorted according to the default database
+// sort order.
+func SortContainers(containers []Container) []Container {
+	rows := make([]row, 0, len(containers))
+	for _, m := range containers {
+		rows = append(rows, m)
+	}
+
+	sort.Sort(rowSlice(rows))
+
+	containers = make([]Container, 0, len(containers))
+	for _, r := range rows {
+		containers = append(containers, r.(Container))
+	}
+
+	return containers
+}
+
 func (c Container) less(r row) bool {
-	return c.ID < r.(Container).ID
+	return c.StitchID < r.(Container).StitchID
 }
 
 // Get returns the value contained at the given index

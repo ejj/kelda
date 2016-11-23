@@ -1,9 +1,11 @@
 package command
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -72,10 +74,48 @@ func TestContainerFlags(t *testing.T) {
 func TestContainerOutput(t *testing.T) {
 	t.Parallel()
 
-	res := containersStr([]db.Container{{ID: 1, Command: []string{"cmd", "arg"}}})
-	exp := "Container-1{run  cmd arg}\n"
-	if res != exp {
-		t.Errorf("Expected container command to print %s, but got %s.", exp, res)
+	containers := []db.Container{
+		{StitchID: 3, Minion: "3.3.3.3", Image: "image1",
+			Command: []string{"cmd", "1"}},
+		{StitchID: 1, Minion: "1.1.1.1", Image: "image2",
+			Labels: []string{"label1", "label2"}},
+		{StitchID: 4, Minion: "1.1.1.1", Image: "image3",
+			Command: []string{"cmd"},
+			Labels:  []string{"label1"}},
+		{StitchID: 7, Minion: "2.2.2.2", Image: "image1",
+			Command: []string{"cmd", "3", "4"},
+			Labels:  []string{"label1"}},
+		{StitchID: 8, Image: "image1"},
+	}
+
+	machines := []db.Machine{
+		{ID: 5, PrivateIP: "1.1.1.1"},
+		{ID: 6, PrivateIP: "2.2.2.2"},
+		{ID: 7, PrivateIP: ""},
+	}
+
+	var b bytes.Buffer
+	writeContainers(&b, machines, containers)
+	result := string(b.Bytes())
+
+	/* By replacing space with underscore, we make the spaces explicit and whitespace
+	* errors easier to debug. */
+	result = strings.Replace(result, " ", "_", -1)
+
+	expected := `ID____MACHINE______IMAGE_____COMMAND______LABELS
+__________________________________________
+3__________________image1____"cmd_1"______
+__________________________________________
+1_____Machine-5____image2____""___________label1,_label2
+4_____Machine-5____image3____"cmd"________label1
+__________________________________________
+7_____Machine-6____image1____"cmd_3_4"____label1
+__________________________________________
+8_____Machine-7____image1____""___________
+`
+	if result != expected {
+		t.Errorf("Bad Container Output\nResult:\n%s\nExpected:\n%s\n",
+			result, expected)
 	}
 }
 

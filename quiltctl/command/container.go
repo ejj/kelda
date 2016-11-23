@@ -2,6 +2,11 @@ package command
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"sort"
+	"strings"
+	"text/tabwriter"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -36,9 +41,9 @@ func (cCmd *Container) Run() int {
 		log.Error(err)
 		return 1
 	}
+	defer localClient.Close()
 
 	c, err := cCmd.clientGetter.LeaderClient(localClient)
-	localClient.Close()
 	if err != nil {
 		log.WithError(err).Error("Error connecting to leader.")
 		return 1
@@ -51,17 +56,50 @@ func (cCmd *Container) Run() int {
 		return 1
 	}
 
-	str := containersStr(containers)
-	fmt.Print(str)
+	machines, err := localClient.QueryMachines()
+	if err != nil {
+		log.WithError(err).Error("Unable to query machines")
+		return 1
+	}
 
+	writeContainers(os.Stdout, machines, containers)
 	return 0
 }
 
-func containersStr(containers []db.Container) string {
-	var containersStr string
-	for _, c := range containers {
-		containersStr += fmt.Sprintf("%v\n", c)
+func writeContainers(fd io.Writer, machines []db.Machine, containers []db.Container) {
+	w := tabwriter.NewWriter(fd, 0, 0, 4, ' ', 0)
+	defer w.Flush()
+	fmt.Fprintln(w, "ID\tMACHINE\tIMAGE\tCOMMAND\tLABELS")
+
+	ipIDMap := map[string]int{}
+	for _, m := range machines {
+		ipIDMap[m.PrivateIP] = m.ID
 	}
 
-	return containersStr
+	machineDBC := map[int][]db.Container{}
+	for _, dbc := range containers {
+		id := ipIDMap[dbc.Minion]
+		machineDBC[id] = append(machineDBC[id], dbc)
+	}
+
+	var machineIDs []int
+	for key := range machineDBC {
+		machineIDs = append(machineIDs, key)
+	}
+	sort.Ints(machineIDs)
+
+	for _, machineID := range machineIDs {
+		machineStr := ""
+		if machineID != 0 {
+			machineStr = fmt.Sprintf("Machine-%d", machineID)
+		}
+
+		fmt.Fprintln(w, "\t\t\t\t")
+		for _, dbc := range db.SortContainers(machineDBC[machineID]) {
+			cmd := strings.Join(dbc.Command, " ")
+			labels := strings.Join(dbc.Labels, ", ")
+			fmt.Fprintf(w, "%v\t%v\t%v\t\"%v\"\t%v\n", dbc.StitchID,
+				machineStr, dbc.Image, cmd, labels)
+		}
+	}
 }

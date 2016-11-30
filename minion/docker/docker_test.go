@@ -1,11 +1,10 @@
 package docker
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPull(t *testing.T) {
@@ -13,41 +12,26 @@ func TestPull(t *testing.T) {
 	md, dk := NewMock()
 
 	md.PullError = true
-	if err := dk.Pull("foo"); err == nil {
-		t.Errorf("Expected error")
-	}
-	if _, ok := dk.imageCache["foo"]; ok {
-		t.Errorf("Unexpected image cache entry foo")
-	}
+	err := dk.Pull("foo")
+	assert.NotNil(t, err)
+
+	_, ok := dk.imageCache["foo"]
+	assert.False(t, ok)
 	md.PullError = false
 
-	if err := dk.Pull("foo"); err != nil {
-		t.Errorf("Unexpected error: %s", err)
-	}
+	err = dk.Pull("foo")
+	assert.Nil(t, err)
 
 	exp := map[string]struct{}{
 		"foo": {},
 	}
-	if !reflect.DeepEqual(md.Pulled, exp) {
-		t.Error(spew.Sprintf("Pulled %v\nexpected: %v", md.Pulled, exp))
+	assert.Equal(t, exp, md.Pulled)
+	assert.Equal(t, exp, cacheKeys(dk.imageCache))
 
-	}
-	if !reflect.DeepEqual(cacheKeys(dk.imageCache), exp) {
-		t.Error(spew.Sprintf("Pulled %v\nexpected: %v", md.Pulled, exp))
-
-	}
-
-	if err := dk.Pull("foo"); err != nil {
-		t.Errorf("Unexpected error: %s", err)
-	}
-	if !reflect.DeepEqual(md.Pulled, exp) {
-		t.Error(spew.Sprintf("Pulled %v\nexpected: %v", md.Pulled, exp))
-
-	}
-	if !reflect.DeepEqual(cacheKeys(dk.imageCache), exp) {
-		t.Error(spew.Sprintf("Pulled %v\nexpected: %v", md.Pulled, exp))
-
-	}
+	err = dk.Pull("foo")
+	assert.Nil(t, err)
+	assert.Equal(t, exp, md.Pulled)
+	assert.Equal(t, exp, cacheKeys(dk.imageCache))
 }
 
 func checkCache(prePull func()) (bool, error) {
@@ -71,13 +55,8 @@ func checkCache(prePull func()) (bool, error) {
 
 func TestPullImageCached(t *testing.T) {
 	cached, err := checkCache(func() {})
-	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
-		return
-	}
-	if !cached {
-		t.Errorf("Should not have pulled the image because it's cached.")
-	}
+	assert.Nil(t, err)
+	assert.True(t, cached)
 }
 
 func TestPullImageNotCached(t *testing.T) {
@@ -86,13 +65,8 @@ func TestPullImageNotCached(t *testing.T) {
 	cached, err := checkCache(func() {
 		time.Sleep(500 * time.Millisecond)
 	})
-	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
-		return
-	}
-	if cached {
-		t.Errorf("Should have pulled the image because it's no longer cached.")
-	}
+	assert.Nil(t, err)
+	assert.False(t, cached)
 }
 
 func TestCreateGet(t *testing.T) {
@@ -100,20 +74,17 @@ func TestCreateGet(t *testing.T) {
 	md, dk := NewMock()
 
 	md.PullError = true
-	if _, err := dk.create("name", "image", nil, nil, nil, nil); err == nil {
-		t.Error("Expected error")
-	}
+	_, err := dk.create("name", "image", nil, nil, nil, nil)
+	assert.NotNil(t, err)
 	md.PullError = false
 
 	md.CreateError = true
-	if _, err := dk.create("name", "image", nil, nil, nil, nil); err == nil {
-		t.Error("Expected error")
-	}
+	_, err = dk.create("name", "image", nil, nil, nil, nil)
+	assert.NotNil(t, err)
 	md.CreateError = false
 
-	if _, err := dk.Get("awef"); err == nil {
-		t.Error("Expected error")
-	}
+	_, err = dk.Get("awef")
+	assert.NotNil(t, err)
 
 	args := []string{"arg1"}
 	env := map[string]struct{}{
@@ -121,14 +92,10 @@ func TestCreateGet(t *testing.T) {
 	}
 	labels := map[string]string{"label": "foo"}
 	id, err := dk.create("name", "image", args, labels, env, nil)
-	if err != nil {
-		t.Error("Unexpected error")
-	}
+	assert.Nil(t, err)
 
 	container, err := dk.Get(id)
-	if err != nil {
-		t.Error("Unexpected error")
-	}
+	assert.Nil(t, err)
 
 	expContainer := Container{
 		Name:   "name",
@@ -138,11 +105,7 @@ func TestCreateGet(t *testing.T) {
 		Env:    map[string]string{"envA": "B"},
 		Labels: labels,
 	}
-
-	if !reflect.DeepEqual(container, expContainer) {
-		t.Error(spew.Sprintf("containers %v\nexpected %v\n",
-			container, expContainer))
-	}
+	assert.Equal(t, expContainer, container)
 }
 
 func TestRun(t *testing.T) {
@@ -150,102 +113,64 @@ func TestRun(t *testing.T) {
 	md, dk := NewMock()
 
 	md.CreateError = true
-	if _, err := dk.Run(RunOptions{}); err == nil {
-		t.Error("Expected Error")
-	}
+	_, err := dk.Run(RunOptions{})
+	assert.NotNil(t, err)
 	md.CreateError = false
 
 	md.StartError = true
-	if _, err := dk.Run(RunOptions{}); err == nil {
-		t.Error("Expected Error")
-	}
+	_, err = dk.Run(RunOptions{})
+	assert.NotNil(t, err)
 	md.StartError = false
 
 	md.ListError = true
-	if _, err := dk.List(nil); err == nil {
-		t.Error("Expected Error")
-	}
+	_, err = dk.List(nil)
+	assert.NotNil(t, err)
 	md.ListError = false
 
 	md.ListError = true
-	if _, err := dk.IsRunning("foo"); err == nil {
-		t.Error("Expected Error")
-	}
+	_, err = dk.IsRunning("foo")
+	assert.NotNil(t, err)
 	md.ListError = false
 
 	containers, err := dk.list(nil, true)
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-
-	if len(containers) > 0 {
-		t.Errorf(spew.Sprintf("Unexpected containers: %v", containers))
-	}
+	assert.Nil(t, err)
+	assert.Zero(t, len(containers))
 
 	id1, err := dk.Run(RunOptions{Name: "name1"})
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
+	assert.Nil(t, err)
 
 	id2, err := dk.Run(RunOptions{Name: "name2"})
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
+	assert.Nil(t, err)
 
 	md.StopContainer(id2)
 
 	containers, err = dk.List(nil)
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-
-	if len(containers) != 1 || containers[0].ID != id1 {
-		t.Errorf(spew.Sprintf("Unexpected containers: %v", containers))
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(containers))
+	assert.Equal(t, id1, containers[0].ID)
 
 	containers, err = dk.list(nil, true)
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-
-	if len(containers) != 2 ||
-		(containers[0].ID != id2 && containers[1].ID != id2) {
-		t.Errorf(spew.Sprintf("Unexpected containers: %v", containers))
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(containers))
+	assert.True(t, containers[0].ID == id2 || containers[1].ID == id2)
 
 	md.InspectError = true
 	containers, err = dk.List(nil)
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-	if len(containers) > 0 {
-		t.Errorf(spew.Sprintf("Unexpected containers: %v", containers))
-	}
+	assert.Nil(t, err)
+	assert.Zero(t, len(containers))
 	md.InspectError = false
 
 	running, err := dk.IsRunning("no")
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-	if running {
-		t.Error("Container should not be running")
-	}
+	assert.Nil(t, err)
+	assert.False(t, running)
 
 	running, err = dk.IsRunning("name1")
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-	if !running {
-		t.Error("Container should be running")
-	}
+	assert.Nil(t, err)
+	assert.True(t, running)
 
 	running, err = dk.IsRunning("name2")
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-	if running {
-		t.Error("Container should not be running")
-	}
+	assert.Nil(t, err)
+	assert.False(t, running)
 }
 
 func TestRunEnv(t *testing.T) {
@@ -257,17 +182,11 @@ func TestRunEnv(t *testing.T) {
 		"c": "d",
 	}
 	id, err := dk.Run(RunOptions{Name: "name1", Env: env})
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
+	assert.Nil(t, err)
 
 	container, err := dk.Get(id)
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-	if !reflect.DeepEqual(container.Env, env) {
-		t.Errorf(spew.Sprintf("Got: %v\nExp: %v\n", container.Env, env))
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, env, container.Env)
 }
 
 func TestRemove(t *testing.T) {
@@ -275,47 +194,33 @@ func TestRemove(t *testing.T) {
 	md, dk := NewMock()
 
 	_, err := dk.Run(RunOptions{Name: "name1"})
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
+	assert.Nil(t, err)
 
 	id2, err := dk.Run(RunOptions{Name: "name2"})
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
+	assert.Nil(t, err)
 
 	md.ListError = true
-	if err := dk.Remove("name1"); err == nil {
-		t.Error("Expected Error")
-	}
+	err = dk.Remove("name1")
+	assert.NotNil(t, err)
 	md.ListError = false
 
 	md.RemoveError = true
-	if err := dk.Remove("name1"); err == nil {
-		t.Error("Expected Error")
-	}
+	err = dk.Remove("name1")
+	assert.NotNil(t, err)
 	md.RemoveError = false
 
-	if err := dk.Remove("unknown"); err == nil {
-		t.Error("Expected Error")
-	}
+	err = dk.Remove("unknown")
+	assert.NotNil(t, err)
 
-	if err := dk.Remove("name1"); err != nil {
-		t.Error("Unexpected Error")
-	}
+	err = dk.Remove("name1")
+	assert.Nil(t, err)
 
-	if err := dk.RemoveID(id2); err != nil {
-		t.Errorf("Unexpected Error: %v", err)
-	}
+	err = dk.RemoveID(id2)
+	assert.Nil(t, err)
 
 	containers, err := dk.list(nil, true)
-	if err != nil {
-		t.Errorf("Unexpected Error: %v", err)
-	}
-
-	if len(containers) > 0 {
-		t.Errorf(spew.Sprintf("Unexpected containers: %v", containers))
-	}
+	assert.Nil(t, err)
+	assert.Zero(t, len(containers))
 }
 
 func cacheKeys(cache map[string]time.Time) map[string]struct{} {

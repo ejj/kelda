@@ -3,7 +3,6 @@ package cluster
 import (
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/NetSys/quilt/db"
@@ -19,9 +18,7 @@ func TestBoot(t *testing.T) {
 	fm, clients := startTest()
 	fm.runOnce()
 
-	if clients.newCalls != 0 {
-		t.Errorf("clients.newCalls = %d, want 0", clients.newCalls)
-	}
+	assert.Zero(t, clients.newCalls)
 
 	fm.conn.Transact(func(view db.Database) error {
 		m := view.InsertMachine()
@@ -33,22 +30,14 @@ func TestBoot(t *testing.T) {
 	})
 
 	fm.runOnce()
-	if clients.newCalls != 1 {
-		t.Errorf("clients.newCalls = %d, want 1", clients.newCalls)
-	}
-
-	if _, ok := clients.clients["1.1.1.1"]; !ok {
-		t.Errorf("Missing 1.1.1.1: %s", spew.Sdump(clients))
-	}
+	assert.Equal(t, 1, clients.newCalls)
+	_, ok := clients.clients["1.1.1.1"]
+	assert.True(t, ok)
 
 	fm.runOnce()
-	if clients.newCalls != 1 {
-		t.Errorf("clients.newCalls = %d, want 1", clients.newCalls)
-	}
-
-	if _, ok := clients.clients["1.1.1.1"]; !ok {
-		t.Errorf("Missing 1.1.1.1: %s", spew.Sdump(clients))
-	}
+	assert.Equal(t, 1, clients.newCalls)
+	_, ok = clients.clients["1.1.1.1"]
+	assert.True(t, ok)
 
 	fm.conn.Transact(func(view db.Database) error {
 		m := view.InsertMachine()
@@ -60,31 +49,25 @@ func TestBoot(t *testing.T) {
 	})
 
 	fm.runOnce()
-	if clients.newCalls != 2 {
-		t.Errorf("clients.newCalls = %d, want 2", clients.newCalls)
-	}
+	assert.Equal(t, 2, clients.newCalls)
 
-	if _, ok := clients.clients["2.2.2.2"]; !ok {
-		t.Errorf("Missing 2.2.2.2: %s", spew.Sdump(clients))
-	}
-	if _, ok := clients.clients["1.1.1.1"]; !ok {
-		t.Errorf("Missing 1.1.1.1: %s", spew.Sdump(clients))
-	}
+	_, ok = clients.clients["2.2.2.2"]
+	assert.True(t, ok)
+
+	_, ok = clients.clients["1.1.1.1"]
+	assert.True(t, ok)
 
 	fm.runOnce()
 	fm.runOnce()
 	fm.runOnce()
 	fm.runOnce()
-	if clients.newCalls != 2 {
-		t.Errorf("clients.newCalls = %d, want 2", clients.newCalls)
-	}
+	assert.Equal(t, 2, clients.newCalls)
 
-	if _, ok := clients.clients["2.2.2.2"]; !ok {
-		t.Errorf("Missing 2.2.2.2: %s", spew.Sdump(clients))
-	}
-	if _, ok := clients.clients["1.1.1.1"]; !ok {
-		t.Errorf("Missing 1.1.1.1: %s", spew.Sdump(clients))
-	}
+	_, ok = clients.clients["2.2.2.2"]
+	assert.True(t, ok)
+
+	_, ok = clients.clients["1.1.1.1"]
+	assert.True(t, ok)
 
 	fm.conn.Transact(func(view db.Database) error {
 		machines := view.SelectFromMachine(func(m db.Machine) bool {
@@ -95,31 +78,25 @@ func TestBoot(t *testing.T) {
 	})
 
 	fm.runOnce()
-	if clients.newCalls != 2 {
-		t.Errorf("clients.newCalls = %d, want 2", clients.newCalls)
-	}
+	assert.Equal(t, 2, clients.newCalls)
 
-	if _, ok := clients.clients["2.2.2.2"]; !ok {
-		t.Errorf("Missing 2.2.2.2: %s", spew.Sdump(clients))
-	}
-	if _, ok := clients.clients["1.1.1.1"]; ok {
-		t.Errorf("Unexpected client 1.1.1.1: %s", spew.Sdump(clients))
-	}
+	_, ok = clients.clients["2.2.2.2"]
+	assert.True(t, ok)
+
+	_, ok = clients.clients["1.1.1.1"]
+	assert.False(t, ok)
 
 	fm.runOnce()
 	fm.runOnce()
 	fm.runOnce()
 	fm.runOnce()
-	if clients.newCalls != 2 {
-		t.Errorf("clients.newCalls = %d, want 2", clients.newCalls)
-	}
+	assert.Equal(t, 2, clients.newCalls)
 
-	if _, ok := clients.clients["2.2.2.2"]; !ok {
-		t.Errorf("Missing 2.2.2.2: %s", spew.Sdump(clients))
-	}
-	if _, ok := clients.clients["1.1.1.1"]; ok {
-		t.Errorf("Unexpected client 1.1.1.1: %s", spew.Sdump(clients))
-	}
+	_, ok = clients.clients["2.2.2.2"]
+	assert.True(t, ok)
+
+	_, ok = clients.clients["1.1.1.1"]
+	assert.False(t, ok)
 }
 
 func TestBootEtcd(t *testing.T) {
@@ -183,16 +160,12 @@ func TestInitForeman(t *testing.T) {
 
 	fm.init()
 	for _, m := range fm.minions {
-		if m.machine.Role != db.Worker {
-			t.Error("Minion machine not set to worker.")
-		}
+		assert.Equal(t, db.Role(db.Worker), m.machine.Role)
 	}
 
 	fm = startTestWithRole(pb.MinionConfig_Role(-7))
 	for _, m := range fm.minions {
-		if m.machine.Role != db.None {
-			t.Error("Minion machine set to invalid role.")
-		}
+		assert.Equal(t, db.None, m.machine.Role)
 	}
 }
 
@@ -228,13 +201,10 @@ func TestConfigConsistency(t *testing.T) {
 	fm.runOnce()
 	checkRoles := func(fore foreman) {
 		r := fore.minions["1.1.1.1"].client.(*fakeClient).mc.Role
-		if r != masterRole {
-			t.Errorf("Master has role %v, should be %v", r, masterRole)
-		}
+		assert.Equal(t, masterRole, r)
+
 		r = fore.minions["2.2.2.2"].client.(*fakeClient).mc.Role
-		if r != workerRole {
-			t.Errorf("Worker has role %v, should be %v", r, workerRole)
-		}
+		assert.Equal(t, workerRole, r)
 	}
 	checkRoles(fm)
 	fm.stop()
@@ -263,13 +233,11 @@ func TestConfigConsistency(t *testing.T) {
 	newfm.conn.Transact(func(view db.Database) error {
 		machines := view.SelectFromMachine(nil)
 		for _, m := range machines {
-			if m.PublicIP == "1.1.1.1" && m.Role != db.Master {
-				t.Errorf("db Master had role %v, expected %v", m.Role,
-					db.Master)
+			if m.PublicIP == "1.1.1.1" {
+				assert.Equal(t, db.Role(db.Master), m.Role)
 			}
-			if m.PublicIP == "2.2.2.2" && m.Role != db.Worker {
-				t.Errorf("db Worker had role %v, expected %v", m.Role,
-					db.Worker)
+			if m.PublicIP == "2.2.2.2" {
+				assert.Equal(t, db.Role(db.Worker), m.Role)
 			}
 		}
 		return nil

@@ -1,7 +1,6 @@
 package minion
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -9,7 +8,7 @@ import (
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/stitch"
 	"github.com/NetSys/quilt/util"
-	"github.com/davecgh/go-spew/spew"
+	"github.com/stretchr/testify/assert"
 )
 
 const testImage = "alpine"
@@ -19,41 +18,25 @@ func TestContainerTxn(t *testing.T) {
 	trigg := conn.Trigger(db.ContainerTable).C
 
 	spec := ""
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if fired(trigg) {
-		t.Error("Unexpected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.False(t, fired(trigg))
 
 	spec = `deployment.deploy(
 		new Service("a", [new Container("alpine", ["tail"])])
 	)`
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
 
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if fired(trigg) {
-		t.Error("Unexpected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.False(t, fired(trigg))
 
 	spec = `var b = new Container("alpine", ["tail"]);
 	deployment.deploy([
 		new Service("b", [b]),
 		new Service("a", [b, new Container("alpine", ["tail"])])
 	]);`
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
 
 	spec = `var b = new Service("b", [new Container("alpine", ["cat"])]);
 	deployment.deploy([
@@ -61,12 +44,8 @@ func TestContainerTxn(t *testing.T) {
 		new Service("a",
 			b.containers.concat([new Container("alpine", ["tail"])])),
 	]);`
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
 
 	spec = `var b = new Service("b", [new Container("ubuntu", ["cat"])]);
 	deployment.deploy([
@@ -74,12 +53,8 @@ func TestContainerTxn(t *testing.T) {
 		new Service("a",
 			b.containers.concat([new Container("alpine", ["tail"])])),
 	]);`
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
 
 	spec = `deployment.deploy(
 		new Service("a", [
@@ -87,22 +62,14 @@ func TestContainerTxn(t *testing.T) {
 			new Container("alpine", ["cat"])
 		])
 	);`
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
 
 	spec = `deployment.deploy(
 		new Service("a", [new Container("alpine")])
 	)`
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
 
 	spec = `var b = new Service("b", [new Container("alpine")]);
 	var c = new Service("c", [new Container("alpine")]);
@@ -111,26 +78,16 @@ func TestContainerTxn(t *testing.T) {
 		c,
 		new Service("a", b.containers.concat(c.containers)),
 	])`
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
 
-	if err := testContainerTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if fired(trigg) {
-		t.Error("Unexpected Database Change")
-	}
+	testContainerTxn(t, conn, spec)
+	assert.False(t, fired(trigg))
 }
 
-func testContainerTxn(conn db.Conn, spec string) string {
+func testContainerTxn(t *testing.T, conn db.Conn, spec string) {
 	compiled, err := stitch.FromJavascript(spec, stitch.DefaultImportGetter)
-	if err != nil {
-		return err.Error()
-	}
+	assert.Nil(t, err)
 
 	var containers []db.Container
 	conn.Transact(func(view db.Database) error {
@@ -151,17 +108,10 @@ func testContainerTxn(conn db.Conn, spec string) string {
 			}
 		}
 
-		if found == false {
-			return fmt.Sprintf("Missing expected label set: %v\n%v",
-				e, containers)
-		}
+		assert.True(t, found)
 	}
 
-	if len(containers) > 0 {
-		return spew.Sprintf("Unexpected containers: %s", containers)
-	}
-
-	return ""
+	assert.Empty(t, containers)
 }
 
 func TestConnectionTxn(t *testing.T) {
@@ -174,78 +124,44 @@ func TestConnectionTxn(t *testing.T) {
 	deployment.deploy([a, b, c]);`
 
 	spec := ""
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if fired(trigg) {
-		t.Error("Unexpected Database Change")
-	}
+	testConnectionTxn(t, conn, spec)
+	assert.False(t, fired(trigg))
 
 	spec = pre + `a.connect(80, a);`
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if fired(trigg) {
-		t.Error("Unexpected Database Change")
-	}
+	testConnectionTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
+
+	testConnectionTxn(t, conn, spec)
+	assert.False(t, fired(trigg))
 
 	spec = pre + `a.connect(90, a);`
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if fired(trigg) {
-		t.Error("Unexpected Database Change")
-	}
+	testConnectionTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
+
+	testConnectionTxn(t, conn, spec)
+	assert.False(t, fired(trigg))
 
 	spec = pre + `b.connect(90, a);
 	b.connect(90, c);
 	b.connect(100, b);
 	c.connect(101, a);`
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if fired(trigg) {
-		t.Error("Unexpected Database Change")
-	}
+	testConnectionTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
+
+	testConnectionTxn(t, conn, spec)
+	assert.False(t, fired(trigg))
 
 	spec = pre
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if !fired(trigg) {
-		t.Error("Expected Database Change")
-	}
-	if err := testConnectionTxn(conn, spec); err != "" {
-		t.Error(err)
-	}
-	if fired(trigg) {
-		t.Error("Unexpected Database Change")
-	}
+	testConnectionTxn(t, conn, spec)
+	assert.True(t, fired(trigg))
+
+	testConnectionTxn(t, conn, spec)
+	assert.False(t, fired(trigg))
 }
 
-func testConnectionTxn(conn db.Conn, spec string) string {
+func testConnectionTxn(t *testing.T, conn db.Conn, spec string) {
 	compiled, err := stitch.FromJavascript(spec, stitch.DefaultImportGetter)
-	if err != nil {
-		return err.Error()
-	}
+	assert.Nil(t, err)
 
 	var connections []db.Connection
 	conn.Transact(func(view db.Database) error {
@@ -267,16 +183,10 @@ func testConnectionTxn(conn db.Conn, spec string) string {
 			}
 		}
 
-		if found == false {
-			return fmt.Sprintf("Missing expected connection: %v", e)
-		}
+		assert.True(t, found)
 	}
 
-	if len(connections) > 0 {
-		return spew.Sprintf("Unexpected connections: %s", connections)
-	}
-
-	return ""
+	assert.Empty(t, connections)
 }
 
 func fired(c chan struct{}) bool {
@@ -294,9 +204,7 @@ func TestPlacementTxn(t *testing.T) {
 	checkPlacement := func(spec string, exp ...db.Placement) {
 		compiled, err := stitch.FromJavascript(spec,
 			stitch.DefaultImportGetter)
-		if err != nil {
-			t.Errorf("Unexpected error while compiling: %s", err.Error())
-		}
+		assert.Nil(t, err)
 
 		placements := map[db.Placement]struct{}{}
 		conn.Transact(func(view db.Database) error {
@@ -312,17 +220,10 @@ func TestPlacementTxn(t *testing.T) {
 			return nil
 		})
 
-		if len(placements) != len(exp) {
-			t.Errorf("Placement error in %s. Expected %v, got %v",
-				spec, exp, placements)
-		}
-
+		assert.Equal(t, len(exp), len(placements))
 		for _, p := range exp {
-			if _, ok := placements[p]; !ok {
-				t.Errorf("Placement error in %s. Expected %v, got %v",
-					spec, exp, placements)
-				break
-			}
+			_, ok := placements[p]
+			assert.True(t, ok)
 		}
 	}
 

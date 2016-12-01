@@ -7,14 +7,12 @@ import (
 	"math/rand"
 	"net"
 	"path"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/minion/ip"
-
-	"github.com/davecgh/go-spew/spew"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWriteMinion(t *testing.T) {
@@ -28,9 +26,8 @@ func TestWriteMinion(t *testing.T) {
 
 	writeMinion(conn, store)
 	val, err := store.Get(key)
-	if err == nil {
-		t.Errorf("Expected \"\", got %s", val)
-	}
+	assert.NotNil(t, err)
+	assert.Empty(t, val)
 
 	// Minion without a PrivateIP
 	conn.Transact(func(view db.Database) error {
@@ -46,9 +43,8 @@ func TestWriteMinion(t *testing.T) {
 
 	writeMinion(conn, store)
 	val, err = store.Get(key)
-	if err == nil {
-		t.Errorf("Expected \"\", got %s", val)
-	}
+	assert.NotNil(t, err)
+	assert.Empty(t, val)
 
 	conn.Transact(func(view db.Database) error {
 		m, _ := view.MinionSelf()
@@ -58,15 +54,11 @@ func TestWriteMinion(t *testing.T) {
 	})
 	writeMinion(conn, store)
 	val, err = store.Get(key)
-	if err != nil {
-		t.Errorf("Error %s", err)
-	}
+	assert.Nil(t, err)
 
 	expVal := `{"Role":"Master","PrivateIP":"1.2.3.4",` +
 		`"Provider":"Amazon","Size":"Big","Region":"Somewhere"}`
-	if val != expVal {
-		t.Errorf("Got %s\n\tExp %s", val, expVal)
-	}
+	assert.Equal(t, expVal, val)
 }
 
 func TestReadMinion(t *testing.T) {
@@ -81,35 +73,24 @@ func TestReadMinion(t *testing.T) {
 
 	readMinion(conn, store)
 	minions := conn.SelectFromMinion(nil)
-	if len(minions) != 1 {
-		t.Error(spew.Sprintf("Wrong number of minions: %s", minions))
-	}
+	assert.Equal(t, 1, len(minions))
 
 	minions[0].ID = m.ID
-	if !reflect.DeepEqual(minions[0], m) {
-		t.Error(spew.Sprintf("Incorrect DB Minion: %s", minions))
-	}
+	assert.Equal(t, m, minions[0])
 
 	store = NewMock()
 	store.Mkdir(nodeStore, 0)
 	readMinion(conn, store)
 	minions = conn.SelectFromMinion(nil)
-	if len(minions) > 0 {
-		t.Error(spew.Sprintf("Expected zero minions, found: %s", minions))
-	}
+	assert.Empty(t, minions)
 }
 
 func TestReadDiff(t *testing.T) {
 	t.Parallel()
 
 	add, del := diffMinion(nil, nil)
-	if len(add) > 0 {
-		t.Error(spew.Sprintf("Expected no additions, found: %s", add))
-	}
-
-	if len(del) > 0 {
-		t.Error(spew.Sprintf("Expected no deletions, found: %s", del))
-	}
+	assert.Empty(t, add)
+	assert.Empty(t, del)
 
 	sharedEtcd := randMinion()
 	sharedDbm := sharedEtcd
@@ -120,50 +101,29 @@ func TestReadDiff(t *testing.T) {
 	dbms := []db.Minion{dbMinion()}
 
 	del, add = diffMinion(append(dbms, sharedDbm), append(etcd, sharedEtcd))
-
-	if !reflect.DeepEqual(del, dbms) {
-		t.Error(spew.Sprintf("Diff Deletion Found:\n\t%s\nExpected:\n\t%s",
-			del, dbms))
-	}
-
-	if !reflect.DeepEqual(add, etcd) {
-		t.Error(spew.Sprintf("Diff Addition Found:\n\t%s\nExpected:\n\t%s",
-			add, etcd))
-	}
+	assert.Equal(t, dbms, del)
+	assert.Equal(t, etcd, add)
 }
 
 func TestFilter(t *testing.T) {
 	newDB, newEtcd := filterSelf(nil, nil)
-	if len(newDB) > 0 || len(newEtcd) > 0 {
-		t.Error(spew.Sprintf("Filter change unexpected: %s, %s", newDB, newEtcd))
-	}
+	assert.Empty(t, newDB)
+	assert.Empty(t, newEtcd)
 
 	dbms := []db.Minion{dbMinion(), dbMinion()}
 	etcd := []db.Minion{randMinion(), randMinion()}
 
 	newDB, newEtcd = filterSelf(dbms, etcd)
-	if !reflect.DeepEqual(dbms, newDB) {
-		t.Error(spew.Sprintf("No Self DB Found:\n\t%s\nExpected:\n\t%s",
-			newDB, dbms))
-	}
-	if !reflect.DeepEqual(etcd, newEtcd) {
-		t.Error(spew.Sprintf("No Self Etcd Found:\n\t%s\nExpected:\n\t%s",
-			newEtcd, etcd))
-	}
+	assert.Equal(t, dbms, newDB)
+	assert.Equal(t, etcd, newEtcd)
 
 	self := randMinion()
 	selfEtcd := self
 	self.Self = true
 
 	newDB, newEtcd = filterSelf(append(dbms, self), append(etcd, selfEtcd))
-	if !reflect.DeepEqual(dbms, newDB) {
-		t.Error(spew.Sprintf("No Self DB Found:\n\t%s\nExpected:\n\t%s",
-			newDB, dbms))
-	}
-	if !reflect.DeepEqual(etcd, newEtcd) {
-		t.Error(spew.Sprintf("No Self Etcd Found:\n\t%s\nExpected:\n\t%s",
-			newEtcd, etcd))
-	}
+	assert.Equal(t, dbms, newDB)
+	assert.Equal(t, etcd, newEtcd)
 }
 
 // Test that GenerateSubnet generates valid subnets, and passively test that it can
@@ -178,27 +138,15 @@ func TestGenerateSubnet(t *testing.T) {
 	emptyBits := uint32(0xffffffff >> uint(minionMaskBits))
 	for i := 0; i < 3500; i++ {
 		subnetStr, err := generateSubnet(store, db.Minion{PrivateIP: "10.1.0.1"})
-		if err != nil {
-			t.Fatal("Ran out of attempts to generate subnet")
-		}
+		assert.Nil(t, err)
 
 		subnet := ip.Parse(subnetStr, ip.QuiltPrefix, ip.QuiltMask)
-		if subnet.Equal(ip.LabelPrefix) {
-			t.Fatal("Generated the label subnet")
-		}
-
-		if !subnet.Mask(ip.QuiltMask).Equal(ip.QuiltPrefix) {
-			t.Fatal("Generated subnet is not within private subnet")
-		}
-
-		if !subnet.Mask(ip.SubMask).Equal(subnet) {
-			t.Fatal("Generated subnet is not with its own CIDR subnet")
-		}
+		assert.False(t, subnet.Equal(ip.LabelPrefix))
+		assert.True(t, subnet.Mask(ip.QuiltMask).Equal(ip.QuiltPrefix))
+		assert.True(t, subnet.Mask(ip.SubMask).Equal(subnet))
 
 		subnetInt := binary.BigEndian.Uint32(subnet.To4())
-		if subnetInt&emptyBits != 0 {
-			t.Fatal("Generated subnet uses too many bits")
-		}
+		assert.Zero(t, subnetInt&emptyBits)
 	}
 }
 
@@ -262,18 +210,11 @@ func TestUpdateSubnet(t *testing.T) {
 	thirdSubnet := net.IPv4(10, 0, 48, 0).String()
 
 	minion, err := store.Get(path.Join(subnetStore, firstSubnet))
-	if err != nil {
-		t.Fatalf("Expected subnet %s/20 to be claimed, none found", firstSubnet)
-	}
-
-	if minion != "1.2.3.4" {
-		t.Fatalf("Wrong minion owns subnet %s/20", firstSubnet)
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, "1.2.3.4", minion)
 
 	err = store.Set(path.Join(subnetStore, firstSubnet), "1.2.3.5", time.Minute)
-	if err != nil {
-		t.Fatal("Could not overwrite store value")
-	}
+	assert.Nil(t, err)
 
 	done = timeUpdateSubnet()
 	timer = time.After(100 * time.Millisecond)
@@ -285,22 +226,12 @@ func TestUpdateSubnet(t *testing.T) {
 	}
 
 	minion, err = store.Get(path.Join(subnetStore, firstSubnet))
-	if err != nil {
-		t.Fatalf("Expected subnet %s/20 to be claimed, none found", firstSubnet)
-	}
-
-	if minion != "1.2.3.5" {
-		t.Fatal("Minion 1.2.3.4 reclaimed a subnet it shouldn't have")
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, "1.2.3.5", minion)
 
 	minion, err = store.Get(path.Join(subnetStore, secondSubnet))
-	if err != nil {
-		t.Fatalf("Expected subnet %s/20 to be claimed, none found", secondSubnet)
-	}
-
-	if minion != "1.2.3.4" {
-		t.Fatalf("Wrong minion owns subnet %s/20", secondSubnet)
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, "1.2.3.4", minion)
 
 	store.advanceTime(2 * time.Second)
 
@@ -314,18 +245,11 @@ func TestUpdateSubnet(t *testing.T) {
 	}
 
 	_, err = store.Get(path.Join(subnetStore, secondSubnet))
-	if err == nil {
-		t.Fatalf("Expected subnet %s/20 to be expired", secondSubnet)
-	}
+	assert.NotNil(t, err)
 
 	minion, err = store.Get(path.Join(subnetStore, thirdSubnet))
-	if err != nil {
-		t.Fatalf("Expected subnet %s/20 to be claimed, none found", thirdSubnet)
-	}
-
-	if minion != "1.2.3.4" {
-		t.Fatalf("Wrong minion owns subnet %s/20", thirdSubnet)
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, "1.2.3.4", minion)
 }
 
 func randMinion() db.Minion {

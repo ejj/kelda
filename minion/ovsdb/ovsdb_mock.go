@@ -77,65 +77,79 @@ type fakeMutation struct {
 
 // Applies mutation on a row, and returns number of mutations applied.
 func (mutation fakeMutation) apply(row *fakeRow) int {
-	mutationCount := 0
-	column := (*row)[mutation.column].([]interface{})
-
 	switch mutationVal := mutation.value.(type) {
 	case *ovs.OvsSet:
-		data := column[1].([]interface{})
-
-		uuidGeneric := mutationVal.GoSet[0].(ovs.UUID).GoUUID
-		uuid, ok := uuidMap[uuidGeneric]
-		if !ok {
-			uuid = uuidGeneric
-		}
-		switch mutation.mutator {
-		case "insert":
-			data = append(data, []interface{}{"uuid", uuid})
-			mutationCount++
-		case "delete":
-			for i, e := range data {
-				if e.([]interface{})[1] == uuid {
-					data = append(data[:i], data[i+1:]...)
-				}
-			}
-			mutationCount++
-		default:
-			panic("mutator is not yet supported:" + mutation.mutator)
-		}
-		column[1] = data
+		return mutation.applySet(row, mutationVal)
 	case *ovs.OvsMap:
-		switch data := column[1].(type) {
-		case map[string]interface{}:
-			for k, v := range mutationVal.GoMap {
-				switch mutation.mutator {
-				case "insert":
-					data[k.(string)] = v
-					mutationCount++
-				default:
-					panic("mutator is not yet supported:" +
-						mutation.mutator)
-				}
-			}
-			column[1] = data
-		case []interface{}:
-			for k, v := range mutationVal.GoMap {
-				switch mutation.mutator {
-				case "insert":
-					data = append(data, []interface{}{k, v})
-					mutationCount++
-				default:
-					panic("mutator is not yet supported:" +
-						mutation.mutator)
-				}
-			}
-			column[1] = data
-		default:
-			panic("not yet supported.")
-		}
+		return mutation.applyMap(row, mutationVal)
 	default:
 		panic("mutation type is not yet supported:" +
 			reflect.TypeOf(mutationVal).String())
+	}
+}
+
+func (mutation fakeMutation) applySet(row *fakeRow, set *ovs.OvsSet) int {
+	mutationCount := 0
+	column := (*row)[mutation.column].([]interface{})
+	data := column[1].([]interface{})
+
+	uuidGeneric := set.GoSet[0].(ovs.UUID).GoUUID
+	uuid, ok := uuidMap[uuidGeneric]
+	if !ok {
+		uuid = uuidGeneric
+	}
+	switch mutation.mutator {
+	case "insert":
+		data = append(data, []interface{}{"uuid", uuid})
+		mutationCount++
+	case "delete":
+		for i, e := range data {
+			if e.([]interface{})[1] == uuid {
+				data = append(data[:i], data[i+1:]...)
+				break
+			}
+		}
+		mutationCount++
+	default:
+		panic("mutator is not yet supported:" + mutation.mutator)
+	}
+
+	column[1] = data
+	(*row)[mutation.column] = column
+	return mutationCount
+}
+
+func (mutation fakeMutation) applyMap(row *fakeRow, mp *ovs.OvsMap) int {
+	mutationCount := 0
+	column := (*row)[mutation.column].([]interface{})
+
+	switch data := column[1].(type) {
+	case map[string]interface{}:
+		for k, v := range mp.GoMap {
+			switch mutation.mutator {
+			case "insert":
+				data[k.(string)] = v
+				mutationCount++
+			default:
+				panic("mutator is not yet supported:" +
+					mutation.mutator)
+			}
+		}
+		column[1] = data
+	case []interface{}:
+		for k, v := range mp.GoMap {
+			switch mutation.mutator {
+			case "insert":
+				data = append(data, []interface{}{k, v})
+				mutationCount++
+			default:
+				panic("mutator is not yet supported:" +
+					mutation.mutator)
+			}
+		}
+		column[1] = data
+	default:
+		panic("not yet supported.")
 	}
 
 	(*row)[mutation.column] = column

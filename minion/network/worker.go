@@ -131,18 +131,24 @@ func runWorker(conn db.Conn, dk docker.Client) {
 			wg.Done()
 		}()
 
-		if publicInterface != "" {
-			updateNAT(publicInterface, containers, connections)
-		}
-		updatePorts(odb, containers)
-
 		wg.Add(1)
 		go func() {
-			updateOpenFlow(odb, containers, labels, connections)
+			if publicInterface != "" {
+				updateNAT(publicInterface, containers, connections)
+			}
 			wg.Done()
 		}()
 
-		updateContainerIPs(containers, labels)
+		wg.Add(1)
+		go func() {
+			updateContainerIPs(containers, labels)
+			wg.Done()
+		}()
+
+		// Ports must be updated before OpenFlow so they must be done in the same
+		// go routine.
+		updatePorts(odb, containers)
+		updateOpenFlow(odb, containers, labels, connections)
 
 		wg.Wait()
 		return nil

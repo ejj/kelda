@@ -43,7 +43,9 @@ func TestConfigs(t *testing.T) {
 	quiltPath := filepath.Join(goPath, "src")
 
 	testConfig("../quilt-tester/tests/100-logs/logs.js", quiltPath)
+	testConfig("../quilt-tester/tests/30-mean/mean.js", quiltPath)
 	testConfig("../quilt-tester/tests/20-spark/spark.js", quiltPath)
+	testConfig("../quilt-tester/tests/10-network/network.js", quiltPath)
 	testConfig("./example.js", quiltPath)
 	testConfig("./spark/sparkPI.js", quiltPath)
 	testConfig("./wordpress/wordpress-example.js", quiltPath)

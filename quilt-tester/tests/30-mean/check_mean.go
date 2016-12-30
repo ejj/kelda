@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/NetSys/quilt/api"
@@ -35,11 +37,26 @@ func main() {
 		log.WithError(err).Fatal("FAILED, couldn't query machines")
 	}
 
-	if httpGetTest(machines, containers) {
+	if logContainers(containers) && httpGetTest(machines, containers) {
 		log.Info("PASSED")
 	} else {
 		log.Info("FAILED")
 	}
+}
+
+func logContainers(containers []db.Container) bool {
+	var failed bool
+	for _, c := range containers {
+		cmd := exec.Command("quilt", "logs", strconv.Itoa(c.StitchID))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.WithError(err).Error("Failed to log: %s", c)
+			failed = true
+		}
+		log.Infof("Container: %s\n%s\n\n", c, string(out))
+	}
+
+	return !failed
 }
 
 func httpGetTest(machines []db.Machine, containers []db.Container) bool {

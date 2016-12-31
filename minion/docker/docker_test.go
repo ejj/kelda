@@ -256,7 +256,7 @@ func TestRemove(t *testing.T) {
 	assert.Zero(t, len(containers))
 }
 
-func cacheKeys(cache map[string]time.Time) map[string]struct{} {
+func cacheKeys(cache map[string]*cacheEntry) map[string]struct{} {
 	res := map[string]struct{}{}
 	for k := range cache {
 		res[k] = struct{}{}

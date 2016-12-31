@@ -45,7 +45,12 @@ type ContainerSlice []Container
 type Client struct {
 	client
 	*sync.Mutex
-	imageCache map[string]time.Time
+	imageCache map[string]*cacheEntry
+}
+
+type cacheEntry struct {
+	sync.Mutex
+	expiration time.Time
 }
 
 // RunOptions changes the behavior of the Run function.
@@ -88,7 +93,7 @@ func New(sock string) Client {
 		break
 	}
 
-	return Client{client, &sync.Mutex{}, map[string]time.Time{}}
+	return Client{client, &sync.Mutex{}, map[string]*cacheEntry{}}
 }
 
 // Run creates and starts a new container in accordance RunOptions.
@@ -213,17 +218,17 @@ func (dk Client) RemoveID(id string) error {
 // <repo>:<tag>@<digestFormat>:<digest>.
 // If no tag is specified, then the "latest" tag is applied.
 func (dk Client) Pull(image string) error {
-	dk.Lock()
-	defer dk.Unlock()
-
-	now := time.Now()
-	if expiration, ok := dk.imageCache[image]; ok && now.Before(expiration) {
-		return nil
-	}
-
 	repo, tag := dkc.ParseRepositoryTag(image)
 	if tag == "" {
 		tag = "latest"
+	}
+
+	entry := dk.getCacheEntry(repo, tag)
+	entry.Lock()
+	defer entry.Unlock()
+
+	if time.Now().Before(entry.expiration) {
+		return nil
 	}
 
 	log.WithField("image", image).Info("Begin image pull")
@@ -233,9 +238,22 @@ func (dk Client) Pull(image string) error {
 		return err
 	}
 
-	dk.imageCache[repo+":"+tag] = now.Add(pullCacheTimeout)
+	entry.expiration = time.Now().Add(pullCacheTimeout)
 	log.WithField("image", image).Info("Finish image pull")
 	return nil
+}
+
+func (dk Client) getCacheEntry(repo, tag string) *cacheEntry {
+	dk.Lock()
+	defer dk.Unlock()
+
+	key := repo + ":" + tag
+	if entry, ok := dk.imageCache[key]; ok {
+		return entry
+	}
+	entry := &cacheEntry{}
+	dk.imageCache[key] = entry
+	return entry
 }
 
 // List returns a slice of all running containers.  The List can be be filtered with the

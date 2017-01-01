@@ -226,13 +226,15 @@ func (dk Client) Pull(image string) error {
 		tag = "latest"
 	}
 
-	log.Infof("Pulling docker image %s.", image)
+	log.WithField("image", image).Info("Begin image pull")
 	opts := dkc.PullImageOptions{Repository: repo, Tag: tag}
 	if err := dk.PullImage(opts, dkc.AuthConfiguration{}); err != nil {
+		log.WithField("image", image).WithError(err).Error("Failed image pull")
 		return err
 	}
 
 	dk.imageCache[repo+":"+tag] = now.Add(pullCacheTimeout)
+	log.WithField("image", image).Info("Finish image pull")
 	return nil
 }
 

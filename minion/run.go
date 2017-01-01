@@ -35,7 +35,7 @@ func Run() {
 	go minionServerRun(conn)
 	go supervisor.Run(conn, dk)
 	go scheduler.Run(conn, dk)
-	go network.Run(conn, dk)
+	go network.Run(conn)
 	go etcd.Run(conn)
 	go syncAuthorizedKeys(conn)
 

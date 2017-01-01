@@ -7,6 +7,7 @@ import (
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/minion/docker"
+	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/minion/network/plugin"
 	"github.com/NetSys/quilt/util"
 	log "github.com/Sirupsen/logrus"
@@ -137,6 +138,7 @@ func dockerRun(dk docker.Client, in chan interface{}) {
 			Env:         dbc.Env,
 			Labels:      map[string]string{labelKey: labelValue},
 			NetworkMode: plugin.NetworkName,
+			DNS:         []string{ipdef.GatewayIP.String()},
 			DNSSearch:   []string{"q"},
 		})
 		if err != nil {

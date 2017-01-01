@@ -10,7 +10,6 @@ import (
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/minion/docker"
 	"github.com/NetSys/quilt/minion/ovsdb"
 	"github.com/NetSys/quilt/util"
 
@@ -32,13 +31,14 @@ type dbport struct {
 type dbslice []dbport
 
 // Run blocks implementing the network services.
-func Run(conn db.Conn, dk docker.Client) {
+func Run(conn db.Conn) {
 	loopLog := util.NewEventTimer("Network")
 	for range conn.TriggerTick(30, db.MinionTable, db.ContainerTable,
 		db.ConnectionTable, db.LabelTable, db.EtcdTable).C {
 
 		loopLog.LogStart()
-		runWorker(conn, dk)
+		runDNS(conn)
+		runWorker(conn)
 		runMaster(conn)
 		loopLog.LogEnd()
 	}

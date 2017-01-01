@@ -16,11 +16,9 @@ import (
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/minion/docker"
 	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/minion/ovsdb"
 	"github.com/NetSys/quilt/stitch"
-	"github.com/NetSys/quilt/util"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -66,7 +64,6 @@ type OFRuleSlice []OFRule
 //      patch ports between br-int and quilt-int, then install flows to send traffic
 //      between the patch port on quilt-int and the container's outer interface
 //      (These flows live in Table 2)
-//    - Update the container's /etc/hosts file with the set of labels it may access.
 //    - Populate quilt-int with the OpenFlow rules necessary to facilitate forwarding.
 //
 // To connect to the public internet, we do the following setup:
@@ -81,7 +78,7 @@ type OFRuleSlice []OFRule
 //        * Forward arp packets to both br-int and the default gateway.
 //        * Forward packets from LOCAL to the container with the packet's dst MAC.
 
-func runWorker(conn db.Conn, dk docker.Client) {
+func runWorker(conn db.Conn) {
 	minion, err := conn.MinionSelf()
 	if err != nil || !minion.SupervisorInit || minion.Role != db.Worker {
 		return
@@ -124,12 +121,6 @@ func runWorker(conn db.Conn, dk docker.Client) {
 		connections := view.SelectFromConnection(nil)
 
 		var wg sync.WaitGroup
-
-		wg.Add(1)
-		go func() {
-			updateEtcHosts(dk, containers, labels, connections)
-			wg.Done()
-		}()
 
 		wg.Add(1)
 		go func() {
@@ -569,6 +560,15 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 				"actions=output:%d", ofVeth, ofQuilt),
 			fmt.Sprintf("table=0 priority=0,in_port=%d "+
 				"actions=output:%d", ofVeth, ofQuilt),
+
+			// Always send DNS packets to and from the default gateway.
+			fmt.Sprintf("table=0 priority=5001,"+
+				"in_port=%d,udp,dl_src=%s,dl_dst=%s,nw_dst=%s,tp_dst=53"+
+				" actions=LOCAL", ofVeth, dbcMac, gwMac,
+				ipdef.GatewayIP),
+			fmt.Sprintf("table=0 priority=5001,in_port=LOCAL,udp,dl_src=%s,"+
+				"dl_dst=%s,nw_src=%s,tp_src=53 actions=output:%d",
+				gwMac, dbcMac, ipdef.GatewayIP, ofVeth),
 		}...)
 
 		protocols := []string{"tcp", "udp"}
@@ -616,7 +616,6 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 			}
 		}
 
-		var arpDst string
 		if len(portsToWeb) > 0 || len(portsFromWeb) > 0 {
 			// Allow ICMP
 			rules = append(rules,
@@ -627,10 +626,6 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 					"table=0 priority=5000,icmp,in_port=LOCAL,"+
 						"dl_dst=%s actions=output:%d",
 					dbcMac, ofVeth))
-
-			arpDst = fmt.Sprintf("%d,LOCAL", ofQuilt)
-		} else {
-			arpDst = fmt.Sprintf("%d", ofQuilt)
 		}
 
 		if len(portsFromWeb) > 0 {
@@ -643,7 +638,7 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 
 		rules = append(rules, fmt.Sprintf(
 			"table=0 priority=4500,arp,in_port=%d "+
-				"actions=output:%s", ofVeth, arpDst))
+				"actions=output:%d,LOCAL", ofVeth, ofQuilt))
 		rules = append(rules, fmt.Sprintf(
 			"table=0 priority=4500,arp,in_port=LOCAL,"+
 				"dl_dst=%s actions=output:%d", dbcMac, ofVeth))
@@ -721,118 +716,6 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 	}
 
 	return targetRules, nil
-}
-
-func updateEtcHosts(dk docker.Client, containers []db.Container, labels []db.Label,
-	connections []db.Connection) {
-
-	/* Map label name to the label itself. */
-	labelMap := make(map[string]db.Label)
-
-	/* Map label to a list of all labels it connect to. */
-	conns := make(map[string][]string)
-
-	for _, l := range labels {
-		labelMap[l.Label] = l
-	}
-
-	for _, conn := range connections {
-		if conn.To == stitch.PublicInternetLabel ||
-			conn.From == stitch.PublicInternetLabel {
-			continue
-		}
-		conns[conn.From] = append(conns[conn.From], conn.To)
-	}
-
-	containerChannel := make(chan db.Container)
-	updateHosts := func(in chan db.Container) {
-		for dbc := range in {
-			id := dbc.DockerID
-			currHosts, err := dk.GetFromContainer(id, "/etc/hosts")
-			if err != nil {
-				log.WithError(err).Error("Failed to get /etc/hosts")
-				continue
-			}
-
-			newHosts := generateEtcHosts(dbc, labelMap, conns)
-
-			if newHosts != currHosts {
-				err = dk.WriteToContainer(id, newHosts, "/etc",
-					"hosts", 0644)
-				if err != nil {
-					log.WithError(err).Error("Failed to update " +
-						"/etc/hosts")
-				}
-			}
-		}
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(concurrencyLimit)
-	for i := 0; i < concurrencyLimit; i++ {
-		go func() {
-			updateHosts(containerChannel)
-			wg.Done()
-		}()
-	}
-
-	for _, dbc := range containers {
-		containerChannel <- dbc
-	}
-	close(containerChannel)
-	wg.Wait()
-}
-
-func generateEtcHosts(dbc db.Container, labels map[string]db.Label,
-	conns map[string][]string) string {
-
-	type entry struct {
-		ip, host string
-	}
-
-	localhosts := []entry{
-		{"127.0.0.1", "localhost"},
-		{"::1", "localhost ip6-localhost ip6-loopback"},
-		{"fe00::0", "ip6-localnet"},
-		{"ff00::0", "ip6-mcastprefix"},
-		{"ff02::1", "ip6-allnodes"},
-		{"ff02::2", "ip6-allrouters"},
-	}
-
-	if dbc.IP != "" && dbc.DockerID != "" {
-		entry := entry{dbc.IP, util.ShortUUID(dbc.DockerID)}
-		localhosts = append(localhosts, entry)
-	}
-
-	newHosts := make(map[entry]struct{})
-	for _, entry := range localhosts {
-		newHosts[entry] = struct{}{}
-	}
-
-	for _, l := range dbc.Labels {
-		for _, toLabel := range conns[l] {
-			if toLabel == stitch.PublicInternetLabel {
-				continue
-			}
-
-			if ip := labels[toLabel].IP; ip != "" {
-				newHosts[entry{ip, toLabel + ".q"}] = struct{}{}
-			}
-			for i, cIP := range labels[toLabel].ContainerIPs {
-				// The hostname prefix starts from 1 for readability.
-				host := fmt.Sprintf("%d.%s.q", i+1, toLabel)
-				newHosts[entry{cIP, host}] = struct{}{}
-			}
-		}
-	}
-
-	var hosts []string
-	for h := range newHosts {
-		hosts = append(hosts, fmt.Sprintf("%-15s %s", h.ip, h.host))
-	}
-
-	sort.Strings(hosts)
-	return strings.Join(hosts, "\n") + "\n"
 }
 
 func patchPorts(id string) (br, quilt string) {

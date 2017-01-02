@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 
@@ -30,16 +29,6 @@ type ipRule struct {
 
 type ipRuleSlice []ipRule
 
-// OFRule is an OpenFlow rule for Open vSwitch's OpenFlow table.
-type OFRule struct {
-	table   string
-	match   string
-	actions string
-}
-
-// OFRuleSlice is an alias for []OFRule to allow for joins
-type OFRuleSlice []OFRule
-
 func runWorker(conn db.Conn) {
 	minion, err := conn.MinionSelf()
 	if err != nil || !minion.SupervisorInit || minion.Role != db.Worker {
@@ -56,7 +45,7 @@ func runWorker(conn db.Conn) {
 	// XXX: By doing all the work within a transaction, we (kind of) guarantee that
 	// containers won't be removed while we're in the process of setting them up.
 	// Not ideal, but for now it's good enough.
-	conn.Txn(db.ConnectionTable, db.ContainerTable, db.LabelTable,
+	conn.Txn(db.ConnectionTable, db.ContainerTable,
 		db.MinionTable).Run(func(view db.Database) error {
 
 		if !checkSupervisorInit(view) {
@@ -68,9 +57,6 @@ func runWorker(conn db.Conn) {
 		containers := view.SelectFromContainer(func(c db.Container) bool {
 			return c.DockerID != "" && c.IP != "" && c.Mac != "" &&
 				c.Pid != 0
-		})
-		labels := view.SelectFromLabel(func(l db.Label) bool {
-			return l.IP != ""
 		})
 		connections := view.SelectFromConnection(nil)
 
@@ -85,7 +71,7 @@ func runWorker(conn db.Conn) {
 		// Ports must be updated before OpenFlow so they must be done in the same
 		// go routine.
 		updatePorts(odb, containers)
-		updateOpenFlow(odb, containers, labels, connections)
+		updateOpenFlow(odb, containers)
 
 		wg.Wait()
 		return nil
@@ -295,218 +281,50 @@ func generateTargetPorts(containers []db.Container) ovsdb.InterfaceSlice {
 	return configs
 }
 
-// Sets up the OpenFlow tables to get packets from containers into the OVN controlled
-// bridge.  The Openflow tables are organized as follows.
-//
-//     - Table 0 will check for packets destined to an ip address of a label with MAC
-//     0A:00:00:00:00:00 (obtained by OVN faking out arp) and use the OF multipath action
-//     to balance load packets across n links where n is the number of containers
-//     implementing the label.  This result is stored in NXM_NX_REG0. This is done using
-//     a symmetric l3/4 hash, so transport connections should remain intact.
-//
-//     -Table 1 reads NXM_NX_REG0 and changes the destination mac address to one of the
-//     MACs of the containers that implement the label
-//
-// XXX: The multipath action doesn't perform well.  We should migrate away from it
-// choosing datapath recirculation instead.
-func updateOpenFlow(odb ovsdb.Client, containers []db.Container,
-	labels []db.Label, connections []db.Connection) {
-
-	targetOF, err := generateTargetOpenFlow(odb, containers, labels, connections)
-	if err != nil {
-		log.WithError(err).Error("failed to get target OpenFlow flows")
-		return
-	}
-	currentOF, err := generateCurrentOpenFlow()
-	if err != nil {
-		log.WithError(err).Error("failed to get current OpenFlow flows")
-		return
-	}
-
-	_, flowsToDel, flowsToAdd := join.HashJoin(currentOF, targetOF, nil, nil)
-
-	if err := addOrDelFlows(flowsToDel, false); err != nil {
-		log.WithError(err).Error("error deleting OpenFlow flow")
-	}
-
-	if err := addOrDelFlows(flowsToAdd, true); err != nil {
-		log.WithError(err).Error("error adding OpenFlow flow")
-	}
-}
-
-func generateCurrentOpenFlow() (OFRuleSlice, error) {
-	stdout, err := exec.Command("ovs-ofctl", "dump-flows", quiltBridge).Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list OpenFlow flows: %s", err)
-	}
-
-	scanner := bufio.NewScanner(bytes.NewReader(stdout))
-	var flows OFRuleSlice
-
-	// The first line isn't a flow, so skip it.
-	scanner.Scan()
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		flow, err := makeOFRule(line)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to make OpenFlow rule: %s", err)
-		}
-
-		flows = append(flows, flow)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scanner error while getting OpenFlow flows: %s",
-			err)
-	}
-
-	return flows, nil
-}
-
-// The target flows must be in the same format as the output from ovs-ofctl
-// dump-flows. To achieve this, we have some rather ugly hacks that handle
-// a few special cases.
-func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
-	labels []db.Label, connections []db.Connection) (OFRuleSlice, error) {
-
+func updateOpenFlow(odb ovsdb.Client, containers []db.Container) {
 	ifaces, err := odb.ListInterfaces()
 	if err != nil {
-		return nil, err
+		log.WithError(err).Error("failed to list OVS interfaces")
+		return
 	}
 
+	err = ofctlReplaceFlows(generateOpenFlow(generateOFPorts(ifaces, containers)))
+	if err != nil {
+		log.WithError(err).Error("error replacing OpenFlow")
+		return
+	}
+}
+
+func generateOFPorts(ifaces []ovsdb.Interface, dbcs []db.Container) []ofPort {
 	ifaceMap := make(map[string]int)
 	for _, iface := range ifaces {
-		if iface.OFPort != nil {
+		if iface.OFPort != nil && *iface.OFPort > 0 {
 			ifaceMap[iface.Name] = *iface.OFPort
 		}
 	}
 
-	gwMac := ipdef.GatewayMac
-
-	var rules []string
-	for _, dbc := range containers {
+	var ofcs []ofPort
+	for _, dbc := range dbcs {
 		vethOut := ipdef.IFName(dbc.EndpointID)
 		_, peerQuilt := patchPorts(dbc.DockerID)
-		dbcMac := dbc.Mac
-
-		ofQuilt, ok := ifaceMap[peerQuilt]
-		if !ok {
-			continue
-		}
 
 		ofVeth, ok := ifaceMap[vethOut]
 		if !ok {
 			continue
 		}
 
-		if ofQuilt < 0 || ofVeth < 0 {
+		ofQuilt, ok := ifaceMap[peerQuilt]
+		if !ok {
 			continue
 		}
 
-		rules = append(rules, []string{
-			fmt.Sprintf("table=0 priority=5000,in_port=%d "+
-				"actions=output:%d", ofQuilt, ofVeth),
-			fmt.Sprintf("table=2 priority=5000,in_port=%d "+
-				"actions=output:%d", ofVeth, ofQuilt),
-			fmt.Sprintf("table=0 priority=0,in_port=%d "+
-				"actions=output:%d", ofVeth, ofQuilt),
-
-			// Always send DNS packets to and from the default gateway.
-			fmt.Sprintf("table=0 priority=5001,"+
-				"in_port=%d,udp,dl_src=%s,dl_dst=%s,nw_dst=%s,tp_dst=53"+
-				" actions=LOCAL", ofVeth, dbcMac, gwMac,
-				ipdef.GatewayIP),
-			fmt.Sprintf("table=0 priority=5001,in_port=LOCAL,udp,dl_src=%s,"+
-				"dl_dst=%s,nw_src=%s,tp_src=53 actions=output:%d",
-				gwMac, dbcMac, ipdef.GatewayIP, ofVeth),
-		}...)
-
-		protocols := []string{"tcp", "udp"}
-
-		portsToWeb := make(map[int]struct{})
-		portsFromWeb := make(map[int]struct{})
-		for _, l := range dbc.Labels {
-			for _, conn := range connections {
-				if conn.From == l &&
-					conn.To == stitch.PublicInternetLabel {
-					portsToWeb[conn.MinPort] = struct{}{}
-				} else if conn.From ==
-					stitch.PublicInternetLabel && conn.To == l {
-					portsFromWeb[conn.MinPort] = struct{}{}
-				}
-			}
-		}
-
-		// LOCAL is the default quilt-int port created with the bridge.
-		egressRule := fmt.Sprintf("table=0 priority=5000,in_port=%d,", ofVeth) +
-			"%s,%s," + fmt.Sprintf("dl_dst=%s actions=LOCAL", gwMac)
-		ingressRule := "table=0 priority=5000,in_port=LOCAL,%s,%s," +
-			fmt.Sprintf("dl_dst=%s actions=output:%d", dbcMac, ofVeth)
-		for port := range portsFromWeb {
-			for _, protocol := range protocols {
-				egressPort := fmt.Sprintf("tp_src=%d", port)
-				rules = append(rules, fmt.Sprintf(egressRule, protocol,
-					egressPort))
-
-				ingressPort := fmt.Sprintf("tp_dst=%d", port)
-				rules = append(rules, fmt.Sprintf(ingressRule, protocol,
-					ingressPort))
-			}
-		}
-
-		for port := range portsToWeb {
-			for _, protocol := range protocols {
-				egressPort := fmt.Sprintf("tp_dst=%d", port)
-				rules = append(rules, fmt.Sprintf(egressRule, protocol,
-					egressPort))
-
-				ingressPort := fmt.Sprintf("tp_src=%d", port)
-				rules = append(rules, fmt.Sprintf(ingressRule, protocol,
-					ingressPort))
-			}
-		}
-
-		if len(portsToWeb) > 0 || len(portsFromWeb) > 0 {
-			// Allow ICMP
-			rules = append(rules,
-				fmt.Sprintf("table=0 priority=5000,icmp,in_port=%d,"+
-					"dl_dst=%s actions=LOCAL", ofVeth, gwMac))
-			rules = append(rules,
-				fmt.Sprintf(
-					"table=0 priority=5000,icmp,in_port=LOCAL,"+
-						"dl_dst=%s actions=output:%d",
-					dbcMac, ofVeth))
-		}
-
-		if len(portsFromWeb) > 0 {
-			// Allow default gateway to ARP for containers
-			rules = append(rules, fmt.Sprintf(
-				"table=0 priority=%d,arp,in_port=LOCAL,"+
-					"dl_dst=ff:ff:ff:ff:ff:ff actions=output:%d",
-				4500, ofVeth))
-		}
-
-		rules = append(rules, fmt.Sprintf(
-			"table=0 priority=4500,arp,in_port=%d "+
-				"actions=output:%d,LOCAL", ofVeth, ofQuilt))
-		rules = append(rules, fmt.Sprintf(
-			"table=0 priority=4500,arp,in_port=LOCAL,"+
-				"dl_dst=%s actions=output:%d", dbcMac, ofVeth))
+		ofcs = append(ofcs, ofPort{
+			PatchPort: ofQuilt,
+			VethPort:  ofVeth,
+			Mac:       dbc.Mac,
+		})
 	}
-
-	var targetRules OFRuleSlice
-	for _, r := range rules {
-		rule, err := makeOFRule(r)
-		if err != nil {
-			return nil, fmt.Errorf("failed to make OpenFlow rule: %s", err)
-		}
-		targetRules = append(targetRules, rule)
-	}
-
-	return targetRules, nil
+	return ofcs
 }
 
 func patchPorts(id string) (br, quilt string) {
@@ -620,104 +438,29 @@ func getPublicInterface() (string, error) {
 	return link.Attrs().Name, err
 }
 
-func addOrDelFlows(flows []interface{}, add bool) error {
-	if len(flows) == 0 {
-		return nil
-	}
-
-	logAction := "additions"
-	args := []string{"add-flows", quiltBridge, "-"}
-	if !add {
-		args = []string{"del-flows", "--strict", quiltBridge, "-"}
-		logAction = "deletions"
-	}
-	cmd := exec.Command("ovs-ofctl", args...)
-
-	log.Infof("%d OpenFlow %s", len(flows), logAction)
+func ofctlReplaceFlows(flows []string) error {
+	cmd := exec.Command("ovs-ofctl", "-O", "OpenFlow13", "replace-flows",
+		quiltBridge, "-")
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("error running ovs-ofctl: %s", err)
+		return err
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start ovs-ofctl: %s", err)
+		return err
 	}
 
 	for _, f := range flows {
-		flow := f.(OFRule)
-		rule := fmt.Sprintf("%s,%s", flow.table, flow.match)
-		if add {
-			rule += fmt.Sprintf(",actions=%s", flow.actions)
-		}
-		stdin.Write([]byte(rule + "\n"))
+		stdin.Write([]byte(f + "\n"))
 	}
 	stdin.Close()
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("error running ovs-ofctl: %s", err)
+		return err
 	}
 
 	return nil
-}
-
-// makeOFRule constructs an OFRule with the given flow, actions and table.
-// table must be of the format table=X, and both flow and action must be
-// formatted as in the output from `ovs-ofctl dump-flows` - this includes
-// case sensitivity. There must be no spaces in flow and actions.
-// This function works for the flows we need at the moment, but it will likely
-// have to be extended in the future.
-func makeOFRule(flowEntry string) (OFRule, error) {
-	tableRE := regexp.MustCompile("table=\\d+")
-	if ok := tableRE.MatchString(flowEntry); !ok {
-		return OFRule{}, fmt.Errorf("malformed OpenFlow table: %s", flowEntry)
-	}
-	table := tableRE.FindString(flowEntry)
-
-	fields := strings.Split(flowEntry, " ")
-	match := fields[len(fields)-2]
-	actions := fields[len(fields)-1]
-
-	actRE := regexp.MustCompile("actions=(\\S+)")
-	actMatches := actRE.FindStringSubmatch(actions)
-	if len(actMatches) != 2 {
-		return OFRule{}, fmt.Errorf("bad OF action format: %s", actions)
-	}
-	actions = actMatches[1]
-
-	// An action of the format function(args...)
-	funcRE := regexp.MustCompile("\\w+\\([^\\)]+\\)")
-	funcMatches := funcRE.FindAllString(actions, -1)
-
-	// Remove all functions, so we can split actions on commas
-	noFuncs := funcRE.Split(actions, -1)
-
-	var argMatches []string
-	for _, a := range noFuncs {
-		// XXX: If there are commas between two functions in actions,
-		// there might be lone commas in noFuncs. We should ideally
-		// get rid of these commas with the regex above.
-		act := strings.Trim(string(a), ",")
-		if act == "" {
-			continue
-		}
-
-		splitAct := strings.Split(act, ",")
-		argMatches = append(argMatches, splitAct...)
-	}
-
-	allMatches := append(argMatches, funcMatches...)
-	sort.Strings(allMatches)
-
-	splitMatch := strings.Split(match, ",")
-	sort.Strings(splitMatch)
-
-	newRule := OFRule{
-		table:   table,
-		match:   strings.Join(splitMatch, ","),
-		actions: strings.Join(allMatches, ","),
-	}
-	return newRule, nil
 }
 
 func (iprs ipRuleSlice) Get(ii int) interface{} {
@@ -726,16 +469,6 @@ func (iprs ipRuleSlice) Get(ii int) interface{} {
 
 func (iprs ipRuleSlice) Len() int {
 	return len(iprs)
-}
-
-// Get returns the value contained at the given index
-func (ofrs OFRuleSlice) Get(ii int) interface{} {
-	return ofrs[ii]
-}
-
-// Len returns the number of items in the slice
-func (ofrs OFRuleSlice) Len() int {
-	return len(ofrs)
 }
 
 var routeList = netlink.RouteList

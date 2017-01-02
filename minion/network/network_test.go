@@ -10,6 +10,7 @@ import (
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/minion/ovsdb"
+	"github.com/stretchr/testify/assert"
 )
 
 type lportslice []ovsdb.LPort
@@ -281,4 +282,30 @@ func TestACLSync(t *testing.T) {
 		[]db.Connection{dashConnection},
 		append(dropACLs, dashACLs...),
 	)
+}
+
+func TestGenerateOFPorts(t *testing.T) {
+	t.Parallel()
+
+	var ptr = func(x int) *int {
+		return &x
+	}
+
+	ifaces := []ovsdb.Interface{
+		{Name: "1", OFPort: ptr(101)},
+		{Name: "q_1", OFPort: ptr(201)},
+		{Name: "2", OFPort: ptr(102)},
+		{Name: "q_2", OFPort: ptr(-1)},
+		{Name: "q_3", OFPort: ptr(203)},
+	}
+
+	containers := []db.Container{
+		{EndpointID: "1", DockerID: "1", Mac: "m1"},
+		{EndpointID: "2", DockerID: "2", Mac: "m2"},
+		{EndpointID: "3", DockerID: "3", Mac: "m3"},
+	}
+
+	assert.Equal(t,
+		[]ofPort{{VethPort: 101, PatchPort: 201, Mac: "m1"}},
+		generateOFPorts(ifaces, containers))
 }

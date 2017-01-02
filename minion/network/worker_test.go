@@ -1,14 +1,10 @@
 package network
 
 import (
-	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/minion/ipdef"
-	"github.com/stretchr/testify/assert"
-	"github.com/vishvananda/netlink"
 )
 
 func TestMakeIPRule(t *testing.T) {
@@ -110,125 +106,6 @@ func TestGenerateCurrentNatRules(t *testing.T) {
 
 	if !(reflect.DeepEqual(actual, exp)) {
 		t.Errorf("Generated wrong routes.\nExpected:\n%+v\n\nGot:\n%+v\n",
-			exp, actual)
-	}
-}
-
-func TestGetPublicInterface(t *testing.T) {
-	routeList = func(link netlink.Link, family int) ([]netlink.Route, error) {
-		return nil, errors.New("not implemented")
-	}
-	linkByIndex = func(index int) (netlink.Link, error) {
-		if index == 5 {
-			link := netlink.GenericLink{}
-			link.LinkAttrs.Name = "link name"
-			return &link, nil
-		}
-		return nil, errors.New("unknown")
-	}
-
-	res, err := getPublicInterface()
-	assert.Empty(t, res)
-	assert.EqualError(t, err, "route list: not implemented")
-
-	var routes []netlink.Route
-	routeList = func(link netlink.Link, family int) ([]netlink.Route, error) {
-		return routes, nil
-	}
-	res, err = getPublicInterface()
-	assert.Empty(t, res)
-	assert.EqualError(t, err, "missing default route")
-
-	routes = []netlink.Route{{Dst: &ipdef.QuiltSubnet}}
-	res, err = getPublicInterface()
-	assert.Empty(t, res)
-	assert.EqualError(t, err, "missing default route")
-
-	routes = []netlink.Route{{LinkIndex: 2}}
-	res, err = getPublicInterface()
-	assert.Empty(t, res)
-	assert.EqualError(t, err, "default route missing interface: unknown")
-
-	routes = []netlink.Route{{LinkIndex: 5}}
-	res, err = getPublicInterface()
-	assert.Equal(t, "link name", res)
-	assert.NoError(t, err)
-}
-
-func TestMakeOFRule(t *testing.T) {
-	flows := []string{
-		"cookie=0x0, duration=997.526s, table=0, n_packets=0, " +
-			"n_bytes=0, idle_age=997, priority=5000,in_port=3 " +
-			"actions=output:7",
-
-		"cookie=0x0, duration=997.351s, table=1, n_packets=0, " +
-			"n_bytes=0, idle_age=997, priority=4000,ip," +
-			"dl_dst=0a:00:00:00:00:00," +
-			"nw_dst=10.1.4.66 actions=LOCAL",
-
-		"cookie=0x0, duration=159.314s, table=2, n_packets=0, n_bytes=0, " +
-			"idle_age=159, priority=4000,ip,dl_dst=0a:00:00:00:00:00," +
-			"nw_dst=10.1.4.66 " +
-			"actions=mod_dl_dst:02:00:0a:00:96:72,resubmit(,2)",
-
-		"cookie=0x0, duration=159.314s, table=2, n_packets=0, n_bytes=0, " +
-			"idle_age=159, priority=5000,in_port=6 actions=resubmit(,1)," +
-			"multipath(symmetric_l3l4,0,modulo_n,2,0,NXM_NX_REG0[0..1])",
-
-		"table=2 priority=5000,in_port=6 actions=output:3",
-	}
-
-	var actual []OFRule
-	for _, f := range flows {
-
-		rule, err := makeOFRule(f)
-		if err != nil {
-			t.Errorf("failed to make OpenFlow rule: %s", err)
-		}
-		actual = append(actual, rule)
-	}
-
-	exp0 := OFRule{
-		table:   "table=0",
-		match:   "in_port=3,priority=5000",
-		actions: "output:7",
-	}
-
-	exp1 := OFRule{
-		table:   "table=1",
-		match:   "dl_dst=0a:00:00:00:00:00,ip,nw_dst=10.1.4.66,priority=4000",
-		actions: "LOCAL",
-	}
-
-	exp2 := OFRule{
-		table:   "table=2",
-		match:   "dl_dst=0a:00:00:00:00:00,ip,nw_dst=10.1.4.66,priority=4000",
-		actions: "mod_dl_dst:02:00:0a:00:96:72,resubmit(,2)",
-	}
-
-	exp3 := OFRule{
-		table: "table=2",
-		match: "in_port=6,priority=5000",
-		actions: "multipath(symmetric_l3l4,0,modulo_n,2,0,NXM_NX_REG0[0..1])," +
-			"resubmit(,1)",
-	}
-
-	exp4 := OFRule{
-		table:   "table=2",
-		match:   "in_port=6,priority=5000",
-		actions: "output:3",
-	}
-
-	exp := []OFRule{
-		exp0,
-		exp1,
-		exp2,
-		exp3,
-		exp4,
-	}
-
-	if !(reflect.DeepEqual(actual, exp)) {
-		t.Errorf("generated wrong OFRules.\nExpected:\n%+v\n\nGot:\n%+v\n",
 			exp, actual)
 	}
 }

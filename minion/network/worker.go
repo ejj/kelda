@@ -534,6 +534,8 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 		}
 	}
 
+	gwMac := ipdef.IPToMac(ipdef.GatewayIP)
+
 	var rules []string
 	for _, dbc := range containers {
 		vethOut := ipdef.IFName(dbc.EndpointID)
@@ -555,12 +557,12 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 		}
 
 		rules = append(rules, []string{
-			fmt.Sprintf("table=0 priority=%d,in_port=%d "+
-				"actions=output:%d", 5000, ofQuilt, ofVeth),
-			fmt.Sprintf("table=2 priority=%d,in_port=%d "+
-				"actions=output:%d", 5000, ofVeth, ofQuilt),
-			fmt.Sprintf("table=0 priority=%d,in_port=%d "+
-				"actions=output:%d", 0, ofVeth, ofQuilt),
+			fmt.Sprintf("table=0 priority=5000,in_port=%d "+
+				"actions=output:%d", ofQuilt, ofVeth),
+			fmt.Sprintf("table=2 priority=5000,in_port=%d "+
+				"actions=output:%d", ofVeth, ofQuilt),
+			fmt.Sprintf("table=0 priority=0,in_port=%d "+
+				"actions=output:%d", ofVeth, ofQuilt),
 		}...)
 
 		protocols := []string{"tcp", "udp"}
@@ -580,14 +582,10 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 		}
 
 		// LOCAL is the default quilt-int port created with the bridge.
-		egressRule := fmt.Sprintf("table=0 priority=%d,in_port=%d,",
-			5000, ofVeth) +
-			"%s,%s," + fmt.Sprintf("dl_dst=%s actions=LOCAL",
-			ipdef.IPToMac(ipdef.GatewayIP))
-		ingressRule := fmt.Sprintf("table=0 priority=%d,in_port=LOCAL,", 5000) +
-			"%s,%s," + fmt.Sprintf("dl_dst=%s actions=output:%d",
-			dbcMac, ofVeth)
-
+		egressRule := fmt.Sprintf("table=0 priority=5000,in_port=%d,", ofVeth) +
+			"%s,%s," + fmt.Sprintf("dl_dst=%s actions=LOCAL", gwMac)
+		ingressRule := "table=0 priority=5000,in_port=LOCAL,%s,%s," +
+			fmt.Sprintf("dl_dst=%s actions=output:%d", dbcMac, ofVeth)
 		for port := range portsFromWeb {
 			for _, protocol := range protocols {
 				egressPort := fmt.Sprintf("tp_src=%d", port)
@@ -616,15 +614,13 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 		if len(portsToWeb) > 0 || len(portsFromWeb) > 0 {
 			// Allow ICMP
 			rules = append(rules,
-				fmt.Sprintf(
-					"table=0 priority=%d,icmp,in_port=%d,dl_dst=%s"+
-						" actions=LOCAL",
-					5000, ofVeth, ipdef.IPToMac(ipdef.GatewayIP)))
+				fmt.Sprintf("table=0 priority=5000,icmp,in_port=%d,"+
+					"dl_dst=%s actions=LOCAL", ofVeth, gwMac))
 			rules = append(rules,
 				fmt.Sprintf(
-					"table=0 priority=%d,icmp,in_port=LOCAL,"+
+					"table=0 priority=5000,icmp,in_port=LOCAL,"+
 						"dl_dst=%s actions=output:%d",
-					5000, dbcMac, ofVeth))
+					dbcMac, ofVeth))
 
 			arpDst = fmt.Sprintf("%d,LOCAL", ofQuilt)
 		} else {
@@ -640,13 +636,11 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 		}
 
 		rules = append(rules, fmt.Sprintf(
-			"table=0 priority=%d,arp,in_port=%d "+
-				"actions=output:%s",
-			4500, ofVeth, arpDst))
+			"table=0 priority=4500,arp,in_port=%d "+
+				"actions=output:%s", ofVeth, arpDst))
 		rules = append(rules, fmt.Sprintf(
-			"table=0 priority=%d,arp,in_port=LOCAL,"+
-				"dl_dst=%s actions=output:%d",
-			4500, dbcMac, ofVeth))
+			"table=0 priority=4500,arp,in_port=LOCAL,"+
+				"dl_dst=%s actions=output:%d", dbcMac, ofVeth))
 	}
 
 	LabelMacs := make(map[string]map[string]struct{})
@@ -958,11 +952,19 @@ func getPublicInterface() (string, error) {
 }
 
 func addOrDelFlows(flows []interface{}, add bool) error {
+	if len(flows) == 0 {
+		return nil
+	}
+
+	logAction := "additions"
 	args := []string{"add-flows", quiltBridge, "-"}
 	if !add {
 		args = []string{"del-flows", "--strict", quiltBridge, "-"}
+		logAction = "deletions"
 	}
 	cmd := exec.Command("ovs-ofctl", args...)
+
+	log.Infof("%d OpenFlow %s", len(flows), logAction)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

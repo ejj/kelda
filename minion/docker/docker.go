@@ -62,6 +62,9 @@ type RunOptions struct {
 	Env    map[string]string
 
 	NetworkMode string
+	DNS         []string
+	DNSSearch   []string
+
 	PidMode     string
 	Privileged  bool
 	VolumesFrom []string
@@ -108,7 +111,8 @@ func (dk Client) Run(opts RunOptions) (string, error) {
 		PidMode:     opts.PidMode,
 		Privileged:  opts.Privileged,
 		VolumesFrom: opts.VolumesFrom,
-		DNSSearch:   []string{"q"},
+		DNS:         opts.DNS,
+		DNSSearch:   opts.DNSSearch,
 	}
 
 	id, err := dk.create(opts.Name, opts.Image, opts.Args, opts.Labels, env, hc, nil)

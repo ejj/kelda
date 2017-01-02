@@ -137,6 +137,7 @@ func dockerRun(dk docker.Client, in chan interface{}) {
 			Env:         dbc.Env,
 			Labels:      map[string]string{labelKey: labelValue},
 			NetworkMode: plugin.NetworkName,
+			DNSSearch:   []string{"q"},
 		})
 		if err != nil {
 			log.WithFields(log.Fields{

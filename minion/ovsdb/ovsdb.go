@@ -6,7 +6,6 @@ import (
 	"math"
 	"reflect"
 
-	log "github.com/Sirupsen/logrus"
 	ovs "github.com/socketplane/libovsdb"
 )
 
@@ -669,20 +668,14 @@ func ifaceFromRow(row row) (Interface, error) {
 	// Interface table.
 	if peer, ok := options["peer"]; ok {
 		iface.Peer = peer
-	} else {
-		log.Debug("missing Interface key: peer.")
 	}
 
 	if amac, ok := externalIDs["attached-mac"]; ok {
 		iface.AttachedMAC = amac
-	} else {
-		log.Debug("missing Interface key: attached-mac.")
 	}
 
 	if id, ok := externalIDs["iface-id"]; ok {
 		iface.IfaceID = id
-	} else {
-		log.Debug("missing Interface key: iface-id.")
 	}
 
 	return iface, nil

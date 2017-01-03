@@ -202,7 +202,6 @@ func loadMinionIPs(store Store) (map[string]string, error) {
 
 		minionIPData, ok := t.Children[minionIPStore]
 		if !ok {
-			log.Debugf("Minion %s has no IP store node", t.Key)
 			continue
 		}
 

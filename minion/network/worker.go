@@ -44,31 +44,6 @@ type OFRule struct {
 // OFRuleSlice is an alias for []OFRule to allow for joins
 type OFRuleSlice []OFRule
 
-// Query the database for any running containers and for each container running on this
-// host, do the following:
-//    - Create a pair of virtual interfaces for the container if it's new and
-//      assign them the appropriate addresses
-//    - Move one of the interfaces into the network namespace of the container,
-//      and assign it the MAC and IP addresses from OVN
-//    - Attach the other interface to the OVS bridge quilt-int
-//    - Attach this container to the logical network by creating a pair of OVS
-//      patch ports between br-int and quilt-int, then install flows to send traffic
-//      between the patch port on quilt-int and the container's outer interface
-//      (These flows live in Table 2)
-//    - Populate quilt-int with the OpenFlow rules necessary to facilitate forwarding.
-//
-// To connect to the public internet, we do the following setup:
-//    - On the host:
-//        * Set up NAT for packets coming from the 10/8 subnet and leaving on eth0.
-//    - On each container:
-//        * Make the quilt-int device on the host the default gateway (this is the LOCAL
-//          port on the quilt-int bridge).
-//    - On the quilt-int bridge:
-//        * Forward packets from containers to LOCAL, if their dst MAC is that of the
-//          default gateway.
-//        * Forward arp packets to both br-int and the default gateway.
-//        * Forward packets from LOCAL to the container with the packet's dst MAC.
-
 func runWorker(conn db.Conn) {
 	minion, err := conn.MinionSelf()
 	if err != nil || !minion.SupervisorInit || minion.Role != db.Worker {

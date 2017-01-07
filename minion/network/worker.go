@@ -25,12 +25,6 @@ import (
 	"github.com/vishvananda/netns"
 )
 
-const (
-	nsPath           string = "/var/run/netns"
-	innerVeth        string = "eth0"
-	concurrencyLimit int    = 32 // Adjust to change per function goroutine limit
-)
-
 // This represents a rule in the iptables
 type ipRule struct {
 	cmd   string

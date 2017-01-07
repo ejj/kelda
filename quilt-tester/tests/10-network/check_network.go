@@ -141,6 +141,11 @@ func newNetworkTester(clnt client.Client) (networkTester, error) {
 		for _, ip := range append(label.ContainerIPs, label.IP) {
 			allIPsSet[ip] = struct{}{}
 		}
+
+		// XXX: We've temporarily disabled load balancing and thus the label.IP
+		// isn't pingable.  When it's been re-implemented the following line (and
+		// this comment) should be deleted.
+		delete(allIPsSet, label.IP)
 	}
 
 	var allIPs []string

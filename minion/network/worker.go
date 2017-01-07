@@ -5,11 +5,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math"
-	"net"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -22,7 +19,6 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
 )
 
 // This represents a rule in the iptables
@@ -83,12 +79,6 @@ func runWorker(conn db.Conn) {
 		wg.Add(1)
 		go func() {
 			updateNAT(containers, connections)
-			wg.Done()
-		}()
-
-		wg.Add(1)
-		go func() {
-			updateContainerIPs(containers, labels)
 			wg.Done()
 		}()
 
@@ -305,103 +295,6 @@ func generateTargetPorts(containers []db.Container) ovsdb.InterfaceSlice {
 	return configs
 }
 
-func updateContainerIPs(containers []db.Container, labels []db.Label) {
-	// XXX: Once we move to official OVN load balancer, containers will no longer
-	// have multiple IP addresses and this function will become redundant.
-	// Therefore, since the code is temporary, we're refraining from unit testing it
-	// for now.  If that changes, tests should be added.
-	labelIP := make(map[string]string)
-	for _, l := range labels {
-		labelIP[l.Label] = l.IP
-	}
-
-	// It's not safe for this go routine to be assigned to a different thread while
-	// we're messing with network namespaces so we lock it to its current one.
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	for _, c := range containers {
-		updateContainerIP(c, labelIP)
-	}
-}
-
-func updateContainerIP(dbc db.Container, labelIPs map[string]string) {
-	ns, err := netns.GetFromPath(fmt.Sprintf("/hostproc/%d/ns/net", dbc.Pid))
-	if err != nil {
-		log.WithError(err).Warn("Failed to get container namespace")
-		return
-	}
-	defer ns.Close()
-
-	nlh, err := netlink.NewHandleAt(ns)
-	if err != nil {
-		log.WithError(err).Warn("Failed to get netlink handle")
-		return
-	}
-	defer nlh.Delete()
-
-	eth0, err := nlh.LinkByName("eth0")
-	if err != nil {
-		log.WithError(err).Warn("Failed to find eth0")
-		return
-	}
-
-	eth0IPs, err := nlh.AddrList(eth0, 0)
-	if err != nil {
-		log.WithError(err).Warn("Failed to list eth0 IP addresses")
-		return
-	}
-
-	var currIPs []string
-	for _, ip := range eth0IPs {
-		currIPs = append(currIPs, ip.String())
-	}
-
-	targetIPs := generateTargetIPs(dbc, labelIPs)
-
-	_, ipToDel, ipToAdd := join.HashJoin(join.StringSlice(currIPs),
-		join.StringSlice(targetIPs), nil, nil)
-
-	dbcIP := net.ParseIP(dbc.IP)
-	for _, ip := range ipToDel {
-		addr, err := netlink.ParseAddr(ip.(string))
-		if err != nil {
-			panic(fmt.Sprintf("Not Reached: %v", err))
-		}
-
-		// Don't delete the container IP.
-		if addr.IP.Equal(dbcIP) {
-			continue
-		}
-
-		nlh.AddrDel(eth0, addr)
-	}
-
-	for _, ip := range ipToAdd {
-		addr, err := netlink.ParseAddr(ip.(string))
-		if err != nil {
-			panic(fmt.Sprintf("Not Reached: %v", err))
-		}
-		nlh.AddrAdd(eth0, addr)
-	}
-}
-
-func generateTargetIPs(dbc db.Container, labelIPs map[string]string) []string {
-	ipSet := map[string]struct{}{}
-	for _, l := range dbc.Labels {
-		if ip := labelIPs[l]; ip != "" {
-			ipSet[ip] = struct{}{}
-		}
-	}
-
-	var targetIPs []string
-	for ip := range ipSet {
-		targetIPs = append(targetIPs, ip+"/8")
-	}
-
-	return targetIPs
-}
-
 // Sets up the OpenFlow tables to get packets from containers into the OVN controlled
 // bridge.  The Openflow tables are organized as follows.
 //
@@ -602,68 +495,6 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 		rules = append(rules, fmt.Sprintf(
 			"table=0 priority=4500,arp,in_port=LOCAL,"+
 				"dl_dst=%s actions=output:%d", dbcMac, ofVeth))
-	}
-
-	LabelMacs := make(map[string]map[string]struct{})
-	for _, dbc := range containers {
-		for _, l := range dbc.Labels {
-			if _, ok := LabelMacs[l]; !ok {
-				LabelMacs[l] = make(map[string]struct{})
-			}
-			LabelMacs[l][dbc.Mac] = struct{}{}
-		}
-	}
-
-	for _, label := range labels {
-		if !label.MultiHost {
-			continue
-		}
-
-		macs := LabelMacs[label.Label]
-		if len(macs) == 0 {
-			continue
-		}
-
-		ip := label.IP
-		n := len(macs)
-		lg2n := int(math.Ceil(math.Log2(float64(n))))
-
-		nxmRange := fmt.Sprintf("0..%d", lg2n)
-		if lg2n == 0 {
-			// dump-flows collapses 0..0 to just 0.
-			nxmRange = "0"
-		}
-		mpa := fmt.Sprintf("multipath(symmetric_l3l4,0,modulo_n,%d,0,"+
-			"NXM_NX_REG0[%s])", n, nxmRange)
-
-		rules = append(rules, fmt.Sprintf(
-			"table=0 priority=%d,dl_dst=%s,ip,nw_dst=%s "+
-				"actions=%s,resubmit(,1)",
-			4000, labelMac, ip, mpa))
-
-		// We need the order to make diffing consistent.
-		macList := make([]string, 0, n)
-		for mac := range macs {
-			macList = append(macList, mac)
-		}
-		sort.Strings(macList)
-
-		i := 0
-		regPrefix := ""
-		for _, mac := range macList {
-			if i > 0 {
-				// dump-flows puts a 0x prefix for all register values
-				// except for 0.
-				regPrefix = "0x"
-			}
-			reg0 := fmt.Sprintf("%s%x", regPrefix, i)
-
-			rules = append(rules, fmt.Sprintf(
-				"table=1 priority=5000,ip,nw_dst=%s,"+
-					"reg0=%s actions=mod_dl_dst:%s,resubmit(,2)",
-				ip, reg0, mac))
-			i++
-		}
 	}
 
 	var targetRules OFRuleSlice

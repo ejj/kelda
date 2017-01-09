@@ -30,6 +30,9 @@ var (
 
 	// GatewayIP is the address of the border router in the logical network.
 	GatewayIP = net.IPv4(10, 0, 0, 1).To4()
+
+	// GatewayMac is the Mac address of the default gateway.
+	GatewayMac = IPToMac(GatewayIP)
 )
 
 // IPStrToMac converts the given IP address string into a MAC address.

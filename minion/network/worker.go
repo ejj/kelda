@@ -522,7 +522,7 @@ func generateTargetOpenFlow(odb ovsdb.Client, containers []db.Container,
 		}
 	}
 
-	gwMac := ipdef.IPToMac(ipdef.GatewayIP)
+	gwMac := ipdef.GatewayMac
 
 	var rules []string
 	for _, dbc := range containers {

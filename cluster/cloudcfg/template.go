@@ -48,7 +48,6 @@ initialize_minion() {
 
 	[Service]
 	TimeoutSec=1000
-	ExecStartPre=-/usr/bin/mkdir -p /var/run/netns
 	ExecStartPre=-/usr/bin/docker kill minion
 	ExecStartPre=-/usr/bin/docker rm minion
 	ExecStartPre=/usr/bin/docker pull {{.QuiltImage}}
@@ -56,7 +55,7 @@ initialize_minion() {
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt \
 	-v /home/quilt/.ssh:/home/quilt/.ssh:rw \
-	-v /proc:/hostproc:ro -v /var/run/netns:/var/run/netns:rw \
+	-v /proc:/hostproc:ro \
 	-v /run/docker:/run/docker:rw {{.QuiltImage}} \
 	quilt minion
 	Restart=on-failure

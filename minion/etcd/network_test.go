@@ -38,10 +38,10 @@ func TestUpdateEtcdContainers(t *testing.T) {
 		return nil
 	})
 
-	cs := []storeContainer{}
+	cs := []db.Container{}
 	for i := 2; i < 5; i++ {
 		si := strconv.Itoa(i)
-		storeTemp := storeContainer{
+		storeTemp := db.Container{
 			StitchID: i,
 			Command:  []string{"echo", si},
 			Labels:   []string{"red", "blue"},
@@ -61,7 +61,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	resultContainers, err := store.Get(containerStore)
 	assert.Nil(t, err)
 
-	resultSlice := []storeContainer{}
+	resultSlice := []db.Container{}
 	json.Unmarshal([]byte(resultContainers), &resultSlice)
 	assert.Equal(t, cs, resultSlice)
 
@@ -69,10 +69,10 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	assert.Equal(t, 0, *store.writes)
 
 	// simulate etcd having out of date information, except the IP
-	badEtcdSlice := []storeContainer{}
+	badEtcdSlice := []db.Container{}
 	for i := 2; i < 6; i++ {
 		si := strconv.Itoa(i)
-		badEtcd := storeContainer{
+		badEtcd := db.Container{
 			StitchID: i,
 			Command:  []string{"echo", si},
 			Labels:   []string{"red", "blue"},
@@ -82,8 +82,8 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	}
 
 	// add a new container with a bad ip to test ip syncing
-	badEtcdSlice = append(badEtcdSlice, storeContainer{StitchID: 8})
-	cs = append(cs, storeContainer{StitchID: 8})
+	badEtcdSlice = append(badEtcdSlice, db.Container{StitchID: 8})
+	cs = append(cs, db.Container{StitchID: 8})
 	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
 		c := view.InsertContainer()
 		c.StitchID = 8
@@ -108,7 +108,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	resultContainers, err = store.Get(containerStore)
 	assert.Nil(t, err)
 
-	resultSlice = []storeContainer{}
+	resultSlice = []db.Container{}
 	json.Unmarshal([]byte(resultContainers), &resultSlice)
 
 	assert.Equal(t, cs, resultSlice)
@@ -208,7 +208,7 @@ func TestUpdateLeaderDBC(t *testing.T) {
 		view.Commit(dbc)
 
 		updateLeaderDBC(view, view.SelectFromContainer(nil), storeData{
-			containers: []storeContainer{{StitchID: 1}},
+			containers: []db.Container{{StitchID: 1}},
 		}, map[string]string{"1": "foo"})
 
 		dbcs := view.SelectFromContainer(nil)
@@ -244,7 +244,7 @@ func testUpdateWorkerDBC(t *testing.T, view db.Database) {
 		view.Commit(container)
 	}
 
-	cs := storeContainerSlice{
+	cs := db.ContainerSlice{
 		{
 			StitchID: 1,
 			Command:  []string{"echo", "hi"},
@@ -320,7 +320,7 @@ func testUpdateWorkerDBC(t *testing.T, view db.Database) {
 func TestContainerJoinScore(t *testing.T) {
 	t.Parallel()
 
-	a := storeContainer{
+	a := db.Container{
 		Minion:   "Minion",
 		Image:    "Image",
 		StitchID: 1,
@@ -346,7 +346,7 @@ func TestUpdateDBLabels(t *testing.T) {
 func testUpdateDBLabels(t *testing.T, view db.Database) {
 	labelStruct := map[string]string{"a": "10.0.0.2"}
 	ipMap := map[string]string{"1": "10.0.0.3", "2": "10.0.0.4"}
-	containerSlice := []storeContainer{
+	containerSlice := []db.Container{
 		{
 			StitchID: 1,
 			Labels:   []string{"a", "b"},

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net"
 	"path"
-	"sort"
 	"strconv"
 	"time"
 
@@ -30,22 +29,9 @@ const (
 // Keeping all the store data types in a struct makes it much less verbose to pass them
 // around while operating on them
 type storeData struct {
-	containers []storeContainer
+	containers []db.Container
 	multiHost  map[string]string
 }
-
-type storeContainer struct {
-	StitchID int
-
-	Minion  string
-	Image   string
-	Command []string
-	Env     map[string]string
-
-	Labels []string
-}
-
-type storeContainerSlice []storeContainer
 
 // wakeChan collapses the various channels these functions wait on into a single
 // channel. Multiple redundant pings will be coalesced into a single message.
@@ -137,7 +123,7 @@ func readEtcd(store Store) (storeData, error) {
 		err = err2
 	}
 
-	etcdContainerSlice := []storeContainer{}
+	etcdContainerSlice := []db.Container{}
 	multiHostMap := map[string]string{}
 
 	// Failed store reads will just be skipped by Unmarshal, which is fine
@@ -207,28 +193,25 @@ func updateEtcd(s Store, etcdData storeData,
 	return etcdData, nil
 }
 
-func dbSliceToStoreSlice(dbcs []db.Container) []storeContainer {
-	dbContainerSlice := []storeContainer{}
-	for _, c := range dbcs {
-		sc := storeContainer{
-			StitchID: c.StitchID,
-			Minion:   c.Minion,
-			Image:    c.Image,
-			Command:  c.Command,
-			Labels:   c.Labels,
-			Env:      c.Env,
-		}
-		dbContainerSlice = append(dbContainerSlice, sc)
-	}
-	return dbContainerSlice
-}
-
 func updateEtcdContainer(s Store, etcdData storeData,
-	containers []db.Container) (storeData, error) {
+	dbcs []db.Container) (storeData, error) {
 
-	dbContainerSlice := dbSliceToStoreSlice(containers)
-	sort.Sort(storeContainerSlice(dbContainerSlice))
-	newContainers, _ := jsonMarshal(dbContainerSlice)
+	// XXX: On masters, the database has the container IPs that we learned from the
+	// workers.  It likely won't hurt, but it's best not to write these IP addresses
+	// to Etcd.  Note that this hack is a temporary measure, in future patches the
+	// master will allocate database IPs in which case writing them will be
+	// appropriate.
+	//
+	// Also note that we clear the dbc.ID so that it's not returned by this function.
+	// Also a temporary hack fixed in future patches.
+	var containers []db.Container
+	for _, dbc := range db.SortContainers(dbcs) {
+		dbc.ID = 0
+		dbc.IP = ""
+		containers = append(containers, dbc)
+	}
+
+	newContainers, _ := jsonMarshal(containers)
 	oldContainers, _ := jsonMarshal(etcdData.containers)
 	if string(newContainers) == string(oldContainers) {
 		return etcdData, nil
@@ -238,7 +221,7 @@ func updateEtcdContainer(s Store, etcdData storeData,
 		return etcdData, err
 	}
 
-	etcdData.containers = dbContainerSlice
+	etcdData.containers = containers
 	return etcdData, nil
 
 }
@@ -306,7 +289,7 @@ func updateLeaderDBC(view db.Database, dbcs []db.Container,
 func updateWorker(view db.Database, self db.Minion, store Store,
 	etcdData storeData) {
 
-	var containers []storeContainer
+	var containers []db.Container
 	for _, etcdc := range etcdData.containers {
 		if etcdc.Minion == self.PrivateIP {
 			containers = append(containers, etcdc)
@@ -316,7 +299,7 @@ func updateWorker(view db.Database, self db.Minion, store Store,
 	pairs, dbcs, etcdcs := join.Join(view.SelectFromContainer(nil), containers,
 		func(left, right interface{}) int {
 			dbc := left.(db.Container)
-			l := storeContainer{
+			l := db.Container{
 				StitchID: dbc.StitchID,
 				Minion:   dbc.Minion,
 				Image:    dbc.Image,
@@ -324,7 +307,7 @@ func updateWorker(view db.Database, self db.Minion, store Store,
 				Env:      dbc.Env,
 				Labels:   dbc.Labels,
 			}
-			return containerJoinScore(l, right.(storeContainer))
+			return containerJoinScore(l, right.(db.Container))
 		})
 
 	for _, i := range dbcs {
@@ -341,7 +324,7 @@ func updateWorker(view db.Database, self db.Minion, store Store,
 
 	for _, pair := range pairs {
 		dbc := pair.L.(db.Container)
-		etcdc := pair.R.(storeContainer)
+		etcdc := pair.R.(db.Container)
 
 		dbc.StitchID = etcdc.StitchID
 		dbc.Minion = etcdc.Minion
@@ -495,7 +478,7 @@ func allocateIP(ipSet map[string]struct{}, subnet net.IPNet) (string, error) {
 	return "", errors.New("IP pool exhausted")
 }
 
-func containerJoinScore(left, right storeContainer) int {
+func containerJoinScore(left, right db.Container) int {
 	if left.Minion != right.Minion ||
 		left.Image != right.Image ||
 		!util.StrSliceEqual(left.Command, right.Command) ||
@@ -508,16 +491,4 @@ func containerJoinScore(left, right storeContainer) int {
 		score++
 	}
 	return score
-}
-
-func (cs storeContainerSlice) Len() int {
-	return len(cs)
-}
-
-func (cs storeContainerSlice) Less(i, j int) bool {
-	return cs[i].StitchID < cs[j].StitchID
-}
-
-func (cs storeContainerSlice) Swap(i, j int) {
-	cs[i], cs[j] = cs[j], cs[i]
 }

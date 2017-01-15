@@ -14,7 +14,6 @@ import (
 type Container struct {
 	ID int // The database ID of this container.
 
-	Pid        int    // The PID of the running container.
 	IP         string // The virtual IP address of this container.
 	Mac        string // The virtual MAC address of this container.
 	Minion     string // The private IP of the minion this container is running on.
@@ -79,10 +78,6 @@ func (c Container) String() string {
 
 	if c.StitchID != 0 {
 		tags = append(tags, fmt.Sprintf("StitchID: %d", c.StitchID))
-	}
-
-	if c.Pid != 0 {
-		tags = append(tags, fmt.Sprintf("Pid: %d", c.Pid))
 	}
 
 	if c.IP != "" {

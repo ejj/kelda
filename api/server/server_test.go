@@ -58,7 +58,7 @@ func TestContainerResponse(t *testing.T) {
 		return nil
 	})
 
-	exp := `[{"ID":1,"Pid":0,"IP":"","Mac":"","Minion":"",` +
+	exp := `[{"ID":1,"IP":"","Mac":"","Minion":"",` +
 		`"EndpointID":"","StitchID":0,"DockerID":"docker-id","Image":"image",` +
 		`"Command":["cmd","arg"],"Labels":["labelA","labelB"],"Env":null}]`
 

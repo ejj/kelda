@@ -55,8 +55,7 @@ func runWorker(conn db.Conn) {
 		}
 
 		containers := view.SelectFromContainer(func(c db.Container) bool {
-			return c.DockerID != "" && c.IP != "" && c.Mac != "" &&
-				c.Pid != 0
+			return c.DockerID != "" && c.IP != "" && c.Mac != ""
 		})
 		connections := view.SelectFromConnection(nil)
 

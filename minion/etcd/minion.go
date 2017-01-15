@@ -157,7 +157,7 @@ func writeMinion(conn db.Conn, store Store) {
 		return
 	}
 
-	js, err := json.Marshal(minion)
+	js, err := jsonMarshal(minion)
 	if err != nil {
 		panic("Failed to convert Minion to JSON")
 	}

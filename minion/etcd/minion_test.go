@@ -2,7 +2,6 @@ package etcd
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -57,8 +56,13 @@ func TestWriteMinion(t *testing.T) {
 	val, err = store.Get(key)
 	assert.Nil(t, err)
 
-	expVal := `{"Role":"Master","PrivateIP":"1.2.3.4",` +
-		`"Provider":"Amazon","Size":"Big","Region":"Somewhere"}`
+	expVal := `{
+    "Role": "Master",
+    "PrivateIP": "1.2.3.4",
+    "Provider": "Amazon",
+    "Size": "Big",
+    "Region": "Somewhere"
+}`
 	assert.Equal(t, expVal, val)
 }
 
@@ -69,7 +73,7 @@ func TestReadMinion(t *testing.T) {
 	store := NewMock()
 
 	m := randMinion()
-	js, _ := json.Marshal(m)
+	js, _ := jsonMarshal(m)
 	store.Set(nodeStore+"/foo/"+selfNode, string(js), 0)
 
 	readMinion(conn, store)

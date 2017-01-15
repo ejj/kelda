@@ -50,7 +50,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 		cs = append(cs, storeTemp)
 	}
 
-	testContainers, _ := json.Marshal(cs)
+	testContainers, _ := jsonMarshal(cs)
 	err := store.Set(containerStore, string(testContainers), 0)
 	assert.Nil(t, err)
 
@@ -93,11 +93,11 @@ func TestUpdateEtcdContainers(t *testing.T) {
 		return nil
 	})
 	idIPMap["8"] = "10.0.0.0"
-	jsonIPMap, _ := json.Marshal(idIPMap)
+	jsonIPMap, _ := jsonMarshal(idIPMap)
 	minionDirKey := path.Join(nodeStore, "testMinion")
 	store.Set(path.Join(minionDirKey, minionIPStore), string(jsonIPMap), 0)
 
-	badTestContainers, _ := json.Marshal(badEtcdSlice)
+	badTestContainers, _ := jsonMarshal(badEtcdSlice)
 	err = store.Set(containerStore, string(badTestContainers), 0)
 	assert.Nil(t, err)
 
@@ -136,7 +136,7 @@ func TestUpdateEtcdLabel(t *testing.T) {
 	})
 
 	labelStruct := map[string]string{}
-	testLabel, _ := json.Marshal(labelStruct)
+	testLabel, _ := jsonMarshal(labelStruct)
 	err := store.Set(labelToIPStore, string(testLabel), 0)
 	assert.Nil(t, err)
 
@@ -166,7 +166,7 @@ func TestUpdateEtcdLabel(t *testing.T) {
 
 	// Label 2 is now multhost, so if etcd knows that, it should get etcd's ip
 	labelStruct["2"] = "10.0.0.11"
-	testLabel, _ = json.Marshal(labelStruct)
+	testLabel, _ = jsonMarshal(labelStruct)
 	err = store.Set(labelToIPStore, string(testLabel), 0)
 	assert.Nil(t, err)
 
@@ -269,11 +269,11 @@ func testUpdateWorkerDBC(t *testing.T, view db.Database) {
 
 	store := newTestMock()
 
-	jsonCS, _ := json.Marshal(cs)
+	jsonCS, _ := jsonMarshal(cs)
 	err := store.Set(containerStore, string(jsonCS), 0)
 	assert.Nil(t, err)
 
-	jsonNull, _ := json.Marshal(map[string]string{})
+	jsonNull, _ := jsonMarshal(map[string]string{})
 	minionDirKey := path.Join(nodeStore, "1.2.3.4")
 	err = store.Set(path.Join(minionDirKey, minionIPStore), string(jsonNull), 0)
 	assert.Nil(t, err)

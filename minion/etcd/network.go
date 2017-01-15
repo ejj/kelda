@@ -255,8 +255,8 @@ func updateEtcdContainer(s Store, etcdData storeData,
 
 	dbContainerSlice := dbSliceToStoreSlice(containers)
 	sort.Sort(storeContainerSlice(dbContainerSlice))
-	newContainers, _ := json.Marshal(dbContainerSlice)
-	oldContainers, _ := json.Marshal(etcdData.containers)
+	newContainers, _ := jsonMarshal(dbContainerSlice)
+	oldContainers, _ := jsonMarshal(etcdData.containers)
 	if string(newContainers) == string(oldContainers) {
 		return etcdData, nil
 	}
@@ -309,7 +309,7 @@ func updateEtcdLabel(s Store, etcdData storeData, containers []db.Container) (st
 		return etcdData, nil
 	}
 
-	newLabelJSON, _ := json.Marshal(newMultiHosts)
+	newLabelJSON, _ := jsonMarshal(newMultiHosts)
 	if err := s.Set(labelToIPStore, string(newLabelJSON), 0); err != nil {
 		return etcdData, err
 	}
@@ -408,7 +408,7 @@ func updateContainerIP(containers []db.Container, privateIP string, store Store)
 		return
 	}
 
-	jsonData, err := json.Marshal(newIPMap)
+	jsonData, err := jsonMarshal(newIPMap)
 	if err != nil {
 		log.WithError(err).Error("Failed to marshal minion container IP map")
 		return

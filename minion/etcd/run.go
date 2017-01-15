@@ -1,6 +1,8 @@
 package etcd
 
 import (
+	"encoding/json"
+
 	"github.com/NetSys/quilt/db"
 )
 
@@ -14,4 +16,8 @@ func Run(conn db.Conn) {
 	go runElection(conn, store)
 	go runNetwork(conn, store)
 	runMinionSync(conn, store)
+}
+
+func jsonMarshal(v interface{}) ([]byte, error) {
+	return json.MarshalIndent(v, "", "    ")
 }

@@ -77,15 +77,6 @@ func runMaster(conn db.Conn) {
 	}
 
 	var dbData []dbport
-	for _, l := range labels {
-		if l.MultiHost {
-			dbData = append(dbData, dbport{
-				bridge: lSwitch,
-				ip:     l.IP,
-				mac:    labelMac,
-			})
-		}
-	}
 	for _, c := range containers {
 		dbData = append(dbData, dbport{bridge: lSwitch, ip: c.IP,
 			mac: ipdef.IPStrToMac(c.IP)})

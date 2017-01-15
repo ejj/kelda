@@ -3,7 +3,6 @@ package etcd
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net"
 	"path"
 	"strconv"
@@ -115,88 +114,6 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	assert.Equal(t, cs, etcdData.containers)
 
 	// if etcd and the db don't agree, there should be exactly 1 write
-	assert.Equal(t, 1, *store.writes)
-}
-
-func TestUpdateEtcdLabel(t *testing.T) {
-	store := newTestMock()
-	store.Mkdir(minionDir, 0)
-	conn := db.New()
-	var containers []db.Container
-	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		for i := 2; i < 5; i++ {
-			c := view.InsertContainer()
-			si := strconv.Itoa(i)
-			c.DockerID = si
-			c.Labels = []string{si}
-			view.Commit(c)
-		}
-		containers = view.SelectFromContainer(nil)
-		return nil
-	})
-
-	labelStruct := map[string]string{}
-	testLabel, _ := jsonMarshal(labelStruct)
-	err := store.Set(labelToIPStore, string(testLabel), 0)
-	assert.Nil(t, err)
-
-	*store.writes = 0
-	etcdData, _ := readEtcd(store)
-	etcdData, _ = updateEtcdLabel(store, etcdData, containers)
-
-	resultLabels, err := store.Get(labelToIPStore)
-	assert.Nil(t, err)
-
-	resultStruct := map[string]string{}
-	json.Unmarshal([]byte(resultLabels), &resultStruct)
-
-	assert.Equal(t, labelStruct, resultStruct)
-
-	// etcd and the db agree, there should be no writes
-	assert.Equal(t, 0, *store.writes)
-
-	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		c := view.InsertContainer()
-		c.DockerID = "6"
-		c.Labels = []string{"2", "3"}
-		view.Commit(c)
-		containers = append(containers, c)
-		return nil
-	})
-
-	// Label 2 is now multhost, so if etcd knows that, it should get etcd's ip
-	labelStruct["2"] = "10.0.0.11"
-	testLabel, _ = jsonMarshal(labelStruct)
-	err = store.Set(labelToIPStore, string(testLabel), 0)
-	assert.Nil(t, err)
-
-	// the dockerIP map still has label 3's IP, but label 3 is now multihost, so it
-	// should get a new IP
-	labelStruct["3"] = "10.0.0.0"
-
-	*store.writes = 0
-	etcdData, _ = readEtcd(store)
-	nextRand := uint32(0)
-	rand32 = func() uint32 {
-		ret := nextRand
-		nextRand++
-		return ret
-	}
-
-	defer func() {
-		rand32 = rand.Uint32
-	}()
-
-	etcdData, _ = updateEtcdLabel(store, etcdData, containers)
-
-	resultLabels, err = store.Get(labelToIPStore)
-	assert.Nil(t, err)
-
-	resultStruct = map[string]string{}
-	json.Unmarshal([]byte(resultLabels), &resultStruct)
-
-	assert.Equal(t, labelStruct, resultStruct)
-	assert.Equal(t, labelStruct, etcdData.multiHost)
 	assert.Equal(t, 1, *store.writes)
 }
 
@@ -344,7 +261,6 @@ func TestUpdateDBLabels(t *testing.T) {
 }
 
 func testUpdateDBLabels(t *testing.T, view db.Database) {
-	labelStruct := map[string]string{"a": "10.0.0.2"}
 	ipMap := map[string]string{"1": "10.0.0.3", "2": "10.0.0.4"}
 	containerSlice := []db.Container{
 		{
@@ -359,7 +275,6 @@ func testUpdateDBLabels(t *testing.T, view db.Database) {
 
 	updateDBLabels(view, storeData{
 		containers: containerSlice,
-		multiHost:  labelStruct,
 	}, ipMap)
 
 	type labelIPs struct {
@@ -379,7 +294,7 @@ func testUpdateDBLabels(t *testing.T, view db.Database) {
 
 	resultLabels := map[string]labelIPs{
 		"a": {
-			labelIP:      "10.0.0.2",
+			labelIP:      "10.0.0.3",
 			containerIPs: []string{"10.0.0.3", "10.0.0.4"},
 		},
 		"b": {
@@ -389,57 +304,6 @@ func testUpdateDBLabels(t *testing.T, view db.Database) {
 	}
 
 	assert.Equal(t, resultLabels, lip)
-}
-
-func TestSyncIPs(t *testing.T) {
-	nextRand := uint32(0)
-	rand32 = func() uint32 {
-		ret := nextRand
-		nextRand++
-		return ret
-	}
-
-	defer func() {
-		rand32 = rand.Uint32
-	}()
-
-	ipMap := map[string]string{
-		"a": "",
-		"b": "",
-		"c": "",
-	}
-
-	syncLabelIPs(ipMap)
-
-	// 10.0.0.1 is reserved for the default gateway
-	exp := sliceToSet([]string{"10.0.0.0", "10.0.0.2", "10.0.0.3"})
-	ipSet := map[string]struct{}{}
-	for _, ip := range ipMap {
-		ipSet[ip] = struct{}{}
-	}
-
-	assert.Equal(t, exp, ipSet)
-
-	ipMap["d"] = "junk"
-
-	syncLabelIPs(ipMap)
-
-	aIP := ipMap["d"]
-	expected := "10.0.0.4"
-	assert.Equal(t, expected, aIP)
-
-	// Force collisions
-	rand32 = func() uint32 {
-		return 4
-	}
-
-	ipMap["a"] = "junk"
-	syncLabelIPs(ipMap)
-	assert.NotEqual(t, "", ipMap["a"])
-
-	ipMap["e"] = "junk"
-	syncLabelIPs(ipMap)
-	assert.Empty(t, "", ipMap["e"])
 }
 
 func TestAllocate(t *testing.T) {

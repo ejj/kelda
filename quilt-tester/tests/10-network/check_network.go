@@ -172,11 +172,6 @@ func newNetworkTester(clnt client.Client) (networkTester, error) {
 		for i, ip := range label.ContainerIPs {
 			hostnameIPMap[fmt.Sprintf("%d.%s.q", i+1, label.Label)] = ip
 		}
-
-		// XXX: We've temporarily disabled load balancing and thus the label.IP
-		// isn't pingable.  When it's been re-implemented the following line (and
-		// this comment) should be deleted.
-		delete(allIPsSet, label.IP)
 	}
 
 	var allIPs []string
@@ -305,9 +300,6 @@ func (tester networkTester) test(container db.Container) testResult {
 				expReachable[ip] = struct{}{}
 			}
 		}
-		// We can ping our ovearching label, but not other containers within the
-		// label. E.g. 1.yellow.q can ping yellow.q (but not 2.yellow.q).
-		expReachable[tester.labelMap[label].IP] = struct{}{}
 	}
 
 	var expPings []pingResult

@@ -47,19 +47,6 @@ func TestRunMaster(t *testing.T) {
 		minion.Self = true
 		view.Commit(minion)
 
-		for i := 0; i < 3; i++ {
-			si := strconv.Itoa(i)
-			l := view.InsertLabel()
-			l.IP = fmt.Sprintf("0.0.0.%s", si)
-			l.MultiHost = true
-			view.Commit(l)
-			expPorts = append(expPorts, ovsdb.LPort{
-				Bridge:    lSwitch,
-				Name:      l.IP,
-				Addresses: []string{labelMac, l.IP},
-			})
-		}
-
 		for i := 3; i < 5; i++ {
 			si := strconv.Itoa(i)
 			c := view.InsertContainer()

@@ -11,7 +11,6 @@ import (
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/util"
 
 	log "github.com/Sirupsen/logrus"
@@ -20,7 +19,6 @@ import (
 
 const (
 	minionDir      = "/minion"
-	labelToIPStore = minionDir + "/labelIP"
 	containerStore = minionDir + "/container"
 	nodeStore      = minionDir + "/nodes"
 	minionIPStore  = "ips"
@@ -30,7 +28,6 @@ const (
 // around while operating on them
 type storeData struct {
 	containers []db.Container
-	multiHost  map[string]string
 }
 
 // wakeChan collapses the various channels these functions wait on into a single
@@ -101,7 +98,8 @@ func runNetwork(conn db.Conn, store Store) {
 			// produced by the updateEtcd* functions (not considering the
 			// etcd writes they perform).
 			if leader {
-				etcdData, err = updateEtcd(store, etcdData, containers)
+				etcdData, err = updateEtcdContainer(store, etcdData,
+					containers)
 				if err != nil {
 					log.WithError(err).Error("Etcd update failed.")
 					return nil
@@ -118,20 +116,12 @@ func runNetwork(conn db.Conn, store Store) {
 
 func readEtcd(store Store) (storeData, error) {
 	containers, err := store.Get(containerStore)
-	labels, err2 := store.Get(labelToIPStore)
-	if err2 != nil {
-		err = err2
-	}
-
-	etcdContainerSlice := []db.Container{}
-	multiHostMap := map[string]string{}
 
 	// Failed store reads will just be skipped by Unmarshal, which is fine
 	// since an error is returned
+	etcdContainerSlice := []db.Container{}
 	json.Unmarshal([]byte(containers), &etcdContainerSlice)
-	json.Unmarshal([]byte(labels), &multiHostMap)
-
-	return storeData{etcdContainerSlice, multiHostMap}, err
+	return storeData{etcdContainerSlice}, err
 }
 
 func loadMinionIPs(store Store) (map[string]string, error) {
@@ -179,20 +169,6 @@ func loadMinionIPs(store Store) (map[string]string, error) {
 	return ipMap, nil
 }
 
-func updateEtcd(s Store, etcdData storeData,
-	containers []db.Container) (storeData, error) {
-
-	if etcdData, err := updateEtcdContainer(s, etcdData, containers); err != nil {
-		return etcdData, err
-	}
-
-	if etcdData, err := updateEtcdLabel(s, etcdData, containers); err != nil {
-		return etcdData, err
-	}
-
-	return etcdData, nil
-}
-
 func updateEtcdContainer(s Store, etcdData storeData,
 	dbcs []db.Container) (storeData, error) {
 
@@ -224,54 +200,6 @@ func updateEtcdContainer(s Store, etcdData storeData,
 	etcdData.containers = containers
 	return etcdData, nil
 
-}
-
-func updateEtcdLabel(s Store, etcdData storeData, containers []db.Container) (storeData,
-	error) {
-
-	// Collect a map of labels to all of the containers that have that label.
-	labelContainers := map[string][]db.Container{}
-	for _, c := range containers {
-		for _, l := range c.Labels {
-			labelContainers[l] = append(labelContainers[l], c)
-		}
-	}
-
-	newMultiHosts := map[string]string{}
-
-	// Gather the multihost containers and set the IPs of non-multihost containers
-	// at the same time. The single host IPs are retrieved from the map of container
-	// IPs that updateEtcdDocker created.
-	for label, cs := range labelContainers {
-		if len(cs) > 1 {
-			newMultiHosts[label] = ""
-		}
-	}
-
-	// Etcd is the source of truth for IPs. If the label exists in both etcd and the
-	// db and it is a multihost label, then assign it the IP that etcd has.
-	// Otherwise, it stays unassigned and syncLabelIPs will take care of it.
-	for id := range newMultiHosts {
-		if ip, ok := etcdData.multiHost[id]; ok {
-			newMultiHosts[id] = ip
-		}
-	}
-
-	// No need to sync the SingleHost IPs, since they get their IPs from the dockerIP
-	// map, which was already synced in updateEtcdDocker
-	syncLabelIPs(newMultiHosts)
-
-	if util.StrStrMapEqual(newMultiHosts, etcdData.multiHost) {
-		return etcdData, nil
-	}
-
-	newLabelJSON, _ := jsonMarshal(newMultiHosts)
-	if err := s.Set(labelToIPStore, string(newLabelJSON), 0); err != nil {
-		return etcdData, err
-	}
-
-	etcdData.multiHost = newMultiHosts
-	return etcdData, nil
 }
 
 func updateLeaderDBC(view db.Database, dbcs []db.Container,
@@ -378,15 +306,11 @@ func updateDBLabels(view db.Database, etcdData storeData, ipMap map[string]strin
 	// Gather all of the label keys and IPs for single host labels, and IPs of
 	// the containers in a given label.
 	containerIPs := map[string][]string{}
-	labelIPs := map[string]string{}
 	labelKeys := map[string]struct{}{}
 	for _, c := range etcdData.containers {
 		for _, l := range c.Labels {
 			labelKeys[l] = struct{}{}
 			cIP := ipMap[strconv.Itoa(c.StitchID)]
-			if _, ok := etcdData.multiHost[l]; !ok {
-				labelIPs[l] = cIP
-			}
 
 			// The ordering of IPs between function calls will be consistent
 			// because the containers are sorted by their StitchIDs when
@@ -418,42 +342,16 @@ func updateDBLabels(view db.Database, etcdData storeData, ipMap map[string]strin
 	for _, pair := range pairs {
 		dbl := pair.L.(db.Label)
 		dbl.Label = pair.R.(string)
-		if _, ok := etcdData.multiHost[dbl.Label]; ok {
-			dbl.IP = etcdData.multiHost[dbl.Label]
-			dbl.MultiHost = true
-		} else {
-			dbl.IP = labelIPs[dbl.Label]
-			dbl.MultiHost = false
-		}
 		dbl.ContainerIPs = containerIPs[dbl.Label]
 
+		// XXX: In effect, we're implementing a dumb load balancer where all
+		// traffic goes to the first container.  Something more sophisticated is
+		// coming (hopefully).
+		dbl.IP = ""
+		if len(dbl.ContainerIPs) > 0 {
+			dbl.IP = dbl.ContainerIPs[0]
+		}
 		view.Commit(dbl)
-	}
-}
-
-// syncLabelIPs takes a map of IDs to IPs and creates an IP address for every entry
-// that's missing one.
-func syncLabelIPs(ipMap map[string]string) {
-	var unassigned []string
-	ipSet := map[string]struct{}{ipdef.GatewayIP.String(): {}}
-	for k, ipString := range ipMap {
-		_, duplicate := ipSet[ipString]
-		if duplicate || !ipdef.LabelSubnet.Contains(net.ParseIP(ipString)) {
-			unassigned = append(unassigned, k)
-			continue
-		}
-		ipSet[ipString] = struct{}{}
-	}
-
-	for _, k := range unassigned {
-		ip, err := allocateIP(ipSet, ipdef.LabelSubnet)
-		if err != nil {
-			log.WithError(err).Errorf("Failed to allocate IP for %s.", k)
-			ipMap[k] = ""
-			continue
-		}
-
-		ipMap[k] = ip
 	}
 }
 

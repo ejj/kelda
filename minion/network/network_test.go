@@ -9,6 +9,7 @@ import (
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
+	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/minion/ovsdb"
 	"github.com/stretchr/testify/assert"
 )
@@ -63,12 +64,11 @@ func TestRunMaster(t *testing.T) {
 			si := strconv.Itoa(i)
 			c := view.InsertContainer()
 			c.IP = fmt.Sprintf("0.0.0.%s", si)
-			c.Mac = fmt.Sprintf("00:00:00:00:00:0%s", si)
 			view.Commit(c)
 			expPorts = append(expPorts, ovsdb.LPort{
 				Bridge:    lSwitch,
 				Name:      c.IP,
-				Addresses: []string{c.Mac, c.IP},
+				Addresses: []string{ipdef.IPStrToMac(c.IP), c.IP},
 			})
 		}
 
@@ -300,12 +300,13 @@ func TestGenerateOFPorts(t *testing.T) {
 	}
 
 	containers := []db.Container{
-		{EndpointID: "1", DockerID: "1", Mac: "m1"},
-		{EndpointID: "2", DockerID: "2", Mac: "m2"},
-		{EndpointID: "3", DockerID: "3", Mac: "m3"},
+		{EndpointID: "1", DockerID: "1", IP: "1.1.1.1"},
+		{EndpointID: "2", DockerID: "2", IP: "2.2.2.2"},
+		{EndpointID: "3", DockerID: "3", IP: "3.3.3.3"},
 	}
 
 	assert.Equal(t,
-		[]ofPort{{VethPort: 101, PatchPort: 201, Mac: "m1"}},
+		[]ofPort{{VethPort: 101, PatchPort: 201,
+			Mac: ipdef.IPStrToMac("1.1.1.1")}},
 		generateOFPorts(ifaces, containers))
 }

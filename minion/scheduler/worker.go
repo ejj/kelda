@@ -93,7 +93,6 @@ func syncWorker(dbcs []db.Container, dkcs []docker.Container, subnet net.IPNet) 
 		if dbc.DockerID != dkc.ID {
 			dbc.DockerID = dkc.ID
 			dbc.IP = dkc.IP
-			dbc.Mac = dkc.Mac
 			dbc.EndpointID = dkc.EID
 			changed = append(changed, dbc)
 		}

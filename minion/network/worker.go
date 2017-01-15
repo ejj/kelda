@@ -55,7 +55,7 @@ func runWorker(conn db.Conn) {
 		}
 
 		containers := view.SelectFromContainer(func(c db.Container) bool {
-			return c.DockerID != "" && c.IP != "" && c.Mac != ""
+			return c.DockerID != "" && c.IP != ""
 		})
 		connections := view.SelectFromConnection(nil)
 
@@ -273,7 +273,7 @@ func generateTargetPorts(containers []db.Container) ovsdb.InterfaceSlice {
 			Bridge:      ovnBridge,
 			Type:        ovsdb.InterfaceTypePatch,
 			Peer:        peerQuilt,
-			AttachedMAC: dbc.Mac,
+			AttachedMAC: ipdef.IPStrToMac(dbc.IP),
 			IfaceID:     dbc.IP,
 		})
 	}
@@ -320,7 +320,7 @@ func generateOFPorts(ifaces []ovsdb.Interface, dbcs []db.Container) []ofPort {
 		ofcs = append(ofcs, ofPort{
 			PatchPort: ofQuilt,
 			VethPort:  ofVeth,
-			Mac:       dbc.Mac,
+			Mac:       ipdef.IPStrToMac(dbc.IP),
 		})
 	}
 	return ofcs

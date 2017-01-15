@@ -15,7 +15,6 @@ type Container struct {
 	ID int // The database ID of this container.
 
 	IP         string // The virtual IP address of this container.
-	Mac        string // The virtual MAC address of this container.
 	Minion     string // The private IP of the minion this container is running on.
 	EndpointID string // The ID libnetwork has assigned to this container's veth.
 	StitchID   int    // A unique ID given to this container by the stitch compiler.
@@ -82,10 +81,6 @@ func (c Container) String() string {
 
 	if c.IP != "" {
 		tags = append(tags, fmt.Sprintf("IP: %s", c.IP))
-	}
-
-	if c.Mac != "" {
-		tags = append(tags, fmt.Sprintf("Mac: %s", c.Mac))
 	}
 
 	if len(c.Labels) > 0 {

@@ -296,10 +296,8 @@ func updateLeaderDBC(view db.Database, dbcs []db.Container,
 
 	for _, dbc := range dbcs {
 		ipVal := ipMap[strconv.Itoa(dbc.StitchID)]
-		mac := ipdef.IPStrToMac(ipVal)
-		if dbc.IP != ipVal || dbc.Mac != mac {
+		if dbc.IP != ipVal {
 			dbc.IP = ipVal
-			dbc.Mac = mac
 			view.Commit(dbc)
 		}
 	}

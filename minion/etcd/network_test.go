@@ -212,8 +212,7 @@ func TestUpdateLeaderDBC(t *testing.T) {
 		}, map[string]string{"1": "foo"})
 
 		dbcs := view.SelectFromContainer(nil)
-		if len(dbcs) != 1 || dbcs[0].StitchID != 1 || dbcs[0].IP != "foo" ||
-			dbcs[0].Mac != "" {
+		if len(dbcs) != 1 || dbcs[0].StitchID != 1 || dbcs[0].IP != "foo" {
 			t.Error(spew.Sprintf("Unexpected dbc: %v", dbc))
 		}
 

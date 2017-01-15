@@ -10,6 +10,7 @@ import (
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
+	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/minion/ovsdb"
 	"github.com/NetSys/quilt/util"
 
@@ -64,7 +65,7 @@ func runMaster(conn db.Conn) {
 		})
 
 		containers = view.SelectFromContainer(func(dbc db.Container) bool {
-			return dbc.Mac != "" && dbc.IP != ""
+			return dbc.IP != ""
 		})
 
 		connections = view.SelectFromConnection(nil)
@@ -86,7 +87,8 @@ func runMaster(conn db.Conn) {
 		}
 	}
 	for _, c := range containers {
-		dbData = append(dbData, dbport{bridge: lSwitch, ip: c.IP, mac: c.Mac})
+		dbData = append(dbData, dbport{bridge: lSwitch, ip: c.IP,
+			mac: ipdef.IPStrToMac(c.IP)})
 	}
 
 	ovsdbClient, err := ovsdb.Open()

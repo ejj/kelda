@@ -6,8 +6,6 @@
 package network
 
 import (
-	"fmt"
-
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/minion/ipdef"
@@ -21,15 +19,6 @@ const labelMac = "0a:00:00:00:00:00"
 const lSwitch = "quilt"
 const quiltBridge = "quilt-int"
 const ovnBridge = "br-int"
-
-type dbport struct {
-	bridge string
-	ip     string
-	mac    string
-}
-
-// dbslice is a wrapper around []dbport to allow us to perform a join
-type dbslice []dbport
 
 // Run blocks implementing the network services.
 func Run(conn db.Conn) {
@@ -76,12 +65,6 @@ func runMaster(conn db.Conn) {
 		return
 	}
 
-	var dbData []dbport
-	for _, c := range containers {
-		dbData = append(dbData, dbport{bridge: lSwitch, ip: c.IP,
-			mac: ipdef.IPStrToMac(c.IP)})
-	}
-
 	ovsdbClient, err := ovsdb.Open()
 	if err != nil {
 		log.WithError(err).Error("Failed to connect to OVSDB.")
@@ -96,48 +79,39 @@ func runMaster(conn db.Conn) {
 		return
 	}
 
+	dbcKey := func(val interface{}) interface{} {
+		return val.(db.Container).IP
+	}
 	portKey := func(val interface{}) interface{} {
-		port := val.(ovsdb.LPort)
-		return fmt.Sprintf("bridge:%s\nname:%s", port.Bridge, port.Name)
+		return val.(ovsdb.LPort).Name
 	}
 
-	dbKey := func(val interface{}) interface{} {
-		dbPort := val.(dbport)
-		return fmt.Sprintf("bridge:%s\nname:%s", dbPort.bridge, dbPort.ip)
-	}
+	_, ovsps, dbcs := join.HashJoin(ovsdb.LPortSlice(lports),
+		db.ContainerSlice(containers), portKey, dbcKey)
 
-	_, ovsps, dbps := join.HashJoin(ovsdb.LPortSlice(lports), dbslice(dbData),
-		portKey, dbKey)
-
-	for _, dbp := range dbps {
-		lport := dbp.(dbport)
-		log.WithField("IP", lport.ip).Info("New logical port.")
-		err := ovsdbClient.CreateLogicalPort(lport.bridge, lport.ip, lport.mac,
-			lport.ip)
+	for _, dbcIface := range dbcs {
+		dbc := dbcIface.(db.Container)
+		err := ovsdbClient.CreateLogicalPort(lSwitch, dbc.IP,
+			ipdef.IPStrToMac(dbc.IP), dbc.IP)
 		if err != nil {
-			log.WithError(err).Warnf("Failed to create port %s.", lport.ip)
+			log.WithError(err).Warnf("Failed to create logical port: %s",
+				dbc.IP)
+		} else {
+			log.Infof("New logical port: %s", dbc.IP)
 		}
 	}
 
 	for _, ovsp := range ovsps {
 		lport := ovsp.(ovsdb.LPort)
-		log.Infof("Delete logical port %s.", lport.Name)
 		if err := ovsdbClient.DeleteLogicalPort(lSwitch, lport); err != nil {
-			log.WithError(err).Warn("Failed to delete logical port.")
+			log.WithError(err).Warnf("Failed to delete logical port: %s",
+				lport.Name)
+		} else {
+			log.Infof("Delete logical port: %s", lport.Name)
 		}
 	}
 
 	updateACLs(ovsdbClient, connections, labels)
-}
-
-// Len returns the length of the slice
-func (dbs dbslice) Len() int {
-	return len(dbs)
-}
-
-// Get returns the element at index i of the slice
-func (dbs dbslice) Get(i int) interface{} {
-	return dbs[i]
 }
 
 func checkSupervisorInit(view db.Database) bool {

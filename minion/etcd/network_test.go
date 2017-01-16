@@ -54,8 +54,8 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	assert.Nil(t, err)
 
 	*store.writes = 0
-	etcdData, _ := readEtcd(store)
-	etcdData, _ = updateEtcdContainer(store, etcdData, containers)
+	etcdDBCs, _ := readEtcd(store)
+	etcdDBCs, _ = updateEtcdContainer(store, etcdDBCs, containers)
 
 	resultContainers, err := store.Get(containerStore)
 	assert.Nil(t, err)
@@ -101,8 +101,8 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	assert.Nil(t, err)
 
 	*store.writes = 0
-	etcdData, _ = readEtcd(store)
-	etcdData, _ = updateEtcdContainer(store, etcdData, containers)
+	etcdDBCs, _ = readEtcd(store)
+	etcdDBCs, _ = updateEtcdContainer(store, etcdDBCs, containers)
 
 	resultContainers, err = store.Get(containerStore)
 	assert.Nil(t, err)
@@ -111,7 +111,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 	json.Unmarshal([]byte(resultContainers), &resultSlice)
 
 	assert.Equal(t, cs, resultSlice)
-	assert.Equal(t, cs, etcdData.containers)
+	assert.Equal(t, cs, etcdDBCs)
 
 	// if etcd and the db don't agree, there should be exactly 1 write
 	assert.Equal(t, 1, *store.writes)
@@ -124,9 +124,8 @@ func TestUpdateLeaderDBC(t *testing.T) {
 		dbc.StitchID = 1
 		view.Commit(dbc)
 
-		updateLeaderDBC(view, view.SelectFromContainer(nil), storeData{
-			containers: []db.Container{{StitchID: 1}},
-		}, map[string]string{"1": "foo"})
+		updateLeaderDBC(view, view.SelectFromContainer(nil),
+			[]db.Container{{StitchID: 1}}, map[string]string{"1": "foo"})
 
 		dbcs := view.SelectFromContainer(nil)
 		if len(dbcs) != 1 || dbcs[0].StitchID != 1 || dbcs[0].IP != "foo" {
@@ -195,7 +194,7 @@ func testUpdateWorkerDBC(t *testing.T, view db.Database) {
 	assert.Nil(t, err)
 
 	updateWorker(view, db.Minion{PrivateIP: "1.2.3.4",
-		Subnet: "10.1.0.0"}, store, storeData{containers: cs})
+		Subnet: "10.1.0.0"}, store, cs)
 
 	ipMap := map[int]string{}
 	labelMap := map[int][]string{}
@@ -273,9 +272,7 @@ func testUpdateDBLabels(t *testing.T, view db.Database) {
 		},
 	}
 
-	updateDBLabels(view, storeData{
-		containers: containerSlice,
-	}, ipMap)
+	updateDBLabels(view, containerSlice, ipMap)
 
 	type labelIPs struct {
 		labelIP      string

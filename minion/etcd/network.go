@@ -24,12 +24,6 @@ const (
 	minionIPStore  = "ips"
 )
 
-// Keeping all the store data types in a struct makes it much less verbose to pass them
-// around while operating on them
-type storeData struct {
-	containers []db.Container
-}
-
 // wakeChan collapses the various channels these functions wait on into a single
 // channel. Multiple redundant pings will be coalesced into a single message.
 func wakeChan(conn db.Conn, store Store) chan struct{} {
@@ -60,7 +54,7 @@ func runNetwork(conn db.Conn, store Store) {
 		// If the etcd read failed, we only want to update the db if it
 		// failed because a key was missing (has not been created yet).
 		// In all other cases, we skip this iteration.
-		etcdData, err := readEtcd(store)
+		etcdDBCs, err := readEtcd(store)
 		if err != nil {
 			etcdErr, ok := err.(client.Error)
 			if !ok || etcdErr.Code != client.ErrorCodeKeyNotFound {
@@ -82,7 +76,7 @@ func runNetwork(conn db.Conn, store Store) {
 
 			minion, err := view.MinionSelf()
 			if err == nil && minion.Role == db.Worker {
-				updateWorker(view, minion, store, etcdData)
+				updateWorker(view, minion, store, etcdDBCs)
 			}
 
 			ipMap, err := loadMinionIPs(store)
@@ -98,30 +92,30 @@ func runNetwork(conn db.Conn, store Store) {
 			// produced by the updateEtcd* functions (not considering the
 			// etcd writes they perform).
 			if leader {
-				etcdData, err = updateEtcdContainer(store, etcdData,
+				etcdDBCs, err = updateEtcdContainer(store, etcdDBCs,
 					containers)
 				if err != nil {
 					log.WithError(err).Error("Etcd update failed.")
 					return nil
 				}
 
-				updateLeaderDBC(view, containers, etcdData, ipMap)
+				updateLeaderDBC(view, containers, etcdDBCs, ipMap)
 			}
 
-			updateDBLabels(view, etcdData, ipMap)
+			updateDBLabels(view, etcdDBCs, ipMap)
 			return nil
 		})
 	}
 }
 
-func readEtcd(store Store) (storeData, error) {
+func readEtcd(store Store) ([]db.Container, error) {
 	containers, err := store.Get(containerStore)
 
 	// Failed store reads will just be skipped by Unmarshal, which is fine
 	// since an error is returned
 	etcdContainerSlice := []db.Container{}
 	json.Unmarshal([]byte(containers), &etcdContainerSlice)
-	return storeData{etcdContainerSlice}, err
+	return etcdContainerSlice, err
 }
 
 func loadMinionIPs(store Store) (map[string]string, error) {
@@ -169,8 +163,8 @@ func loadMinionIPs(store Store) (map[string]string, error) {
 	return ipMap, nil
 }
 
-func updateEtcdContainer(s Store, etcdData storeData,
-	dbcs []db.Container) (storeData, error) {
+func updateEtcdContainer(s Store, etcdDBCs []db.Container,
+	dbcs []db.Container) ([]db.Container, error) {
 
 	// XXX: On masters, the database has the container IPs that we learned from the
 	// workers.  It likely won't hurt, but it's best not to write these IP addresses
@@ -188,22 +182,22 @@ func updateEtcdContainer(s Store, etcdData storeData,
 	}
 
 	newContainers, _ := jsonMarshal(containers)
-	oldContainers, _ := jsonMarshal(etcdData.containers)
+	oldContainers, _ := jsonMarshal(etcdDBCs)
 	if string(newContainers) == string(oldContainers) {
-		return etcdData, nil
+		return etcdDBCs, nil
 	}
 
 	if err := s.Set(containerStore, string(newContainers), 0); err != nil {
-		return etcdData, err
+		return etcdDBCs, err
 	}
 
-	etcdData.containers = containers
-	return etcdData, nil
+	etcdDBCs = containers
+	return etcdDBCs, nil
 
 }
 
 func updateLeaderDBC(view db.Database, dbcs []db.Container,
-	etcdData storeData, ipMap map[string]string) {
+	etcdDBCs []db.Container, ipMap map[string]string) {
 
 	for _, dbc := range dbcs {
 		ipVal := ipMap[strconv.Itoa(dbc.StitchID)]
@@ -215,10 +209,10 @@ func updateLeaderDBC(view db.Database, dbcs []db.Container,
 }
 
 func updateWorker(view db.Database, self db.Minion, store Store,
-	etcdData storeData) {
+	etcdDBCs []db.Container) {
 
 	var containers []db.Container
-	for _, etcdc := range etcdData.containers {
+	for _, etcdc := range etcdDBCs {
 		if etcdc.Minion == self.PrivateIP {
 			containers = append(containers, etcdc)
 		}
@@ -302,12 +296,12 @@ func updateContainerIP(containers []db.Container, privateIP string, store Store)
 	}
 }
 
-func updateDBLabels(view db.Database, etcdData storeData, ipMap map[string]string) {
+func updateDBLabels(view db.Database, etcdDBCs []db.Container, ipMap map[string]string) {
 	// Gather all of the label keys and IPs for single host labels, and IPs of
 	// the containers in a given label.
 	containerIPs := map[string][]string{}
 	labelKeys := map[string]struct{}{}
-	for _, c := range etcdData.containers {
+	for _, c := range etcdDBCs {
 		for _, l := range c.Labels {
 			labelKeys[l] = struct{}{}
 			cIP := ipMap[strconv.Itoa(c.StitchID)]

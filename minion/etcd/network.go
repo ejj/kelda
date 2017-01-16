@@ -250,10 +250,6 @@ func dbSliceToStoreSlice(dbcs []db.Container) []storeContainer {
 	return dbContainerSlice
 }
 
-func writeDiff(s Store, data storeData, newData []storeContainer) (storeData, error) {
-	return data, nil
-}
-
 func updateEtcdContainer(s Store, etcdData storeData,
 	containers []db.Container) (storeData, error) {
 

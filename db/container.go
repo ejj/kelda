@@ -12,17 +12,17 @@ import (
 // eventually be instantiated within its corresponding cluster.
 // Used only by the minion.
 type Container struct {
-	ID int // The database ID of this container.
+	ID int `json:"-"`
 
-	IP         string // The virtual IP address of this container.
-	Minion     string // The private IP of the minion this container is running on.
-	EndpointID string // The ID libnetwork has assigned to this container's veth.
-	StitchID   int    // A unique ID given to this container by the stitch compiler.
-	DockerID   string
-	Image      string
-	Command    []string
-	Labels     []string
-	Env        map[string]string
+	IP         string            `json:",omitempty"`
+	Minion     string            `json:",omitempty"`
+	EndpointID string            `json:",omitempty"`
+	StitchID   int               `json:",omitempty"`
+	DockerID   string            `json:",omitempty"`
+	Image      string            `json:",omitempty"`
+	Command    []string          `json:",omitempty"`
+	Labels     []string          `json:",omitempty"`
+	Env        map[string]string `json:",omitempty"`
 }
 
 // ContainerSlice is an alias for []Container to allow for joins

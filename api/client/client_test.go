@@ -79,7 +79,6 @@ func TestUnmarshalContainer(t *testing.T) {
 
 	exp := []db.Container{
 		{
-			ID:       1,
 			DockerID: "docker-id",
 			Image:    "image",
 			Command:  []string{"cmd", "arg"},

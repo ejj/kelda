@@ -27,9 +27,13 @@ func Run(conn db.Conn) {
 		db.ConnectionTable, db.LabelTable, db.EtcdTable).C {
 
 		loopLog.LogStart()
-		runDNS(conn)
-		runWorker(conn)
-		runMaster(conn)
+		if conn.EtcdLeader() {
+			runUpdateIPs(conn)
+			runMaster(conn)
+		} else {
+			runDNS(conn)
+			runWorker(conn)
+		}
 		loopLog.LogEnd()
 	}
 }
@@ -39,7 +43,7 @@ func Run(conn db.Conn) {
 // and label.  The specialized OpenFlow rules Quilt requires are managed by the workers
 // individuallly.
 func runMaster(conn db.Conn) {
-	var leader, init bool
+	var init bool
 	var labels []db.Label
 	var containers []db.Container
 	var connections []db.Connection
@@ -47,7 +51,6 @@ func runMaster(conn db.Conn) {
 		db.LabelTable, db.MinionTable).Run(func(view db.Database) error {
 
 		init = checkSupervisorInit(view)
-		leader = view.EtcdLeader()
 
 		labels = view.SelectFromLabel(func(label db.Label) bool {
 			return label.IP != ""
@@ -61,7 +64,7 @@ func runMaster(conn db.Conn) {
 		return nil
 	})
 
-	if !init || !leader {
+	if !init {
 		return
 	}
 

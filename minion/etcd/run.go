@@ -12,12 +12,12 @@ import (
 // Run synchronizes state in `conn` with the Etcd cluster.
 func Run(conn db.Conn) {
 	store := NewStore()
-	makeEtcdDir(subnetStore, store, 0)
-	makeEtcdDir(nodeStore, store, 0)
+	makeEtcdDir(minionPath, store, 0)
 
 	go runElection(conn, store)
-	go runNetwork(conn, store)
 	go runConnection(conn, store)
+	go runContainer(conn, store)
+	go runLabel(conn, store)
 	runMinionSync(conn, store)
 }
 

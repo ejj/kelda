@@ -1,17 +1,12 @@
 package scheduler
 
 import (
-	"net"
 	"testing"
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/minion/docker"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
-)
-
-var (
-	_, subnet, _ = net.ParseCIDR("5.6.7.8/20")
 )
 
 func TestRunWorker(t *testing.T) {
@@ -23,6 +18,7 @@ func TestRunWorker(t *testing.T) {
 		container := view.InsertContainer()
 		container.Image = "Image"
 		container.Minion = "1.2.3.4"
+		container.IP = "10.0.0.2"
 		view.Commit(container)
 
 		m := view.InsertMinion()
@@ -33,20 +29,20 @@ func TestRunWorker(t *testing.T) {
 	})
 
 	// Wrong Minion IP, should do nothing.
-	runWorker(conn, dk, "1.2.3.5", *subnet)
+	runWorker(conn, dk, "1.2.3.5")
 	dkcs, err := dk.List(nil)
 	assert.NoError(t, err)
 	assert.Len(t, dkcs, 0)
 
 	// Run with a list error, should do nothing.
 	md.ListError = true
-	runWorker(conn, dk, "1.2.3.4", *subnet)
+	runWorker(conn, dk, "1.2.3.4")
 	md.ListError = false
 	dkcs, err = dk.List(nil)
 	assert.NoError(t, err)
 	assert.Len(t, dkcs, 0)
 
-	runWorker(conn, dk, "1.2.3.4", *subnet)
+	runWorker(conn, dk, "1.2.3.4")
 	dkcs, err = dk.List(nil)
 	assert.NoError(t, err)
 	assert.Len(t, dkcs, 1)
@@ -54,9 +50,9 @@ func TestRunWorker(t *testing.T) {
 }
 
 func runSync(dk docker.Client, dbcs []db.Container,
-	dkcs []docker.Container, subnet net.IPNet) []db.Container {
+	dkcs []docker.Container) []db.Container {
 
-	changes, tdbcs, tdkcs := syncWorker(dbcs, dkcs, subnet)
+	changes, tdbcs, tdkcs := syncWorker(dbcs, dkcs)
 	doContainers(dk, tdkcs, dockerKill)
 	doContainers(dk, tdbcs, dockerRun)
 	return changes
@@ -76,13 +72,13 @@ func TestSyncWorker(t *testing.T) {
 	}
 
 	md.StartError = true
-	changed := runSync(dk, dbcs, nil, *subnet)
+	changed := runSync(dk, dbcs, nil)
 	md.StartError = false
 	assert.Len(t, changed, 0)
 
-	runSync(dk, dbcs, nil, *subnet)
+	runSync(dk, dbcs, nil)
 	dkcs, err := dk.List(nil)
-	changed, _, _ = syncWorker(dbcs, dkcs, *subnet)
+	changed, _, _ = syncWorker(dbcs, dkcs)
 	assert.NoError(t, err)
 
 	if changed[0].DockerID != dkcs[0].ID {
@@ -104,7 +100,7 @@ func TestSyncWorker(t *testing.T) {
 	assert.Equal(t, dkcsDB, dbcs)
 
 	dbcs[0].DockerID = ""
-	changed = runSync(dk, dbcs, dkcs, *subnet)
+	changed = runSync(dk, dbcs, dkcs)
 
 	newDkcs, err := dk.List(nil)
 	assert.NoError(t, err)
@@ -115,7 +111,7 @@ func TestSyncWorker(t *testing.T) {
 
 	// Atempt a failed remove
 	md.RemoveError = true
-	changed = runSync(dk, nil, dkcs, *subnet)
+	changed = runSync(dk, nil, dkcs)
 	md.RemoveError = false
 	assert.Len(t, changed, 0)
 
@@ -123,7 +119,7 @@ func TestSyncWorker(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, dkcs, newDkcs)
 
-	changed = runSync(dk, nil, dkcs, *subnet)
+	changed = runSync(dk, nil, dkcs)
 	assert.Len(t, changed, 0)
 
 	dkcs, err = dk.List(nil)

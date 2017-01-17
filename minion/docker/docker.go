@@ -2,7 +2,6 @@ package docker
 
 import (
 	"errors"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -143,14 +142,13 @@ func (dk Client) Run(opts RunOptions) (string, error) {
 
 // ConfigureNetwork makes a request to docker to create a network running on driver with
 // the given subnet.
-func (dk Client) ConfigureNetwork(driver string, subnet net.IPNet) error {
+func (dk Client) ConfigureNetwork(driver string) error {
 	_, err := dk.CreateNetwork(dkc.CreateNetworkOptions{
 		Name:   driver,
 		Driver: driver,
 		IPAM: dkc.IPAMOptions{
 			Config: []dkc.IPAMConfig{{
 				Subnet:  ipdef.QuiltSubnet.String(),
-				IPRange: subnet.String(),
 				Gateway: ipdef.GatewayIP.String(),
 			}},
 		},

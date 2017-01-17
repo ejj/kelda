@@ -42,17 +42,14 @@ func Run() {
 	go apiServer.Run(conn, fmt.Sprintf("tcp://0.0.0.0:%d", api.DefaultRemotePort))
 
 	loopLog := util.NewEventTimer("Minion-Update")
-	for range conn.Trigger(db.MinionTable).C {
+
+	for range conn.Trigger(db.MinionTable, db.EtcdTable).C {
 		loopLog.LogStart()
-		conn.Txn(db.ConnectionTable, db.ContainerTable, db.MinionTable,
-			db.PlacementTable).Run(func(view db.Database) error {
-
+		txn := conn.Txn(db.ConnectionTable, db.ContainerTable, db.MinionTable,
+			db.EtcdTable, db.PlacementTable)
+		txn.Run(func(view db.Database) error {
 			minion, err := view.MinionSelf()
-			if err != nil {
-				return err
-			}
-
-			if minion.Role == db.Master {
+			if err == nil && view.EtcdLeader() {
 				updatePolicy(view, minion.Spec)
 			}
 			return nil

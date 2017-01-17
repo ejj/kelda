@@ -225,7 +225,7 @@ func TestRunEnv(t *testing.T) {
 func TestConfigureNetwork(t *testing.T) {
 	md, dk := NewMock()
 
-	err := dk.ConfigureNetwork("quilt", ipdef.QuiltSubnet)
+	err := dk.ConfigureNetwork("quilt")
 	assert.NoError(t, err)
 
 	exp := &dkc.Network{
@@ -234,7 +234,6 @@ func TestConfigureNetwork(t *testing.T) {
 		IPAM: dkc.IPAMOptions{
 			Config: []dkc.IPAMConfig{{
 				Subnet:  ipdef.QuiltSubnet.String(),
-				IPRange: ipdef.QuiltSubnet.String(),
 				Gateway: ipdef.GatewayIP.String()}}}}
 	assert.Equal(t, exp, md.Networks["quilt"])
 }

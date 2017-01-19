@@ -60,6 +60,7 @@ type RunOptions struct {
 	Labels map[string]string
 	Env    map[string]string
 
+	IP          string
 	NetworkMode string
 	DNS         []string
 	DNSSearch   []string
@@ -114,7 +115,20 @@ func (dk Client) Run(opts RunOptions) (string, error) {
 		DNSSearch:   opts.DNSSearch,
 	}
 
-	id, err := dk.create(opts.Name, opts.Image, opts.Args, opts.Labels, env, hc, nil)
+	var nc *dkc.NetworkingConfig
+	if opts.IP != "" {
+		nc = &dkc.NetworkingConfig{
+			EndpointsConfig: map[string]*dkc.EndpointConfig{
+				"quilt": {
+					IPAMConfig: &dkc.EndpointIPAMConfig{
+						IPv4Address: opts.IP,
+					},
+				},
+			},
+		}
+	}
+
+	id, err := dk.create(opts.Name, opts.Image, opts.Args, opts.Labels, env, hc, nc)
 	if err != nil {
 		return "", err
 	}

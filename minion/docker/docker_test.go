@@ -167,7 +167,7 @@ func TestRun(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Zero(t, len(containers))
 
-	id1, err := dk.Run(RunOptions{Name: "name1"})
+	id1, err := dk.Run(RunOptions{Name: "name1", IP: "1.2.3.4"})
 	assert.Nil(t, err)
 
 	id2, err := dk.Run(RunOptions{Name: "name2"})

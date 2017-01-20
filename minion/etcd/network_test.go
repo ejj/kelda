@@ -55,7 +55,7 @@ func TestUpdateEtcdContainers(t *testing.T) {
 
 	*store.writes = 0
 	etcdDBCs, _ := readEtcd(store)
-	etcdDBCs, _ = updateEtcdContainer(store, etcdDBCs, containers)
+	updateEtcdContainer(store, etcdDBCs, containers)
 
 	resultContainers, err := store.Get(containerStore)
 	assert.Nil(t, err)

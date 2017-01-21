@@ -8,7 +8,7 @@ type Minion struct {
 	ID int `json:"-"`
 
 	Self           bool   `json:"-"`
-	Spec           string `json:"-"`
+	Spec           string `json:"-" rowStringer:"omit"`
 	Subnet         string `json:"-"` // no need to include in the JSON, stored in Etcd
 	AuthorizedKeys string `json:"-" rowStringer:"omit"`
 	SupervisorInit bool   `json:"-"`

@@ -7,7 +7,7 @@ import (
 // A Connection allows the members of two labels to speak to each other on the port
 // range [MinPort, MaxPort] inclusive.
 type Connection struct {
-	ID int
+	ID int `json:"-"`
 
 	From    string
 	To      string

@@ -91,7 +91,7 @@ func testContainerTxn(t *testing.T, conn db.Conn, spec string) {
 
 	var containers []db.Container
 	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		updatePolicy(view, db.Master, compiled.String())
+		updatePolicy(view, compiled.String())
 		containers = view.SelectFromContainer(nil)
 		return nil
 	})
@@ -165,7 +165,7 @@ func testConnectionTxn(t *testing.T, conn db.Conn, spec string) {
 
 	var connections []db.Connection
 	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		updatePolicy(view, db.Master, compiled.String())
+		updatePolicy(view, compiled.String())
 		connections = view.SelectFromConnection(nil)
 		return nil
 	})
@@ -208,7 +208,7 @@ func TestPlacementTxn(t *testing.T) {
 
 		placements := map[db.Placement]struct{}{}
 		conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-			updatePolicy(view, db.Master, compiled.String())
+			updatePolicy(view, compiled.String())
 			res := view.SelectFromPlacement(nil)
 
 			// Set the ID to 0 so that we can use reflect.DeepEqual.

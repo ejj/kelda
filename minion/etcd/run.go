@@ -1,7 +1,6 @@
 package etcd
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/NetSys/quilt/db"
@@ -18,6 +17,7 @@ func Run(conn db.Conn) {
 
 	go runElection(conn, store)
 	go runNetwork(conn, store)
+	go runConnection(conn, store)
 	runMinionSync(conn, store)
 }
 
@@ -46,8 +46,4 @@ func createEtcdDir(dir string, store Store, ttl time.Duration) error {
 	}
 
 	return err
-}
-
-func jsonMarshal(v interface{}) ([]byte, error) {
-	return json.MarshalIndent(v, "", "    ")
 }

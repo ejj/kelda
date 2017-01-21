@@ -24,33 +24,11 @@ const (
 	minionIPStore  = "ips"
 )
 
-// wakeChan collapses the various channels these functions wait on into a single
-// channel. Multiple redundant pings will be coalesced into a single message.
-func wakeChan(conn db.Conn, store Store) chan struct{} {
+func runNetwork(conn db.Conn, store Store) {
 	minionWatch := store.Watch("/", 1*time.Second)
 	trigg := conn.TriggerTick(30, db.MinionTable, db.ContainerTable, db.LabelTable,
 		db.EtcdTable).C
-
-	c := make(chan struct{}, 1)
-	go func() {
-		for {
-			select {
-			case <-minionWatch:
-			case <-trigg:
-			}
-
-			select {
-			case c <- struct{}{}:
-			default: // There's a notification in queue, no need for another.
-			}
-		}
-	}()
-
-	return c
-}
-
-func runNetwork(conn db.Conn, store Store) {
-	for range wakeChan(conn, store) {
+	for range joinNotifiers(trigg, minionWatch) {
 		// If the etcd read failed, we only want to update the db if it
 		// failed because a key was missing (has not been created yet).
 		// In all other cases, we skip this iteration.

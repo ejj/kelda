@@ -52,7 +52,9 @@ func Run() {
 				return err
 			}
 
-			updatePolicy(view, minion.Role, minion.Spec)
+			if minion.Role == db.Master {
+				updatePolicy(view, minion.Spec)
+			}
 			return nil
 		})
 		loopLog.LogEnd()

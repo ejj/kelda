@@ -11,23 +11,16 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-func updatePolicy(view db.Database, role db.Role, spec string) {
+func updatePolicy(view db.Database, spec string) {
 	compiled, err := stitch.FromJSON(spec)
 	if err != nil {
 		log.WithError(err).Warn("Invalid spec.")
 		return
 	}
 
+	updateContainers(view, compiled)
+	updatePlacements(view, compiled)
 	updateConnections(view, compiled)
-	if role == db.Master {
-		updatePlacements(view, compiled)
-
-		// The container table is aspirational -- it's the set of containers that
-		// should exist.  In the workers, however, the container table is just
-		// what's running locally.  That's why we only sync the database
-		// containers on the master.
-		updateContainers(view, compiled)
-	}
 }
 
 func updatePlacements(view db.Database, spec stitch.Stitch) {

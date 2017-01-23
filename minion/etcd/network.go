@@ -19,16 +19,15 @@ import (
 )
 
 const (
-	minionDir      = "/minion"
-	containerStore = minionDir + "/container"
-	nodeStore      = minionDir + "/nodes"
+	containerStore = "/containers"
+	nodeStore      = "/nodes"
 	minionIPStore  = "ips"
 )
 
 // wakeChan collapses the various channels these functions wait on into a single
 // channel. Multiple redundant pings will be coalesced into a single message.
 func wakeChan(conn db.Conn, store Store) chan struct{} {
-	minionWatch := store.Watch(minionDir, 1*time.Second)
+	minionWatch := store.Watch("/", 1*time.Second)
 	trigg := conn.TriggerTick(30, db.MinionTable, db.ContainerTable, db.LabelTable,
 		db.EtcdTable).C
 

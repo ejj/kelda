@@ -19,7 +19,7 @@ func TestWriteMinion(t *testing.T) {
 	t.Parallel()
 
 	ip := "1.2.3.4"
-	key := "/minion/nodes/" + ip + "/" + selfNode
+	key := "/nodes/" + ip + "/" + selfNode
 
 	conn := db.New()
 	store := NewMock()

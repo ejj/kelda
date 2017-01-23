@@ -18,7 +18,6 @@ import (
 
 func TestUpdateEtcdContainers(t *testing.T) {
 	store := newTestMock()
-	store.Mkdir(minionDir, 0)
 	conn := db.New()
 	var containers []db.Container
 	idIPMap := map[string]string{}

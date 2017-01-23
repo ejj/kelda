@@ -19,7 +19,7 @@ import (
 
 const (
 	minionTimeout = 30
-	subnetStore   = minionDir + "/subnets"
+	subnetStore   = "/subnets"
 	selfNode      = "self"
 )
 

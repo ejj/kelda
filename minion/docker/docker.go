@@ -1,17 +1,13 @@
 package docker
 
 import (
-	"archive/tar"
-	"bytes"
 	"errors"
-	"io"
 	"net"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/NetSys/quilt/minion/ipdef"
-	"github.com/NetSys/quilt/util"
 
 	log "github.com/Sirupsen/logrus"
 	dkc "github.com/fsouza/go-dockerclient"
@@ -146,59 +142,6 @@ func (dk Client) ConfigureNetwork(driver string, subnet net.IPNet) error {
 		},
 	})
 	return err
-}
-
-// WriteToContainer writes the contents of SRC into the file at path DST on the
-// container with id ID. Overwrites DST if it already exists.
-func (dk Client) WriteToContainer(id, src, dst, archiveName string,
-	permission int) error {
-
-	tarBuf, err := util.ToTar(archiveName, permission, src)
-
-	if err != nil {
-		return err
-	}
-
-	err = dk.UploadToContainer(id, dkc.UploadToContainerOptions{
-		InputStream: tarBuf,
-		Path:        dst,
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// GetFromContainer returns a string containing the content of the file named
-// SRC on the container with id ID.
-func (dk Client) GetFromContainer(id string, src string) (string, error) {
-	var buffIn bytes.Buffer
-	var buffOut bytes.Buffer
-	err := dk.DownloadFromContainer(id, dkc.DownloadFromContainerOptions{
-		OutputStream:      &buffIn,
-		Path:              src,
-		InactivityTimeout: networkTimeout,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	writer := io.Writer(&buffOut)
-
-	for tr := tar.NewReader(&buffIn); err != io.EOF; _, err = tr.Next() {
-
-		if err != nil {
-			return "", err
-		}
-
-		_, err = io.Copy(writer, tr)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	return buffOut.String(), nil
 }
 
 // Remove stops and deletes the container with the given name.

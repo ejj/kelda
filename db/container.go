@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -105,26 +104,18 @@ func (c Container) String() string {
 	return fmt.Sprintf("Container-%d{%s}", c.ID, strings.Join(tags, ", "))
 }
 
-// SortContainers returns a slice of containers sorted according to the default database
-// sort order.
-func SortContainers(containers []Container) []Container {
-	rows := make([]row, 0, len(containers))
-	for _, m := range containers {
-		rows = append(rows, m)
-	}
-
-	sort.Sort(rowSlice(rows))
-
-	containers = make([]Container, 0, len(containers))
-	for _, r := range rows {
-		containers = append(containers, r.(Container))
-	}
-
-	return containers
-}
-
 func (c Container) less(r row) bool {
 	return c.StitchID < r.(Container).StitchID
+}
+
+// Less implements less than for sort.Interface.
+func (cs ContainerSlice) Less(i, j int) bool {
+	return cs[i].less(cs[j])
+}
+
+// Swap implements swapping for sort.Interface.
+func (cs ContainerSlice) Swap(i, j int) {
+	cs[i], cs[j] = cs[j], cs[i]
 }
 
 // Get returns the value contained at the given index

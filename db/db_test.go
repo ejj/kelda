@@ -561,7 +561,7 @@ func TestStringer(t *testing.T) {
 	}
 }
 
-func TestSortContainers(t *testing.T) {
+func TestSliceHelpers(t *testing.T) {
 	containers := []Container{
 		{StitchID: 3},
 		{StitchID: 5},
@@ -575,9 +575,21 @@ func TestSortContainers(t *testing.T) {
 		{StitchID: 5},
 	}
 
-	if !reflect.DeepEqual(SortContainers(containers), expected) {
-		t.Errorf("Bad Container Sort: expected %q, got %q", expected, containers)
-	}
+	sort.Sort(ContainerSlice(containers))
+	assert.Equal(t, expected, containers)
+	assert.Equal(t, containers[0], ContainerSlice(containers).Get(0))
+
+	labels := []Label{{Label: "b"}, {Label: "a"}}
+	expLabels := []Label{{Label: "a"}, {Label: "b"}}
+	sort.Sort(LabelSlice(labels))
+	assert.Equal(t, expLabels, labels)
+	assert.Equal(t, labels[0], LabelSlice(labels).Get(0))
+
+	conns := []Connection{{ID: 2}, {ID: 1}}
+	expConns := []Connection{{ID: 1}, {ID: 2}}
+	sort.Sort(ConnectionSlice(conns))
+	assert.Equal(t, expConns, conns)
+	assert.Equal(t, conns[0], ConnectionSlice(conns).Get(0))
 }
 
 func TestGetClusterNamespace(t *testing.T) {

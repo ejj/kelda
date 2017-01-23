@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"path"
+	"sort"
 	"strconv"
 	"time"
 
@@ -175,11 +176,12 @@ func updateEtcdContainer(s Store, etcdDBCs []db.Container,
 	// Also note that we clear the dbc.ID so that it's not returned by this function.
 	// Also a temporary hack fixed in future patches.
 	var containers []db.Container
-	for _, dbc := range db.SortContainers(dbcs) {
+	for _, dbc := range dbcs {
 		dbc.ID = 0
 		dbc.IP = ""
 		containers = append(containers, dbc)
 	}
+	sort.Sort(db.ContainerSlice(containers))
 
 	newContainers, _ := jsonMarshal(containers)
 	oldContainers, _ := jsonMarshal(etcdDBCs)

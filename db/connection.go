@@ -80,11 +80,21 @@ func (c Connection) less(r row) bool {
 type ConnectionSlice []Connection
 
 // Get returns the value contained at the given index
-func (cs ConnectionSlice) Get(ii int) interface{} {
-	return cs[ii]
+func (cs ConnectionSlice) Get(i int) interface{} {
+	return cs[i]
 }
 
 // Len returns the number of items in the slice.
 func (cs ConnectionSlice) Len() int {
 	return len(cs)
+}
+
+// Less implements less than for sort.Interface.
+func (cs ConnectionSlice) Less(i, j int) bool {
+	return cs[i].less(cs[j])
+}
+
+// Swap implements swapping for sort.Interface.
+func (cs ConnectionSlice) Swap(i, j int) {
+	cs[i], cs[j] = cs[j], cs[i]
 }

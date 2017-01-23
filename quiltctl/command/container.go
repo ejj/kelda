@@ -134,7 +134,9 @@ func writeContainers(fd io.Writer, containers []db.Container, machines []db.Mach
 			fmt.Fprintf(w, "\t\t\t\t\t\t\n")
 		}
 
-		for _, dbc := range db.SortContainers(machineDBC[machineID]) {
+		dbcs := machineDBC[machineID]
+		sort.Sort(db.ContainerSlice(dbcs))
+		for _, dbc := range dbcs {
 			publicPorts := []string{}
 			for _, label := range dbc.Labels {
 				if p, ok := labelPublicPortMap[label]; ok {

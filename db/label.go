@@ -62,11 +62,21 @@ func (r Label) less(row row) bool {
 }
 
 // Get returns the value contained at the given index
-func (ls LabelSlice) Get(ii int) interface{} {
-	return ls[ii]
+func (ls LabelSlice) Get(i int) interface{} {
+	return ls[i]
 }
 
 // Len returns the number of items in the slice
 func (ls LabelSlice) Len() int {
 	return len(ls)
+}
+
+// Less implements less than for sort.Interface.
+func (ls LabelSlice) Less(i, j int) bool {
+	return ls[i].less(ls[j])
+}
+
+// Swap implements swapping for sort.Interface.
+func (ls LabelSlice) Swap(i, j int) {
+	ls[i], ls[j] = ls[j], ls[i]
 }

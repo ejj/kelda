@@ -10,8 +10,7 @@ import (
 )
 
 const electionTTL = 30
-const dir = "/minion"
-const leaderKey = dir + "/leader"
+const leaderKey = "/leader"
 
 // Run blocks implementing leader election.
 func runElection(conn db.Conn, store Store) {

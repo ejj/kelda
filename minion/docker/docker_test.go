@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NetSys/quilt/minion/ipdef"
+	dkc "github.com/fsouza/go-dockerclient"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -218,6 +220,23 @@ func TestRunEnv(t *testing.T) {
 	container, err := dk.Get(id)
 	assert.Nil(t, err)
 	assert.Equal(t, env, container.Env)
+}
+
+func TestConfigureNetwork(t *testing.T) {
+	md, dk := NewMock()
+
+	err := dk.ConfigureNetwork("quilt", ipdef.QuiltSubnet)
+	assert.NoError(t, err)
+
+	exp := &dkc.Network{
+		Name:   "quilt",
+		Driver: "quilt",
+		IPAM: dkc.IPAMOptions{
+			Config: []dkc.IPAMConfig{{
+				Subnet:  ipdef.QuiltSubnet.String(),
+				IPRange: ipdef.QuiltSubnet.String(),
+				Gateway: ipdef.GatewayIP.String()}}}}
+	assert.Equal(t, exp, md.Networks["quilt"])
 }
 
 func TestRemove(t *testing.T) {

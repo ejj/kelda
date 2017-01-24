@@ -14,7 +14,6 @@ import (
 
 const (
 	minionTimeout = 30
-	selfNode      = "self"
 	minionPath    = "/minions"
 )
 
@@ -38,15 +37,8 @@ func readMinion(conn db.Conn, store Store) {
 	var storeMinions []db.Minion
 	for _, t := range tree.Children {
 		var m db.Minion
-		selfData, ok := t.Children[selfNode]
-		if !ok {
-			log.Debugf("Minion %s has no self in etcd yet", t.Key)
-			continue
-		}
-
-		minion := selfData.Value
-		if err := json.Unmarshal([]byte(minion), &m); err != nil {
-			log.WithField("json", minion).Warning("Failed to parse Minion.")
+		if err := json.Unmarshal([]byte(t.Value), &m); err != nil {
+			log.WithField("json", t.Value).Warning("Failed to parse Minion.")
 			continue
 		}
 		storeMinions = append(storeMinions, m)
@@ -118,11 +110,7 @@ func diffMinion(dbMinions, storeMinions []db.Minion) (del, add []db.Minion) {
 
 func writeMinion(conn db.Conn, store Store) {
 	minion, err := conn.MinionSelf()
-	if err != nil {
-		return
-	}
-
-	if minion.PrivateIP == "" {
+	if err != nil || minion.PrivateIP == "" {
 		return
 	}
 
@@ -131,14 +119,9 @@ func writeMinion(conn db.Conn, store Store) {
 		panic("Failed to convert Minion to JSON")
 	}
 
-	dir := path.Join(minionPath, minion.PrivateIP)
-	if err := createEtcdDir(dir, store, minionTimeout*time.Second); err != nil {
-		log.Warning("Failed to create minion directory")
-		return
-	}
-
-	key := path.Join(dir, selfNode)
+	key := path.Join(minionPath, minion.PrivateIP)
 	if err := store.Set(key, string(js), minionTimeout*time.Second); err != nil {
-		log.Warning("Failed to update minion node in Etcd: %s", err)
+		log.Warningf("Failed to create: %s", key)
+		return
 	}
 }

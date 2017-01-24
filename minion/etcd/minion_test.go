@@ -13,7 +13,7 @@ func TestWriteMinion(t *testing.T) {
 	t.Parallel()
 
 	ip := "1.2.3.4"
-	key := "/minions/" + ip + "/" + selfNode
+	key := "/minions/" + ip
 
 	conn := db.New()
 	store := NewMock()
@@ -68,7 +68,7 @@ func TestReadMinion(t *testing.T) {
 
 	m := randMinion()
 	js, _ := jsonMarshal(m)
-	store.Set(minionPath+"/foo/"+selfNode, string(js), 0)
+	store.Set(minionPath+"/foo", string(js), 0)
 
 	readMinion(conn, store)
 	minions := conn.SelectFromMinion(nil)

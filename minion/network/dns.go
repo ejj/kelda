@@ -25,6 +25,12 @@ type dnsTable struct {
 var table *dnsTable
 
 func runDNS(conn db.Conn) {
+	for range conn.Trigger(db.LabelTable, db.MinionTable).C {
+		runDNSOnce(conn)
+	}
+}
+
+func runDNSOnce(conn db.Conn) {
 	self, err := conn.MinionSelf()
 	if err != nil {
 		log.WithError(err).Debug("Failed to get self")

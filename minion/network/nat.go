@@ -8,11 +8,9 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/minion/ovsdb"
 	"github.com/NetSys/quilt/stitch"
 
 	log "github.com/Sirupsen/logrus"
@@ -28,47 +26,19 @@ type ipRule struct {
 
 type ipRuleSlice []ipRule
 
-func runWorker(conn db.Conn) {
-	minion, err := conn.MinionSelf()
-	if err != nil || !minion.SupervisorInit || minion.Role != db.Worker {
-		return
-	}
-
-	odb, err := ovsdb.Open()
-	if err != nil {
-		log.Warning("Failed to connect to ovsdb-server: %s", err)
-		return
-	}
-	defer odb.Disconnect()
-
-	// XXX: By doing all the work within a transaction, we (kind of) guarantee that
-	// containers won't be removed while we're in the process of setting them up.
-	// Not ideal, but for now it's good enough.
-	conn.Txn(db.ConnectionTable, db.ContainerTable,
-		db.MinionTable).Run(func(view db.Database) error {
-
-		if !checkSupervisorInit(view) {
-			// Avoid a race condition where minion.SupervisorInit changed to
-			// false since we checked above.
-			return nil
+func runNat(conn db.Conn) {
+	tables := []db.TableType{db.ContainerTable, db.ConnectionTable, db.MinionTable}
+	for range conn.TriggerTick(30, tables...).C {
+		minion, err := conn.MinionSelf()
+		if err != nil || !minion.SupervisorInit || minion.Role != db.Worker {
+			continue
 		}
 
-		containers := view.SelectFromContainer(func(c db.Container) bool {
-			return c.DockerID != "" && c.IP != ""
+		containers := conn.SelectFromContainer(func(c db.Container) bool {
+			return c.IP != ""
 		})
-		connections := view.SelectFromConnection(nil)
-
-		var wg sync.WaitGroup
-
-		wg.Add(1)
-		go func() {
-			updateNAT(containers, connections)
-			wg.Done()
-		}()
-
-		wg.Wait()
-		return nil
-	})
+		updateNAT(containers, conn.SelectFromConnection(nil))
+	}
 }
 
 func updateNAT(containers []db.Container, connections []db.Connection) {

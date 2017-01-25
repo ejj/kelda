@@ -15,17 +15,23 @@ import (
 )
 
 func runUpdateIPs(conn db.Conn) {
-	txn := conn.Txn(db.ContainerTable, db.LabelTable)
-	err := txn.Run(func(view db.Database) error {
-		err := allocateContainerIPs(view)
-		if err == nil {
-			err = updateLabelIPs(view)
+	for range conn.Trigger(db.ContainerTable, db.LabelTable, db.EtcdTable).C {
+		if !conn.EtcdLeader() {
+			continue
 		}
-		return err
-	})
 
-	if err != nil {
-		log.WithError(err).Warn("Failed to allocate IP addresses")
+		txn := conn.Txn(db.ContainerTable, db.LabelTable)
+		err := txn.Run(func(view db.Database) error {
+			err := allocateContainerIPs(view)
+			if err == nil {
+				err = updateLabelIPs(view)
+			}
+			return err
+		})
+
+		if err != nil {
+			log.WithError(err).Warn("Failed to allocate IP addresses")
+		}
 	}
 }
 

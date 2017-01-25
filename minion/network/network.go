@@ -10,7 +10,6 @@ import (
 	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/minion/ovsdb"
-	"github.com/NetSys/quilt/util"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -20,19 +19,15 @@ const lSwitch = "quilt"
 
 // Run blocks implementing the network services.
 func Run(conn db.Conn) {
-	loopLog := util.NewEventTimer("Network")
+	go runNat(conn)
+	go runDNS(conn)
+	go runUpdateIPs(conn)
+
 	for range conn.TriggerTick(30, db.MinionTable, db.ContainerTable,
 		db.ConnectionTable, db.LabelTable, db.EtcdTable).C {
-
-		loopLog.LogStart()
 		if conn.EtcdLeader() {
-			runUpdateIPs(conn)
 			runMaster(conn)
-		} else {
-			runDNS(conn)
-			runWorker(conn)
 		}
-		loopLog.LogEnd()
 	}
 }
 

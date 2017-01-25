@@ -35,6 +35,8 @@ const mtu int = 1400
 func Run() {
 	h := dnet.NewHandler(driver{})
 
+	go vsctlRun()
+
 	go func() {
 		err := h.ServeUnix("root", pluginSocket)
 		if err != nil {
@@ -75,9 +77,24 @@ func (d driver) CreateEndpoint(req *dnet.CreateEndpointRequest) (
 		return nil, fmt.Errorf("endpoint %s exists", req.EndpointID)
 	}
 
+	mac := ipdef.IPToMac(addr)
+	peerBr, peerQuilt := ipdef.PatchPorts(req.EndpointID)
+
+	err = vsctl([][]string{
+		{"add-port", ipdef.QuiltBridge, ipdef.IFName(req.EndpointID)},
+		{"add-port", ipdef.QuiltBridge, peerQuilt},
+		{"set", "Interface", peerQuilt, "type=patch", "options:peer=" + peerBr},
+		{"add-port", ipdef.OvnBridge, peerBr},
+		{"set", "Interface", peerBr, "type=patch", "options:peer=" + peerQuilt,
+			"external-ids:attached-mac=" + mac,
+			"external-ids:iface-id=" + addr.String()}})
+	if err != nil {
+		return nil, fmt.Errorf("ovs-vsctl: %v", err)
+	}
+
 	resp := &dnet.CreateEndpointResponse{
 		Interface: &dnet.EndpointInterface{
-			MacAddress: ipdef.IPToMac(addr),
+			MacAddress: mac,
 		},
 	}
 	return resp, nil
@@ -91,17 +108,21 @@ func (d driver) EndpointInfo(req *dnet.InfoRequest) (*dnet.InfoResponse, error) 
 	return &dnet.InfoResponse{}, nil
 }
 
-// DeleteEndpoint will do nothing, but checks for the error condition of deleting a
-// non-existent endpoint.
+// DeleteEndpoint cleans up state associated with a docker endpoint.
 func (d driver) DeleteEndpoint(req *dnet.DeleteEndpointRequest) error {
-	_, err := getOuterLink(req.EndpointID)
-	return err
+	peerBr, peerQuilt := ipdef.PatchPorts(req.EndpointID)
+	err := vsctl([][]string{
+		{"del-port", ipdef.QuiltBridge, ipdef.IFName(req.EndpointID)},
+		{"del-port", ipdef.QuiltBridge, peerQuilt},
+		{"del-port", ipdef.OvnBridge, peerBr}})
+	if err != nil {
+		return fmt.Errorf("ovs-vsctl: %v", err)
+	}
+	return nil
 }
 
 // Join creates a Veth pair for the given endpoint ID, returning the interface info.
 func (d driver) Join(req *dnet.JoinRequest) (*dnet.JoinResponse, error) {
-	// We just need to create the Veth and tell Docker where it should go; Docker
-	// will take care of moving it into the container and renaming it.
 	outer := ipdef.IFName(req.EndpointID)
 	inner := ipdef.IFName("tmp_" + req.EndpointID)
 	err := linkAdd(&netlink.Veth{

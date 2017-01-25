@@ -67,9 +67,6 @@ func runWorker(conn db.Conn) {
 			wg.Done()
 		}()
 
-		// Ports must be updated before OpenFlow so they must be done in the same
-		// go routine.
-		updatePorts(odb, containers)
 		updateOpenFlow(odb, containers)
 
 		wg.Wait()
@@ -195,91 +192,6 @@ func generateTargetNatRules(publicInterface string, containers []db.Container,
 	return rules
 }
 
-// There certain exceptions, as certain ports will never be deleted.
-func updatePorts(odb ovsdb.Client, containers []db.Container) {
-	// An Open vSwitch patch port is referred to as a "port".
-	targetPorts := generateTargetPorts(containers)
-	currentPorts, err := odb.ListInterfaces()
-	if err != nil {
-		log.WithError(err).Error("failed to generate current openflow ports")
-		return
-	}
-
-	key := func(val interface{}) interface{} {
-		return struct {
-			name, bridge string
-		}{
-			name:   val.(ovsdb.Interface).Name,
-			bridge: val.(ovsdb.Interface).Bridge,
-		}
-	}
-
-	pairs, lefts, rights := join.HashJoin(ovsdb.InterfaceSlice(currentPorts),
-		targetPorts, key, key)
-
-	for _, l := range lefts {
-		if l.(ovsdb.Interface).Type == ovsdb.InterfaceTypeGeneve ||
-			l.(ovsdb.Interface).Type == ovsdb.InterfaceTypeSTT ||
-			l.(ovsdb.Interface).Type == ovsdb.InterfaceTypeInternal {
-			// The "bridge" port and overlay port should never be deleted.
-			continue
-		}
-		if err := odb.DeleteInterface(l.(ovsdb.Interface)); err != nil {
-			log.WithError(err).Error("failed to delete openflow port")
-			continue
-		}
-	}
-	for _, r := range rights {
-		iface := r.(ovsdb.Interface)
-		if err := odb.CreateInterface(iface.Bridge, iface.Name); err != nil {
-			log.WithError(err).Warning("error creating openflow port")
-		}
-		if err := odb.ModifyInterface(iface); err != nil {
-			log.WithError(err).Error("error changing openflow port")
-		}
-	}
-	for _, p := range pairs {
-		l := p.L.(ovsdb.Interface)
-		r := p.R.(ovsdb.Interface)
-		if l.Type == r.Type && l.Peer == r.Peer &&
-			l.AttachedMAC == r.AttachedMAC && l.IfaceID == r.IfaceID {
-			continue
-		}
-
-		if err := odb.ModifyInterface(r); err != nil {
-			log.WithError(err).Error("failed to modify openflow port")
-			continue
-		}
-	}
-}
-
-func generateTargetPorts(containers []db.Container) ovsdb.InterfaceSlice {
-	var configs ovsdb.InterfaceSlice
-	for _, dbc := range containers {
-		vethOut := ipdef.IFName(dbc.EndpointID)
-		peerBr, peerQuilt := ipdef.PatchPorts(dbc.DockerID)
-		configs = append(configs, ovsdb.Interface{
-			Name:   vethOut,
-			Bridge: ipdef.QuiltBridge,
-		})
-		configs = append(configs, ovsdb.Interface{
-			Name:   peerQuilt,
-			Bridge: ipdef.QuiltBridge,
-			Type:   ovsdb.InterfaceTypePatch,
-			Peer:   peerBr,
-		})
-		configs = append(configs, ovsdb.Interface{
-			Name:        peerBr,
-			Bridge:      ipdef.OvnBridge,
-			Type:        ovsdb.InterfaceTypePatch,
-			Peer:        peerQuilt,
-			AttachedMAC: ipdef.IPStrToMac(dbc.IP),
-			IfaceID:     dbc.IP,
-		})
-	}
-	return configs
-}
-
 func updateOpenFlow(odb ovsdb.Client, containers []db.Container) {
 	ifaceMap, err := odb.OpenFlowPorts()
 	if err != nil {
@@ -298,7 +210,7 @@ func generateOFPorts(ifaceMap map[string]int, dbcs []db.Container) []ofPort {
 	var ofcs []ofPort
 	for _, dbc := range dbcs {
 		vethOut := ipdef.IFName(dbc.EndpointID)
-		_, peerQuilt := ipdef.PatchPorts(dbc.DockerID)
+		_, peerQuilt := ipdef.PatchPorts(dbc.EndpointID)
 
 		ofVeth, ok := ifaceMap[vethOut]
 		if !ok {

@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
 	"testing"
@@ -74,6 +75,8 @@ func TestGetCapabilities(t *testing.T) {
 func TestCreateEndpoint(t *testing.T) {
 	setup()
 
+	vsctl = func(a [][]string) error { return errors.New("err") }
+
 	req := &dnet.CreateEndpointRequest{}
 	req.EndpointID = zero
 	req.Interface = &dnet.EndpointInterface{
@@ -93,9 +96,28 @@ func TestCreateEndpoint(t *testing.T) {
 	expResp := dnet.EndpointInterface{
 		MacAddress: ipdef.IPStrToMac("10.1.0.1"),
 	}
+	_, err = d.CreateEndpoint(req)
+	assert.EqualError(t, err, "ovs-vsctl: err")
+
+	var args [][]string
+	vsctl = func(a [][]string) error {
+		args = a
+		return nil
+	}
+
 	resp, err := d.CreateEndpoint(req)
 	assert.NoError(t, err)
 	assert.Equal(t, expResp, *resp.Interface)
+	assert.Equal(t, [][]string{
+		{"add-port", "quilt-int", "000000000000000"},
+		{"add-port", "quilt-int", "q_0000000000000"},
+		{"set", "Interface", "q_0000000000000", "type=patch",
+			"options:peer=br_000000000000"},
+		{"add-port", "br-int", "br_000000000000"},
+		{"set", "Interface", "br_000000000000", "type=patch",
+			"options:peer=q_0000000000000",
+			"external-ids:attached-mac=02:00:0a:01:00:01",
+			"external-ids:iface-id=10.1.0.1"}}, args)
 
 	req.EndpointID = one
 	req.Interface.Address = "10.1.0.2/8"
@@ -106,21 +128,26 @@ func TestCreateEndpoint(t *testing.T) {
 }
 
 func TestDeleteEndpoint(t *testing.T) {
-	setup()
+	var args [][]string
+
+	vsctl = func(a [][]string) error {
+		args = a
+		return nil
+	}
 
 	d := driver{}
-	req := &dnet.JoinRequest{EndpointID: zero, SandboxKey: "/test/docker0"}
-	_, err := d.Join(req)
-	assert.NoError(t, err)
+	req := &dnet.DeleteEndpointRequest{EndpointID: "foo"}
 
-	delReq := &dnet.DeleteEndpointRequest{EndpointID: zero}
-	err = d.DeleteEndpoint(delReq)
+	err := d.DeleteEndpoint(req)
 	assert.NoError(t, err)
+	assert.Equal(t, [][]string{
+		{"del-port", "quilt-int", "foo"},
+		{"del-port", "quilt-int", "q_foo"},
+		{"del-port", "br-int", "br_foo"}}, args)
 
-	d.Leave(&dnet.LeaveRequest{EndpointID: zero})
-	delReq = &dnet.DeleteEndpointRequest{EndpointID: zero}
-	err = d.DeleteEndpoint(delReq)
-	assert.EqualError(t, err, "byName: no such veth: 000000000000000")
+	vsctl = func(a [][]string) error { return errors.New("err") }
+	err = d.DeleteEndpoint(req)
+	assert.EqualError(t, err, "ovs-vsctl: err")
 }
 
 func TestEndpointOperInfo(t *testing.T) {
@@ -168,7 +195,4 @@ func TestLeave(t *testing.T) {
 
 	err = d.Leave(&dnet.LeaveRequest{EndpointID: zero})
 	assert.NoError(t, err)
-
-	err = d.DeleteEndpoint(&dnet.DeleteEndpointRequest{EndpointID: zero})
-	assert.EqualError(t, err, "byName: no such veth: 000000000000000")
 }

@@ -36,20 +36,6 @@ func (_m *Client) CreateAddressSet(name string, addresses []string) error {
 	return r0
 }
 
-// CreateInterface provides a mock function with given fields: bridge, name
-func (_m *Client) CreateInterface(bridge string, name string) error {
-	ret := _m.Called(bridge, name)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string) error); ok {
-		r0 = rf(bridge, name)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // CreateLogicalPort provides a mock function with given fields: lswitch, name, mac, ip
 func (_m *Client) CreateLogicalPort(lswitch string, name string, mac string, ip string) error {
 	ret := _m.Called(lswitch, name, mac, ip)
@@ -99,20 +85,6 @@ func (_m *Client) DeleteAddressSet(name string) error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func(string) error); ok {
 		r0 = rf(name)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// DeleteInterface provides a mock function with given fields: iface
-func (_m *Client) DeleteInterface(iface ovsdb.Interface) error {
-	ret := _m.Called(iface)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(ovsdb.Interface) error); ok {
-		r0 = rf(iface)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -185,29 +157,6 @@ func (_m *Client) ListAddressSets() ([]ovsdb.AddressSet, error) {
 	return r0, r1
 }
 
-// ListInterfaces provides a mock function with given fields:
-func (_m *Client) ListInterfaces() ([]ovsdb.Interface, error) {
-	ret := _m.Called()
-
-	var r0 []ovsdb.Interface
-	if rf, ok := ret.Get(0).(func() []ovsdb.Interface); ok {
-		r0 = rf()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]ovsdb.Interface)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // ListLogicalPorts provides a mock function with given fields:
 func (_m *Client) ListLogicalPorts() ([]ovsdb.LPort, error) {
 	ret := _m.Called()
@@ -229,20 +178,6 @@ func (_m *Client) ListLogicalPorts() ([]ovsdb.LPort, error) {
 	}
 
 	return r0, r1
-}
-
-// ModifyInterface provides a mock function with given fields: iface
-func (_m *Client) ModifyInterface(iface ovsdb.Interface) error {
-	ret := _m.Called(iface)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(ovsdb.Interface) error); ok {
-		r0 = rf(iface)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
 }
 
 // OpenFlowPorts provides a mock function with given fields:

@@ -131,12 +131,14 @@ func TestSyncJoinScore(t *testing.T) {
 	t.Parallel()
 
 	dbc := db.Container{
+		IP:       "1.2.3.4",
 		Image:    "Image",
 		Command:  []string{"cmd"},
 		Env:      map[string]string{"a": "b"},
 		DockerID: "DockerID",
 	}
 	dkc := docker.Container{
+		IP:    "1.2.3.4",
 		Image: dbc.Image,
 		Args:  dbc.Command,
 		Env:   dbc.Env,
@@ -151,18 +153,28 @@ func TestSyncJoinScore(t *testing.T) {
 	assert.Equal(t, -1, score)
 
 	dbc.Image = dkc.Image
+	score = syncJoinScore(dbc, dkc)
+	assert.Zero(t, score)
+
 	dbc.Command = []string{"wrong"}
 	score = syncJoinScore(dbc, dkc)
 	assert.Equal(t, -1, score)
+
+	dbc.Command = dkc.Args
+	score = syncJoinScore(dbc, dkc)
+	assert.Zero(t, score)
+
+	dbc.IP = "wrong"
+	score = syncJoinScore(dbc, dkc)
+	assert.Equal(t, -1, score)
+
+	dbc.IP = dkc.IP
+	score = syncJoinScore(dbc, dkc)
+	assert.Zero(t, score)
 
 	dbc.Command = dkc.Args
 	dbc.Env = map[string]string{"a": "wrong"}
 	score = syncJoinScore(dbc, dkc)
 	assert.Equal(t, -1, score)
 	dbc.Env = dkc.Env
-
-	dbc.DockerID = "2"
-	score = syncJoinScore(dbc, dkc)
-	assert.Equal(t, 1, score)
-	dbc.DockerID = dkc.ID
 }

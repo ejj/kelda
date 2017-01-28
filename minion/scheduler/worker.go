@@ -140,12 +140,9 @@ func syncJoinScore(left, right interface{}) int {
 	dbc := left.(db.Container)
 	dkc := right.(docker.Container)
 
-	// Depending on the container, the command in the database could be
-	// either The command plus it's arguments, or just it's arguments.  To
-	// handle that case, we check both.
-	cmd1 := dkc.Args
-	cmd2 := append([]string{dkc.Path}, dkc.Args...)
-	dbcCmd := dbc.Command
+	if dbc.Image != dkc.Image || dbc.IP != dkc.IP {
+		return -1
+	}
 
 	for key, value := range dbc.Env {
 		if dkc.Env[key] != value {
@@ -153,16 +150,16 @@ func syncJoinScore(left, right interface{}) int {
 		}
 	}
 
-	switch {
-	case dbc.Image != dkc.Image:
+	// Depending on the container, the command in the database could be
+	// either the command plus it's arguments, or just it's arguments.  To
+	// handle that case, we check both.
+	cmd1 := dkc.Args
+	cmd2 := append([]string{dkc.Path}, dkc.Args...)
+	if len(dbc.Command) != 0 &&
+		!util.StrSliceEqual(dbc.Command, cmd1) &&
+		!util.StrSliceEqual(dbc.Command, cmd2) {
 		return -1
-	case len(dbcCmd) != 0 &&
-		!util.StrSliceEqual(dbcCmd, cmd1) &&
-		!util.StrSliceEqual(dbcCmd, cmd2):
-		return -1
-	case dbc.DockerID == dkc.ID:
-		return 0
-	default:
-		return 1
 	}
+
+	return 0
 }

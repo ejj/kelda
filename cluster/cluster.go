@@ -337,44 +337,48 @@ type syncDBResult struct {
 	updateIPs []machine.Machine
 }
 
-func syncDB(cloudMachines []machine.Machine, dbMachines []db.Machine) syncDBResult {
+func syncDB(cms []machine.Machine, dbms []db.Machine) syncDBResult {
 	ret := syncDBResult{}
 
-	scoreFun := func(left, right interface{}) int {
-		dbm := left.(db.Machine)
-		m := right.(machine.Machine)
+	pair1, dbmis, cmis := join.Join(dbms, cms, func(l, r interface{}) int {
+		dbm := l.(db.Machine)
+		m := r.(machine.Machine)
+
+		if dbm.CloudID == m.ID && dbm.Provider == m.Provider &&
+			dbm.Region == m.Region && dbm.Size == m.Size &&
+			(m.DiskSize == 0 || dbm.DiskSize == m.DiskSize) {
+			return 0
+		}
+
+		return -1
+	})
+
+	pair2, dbmis, cmis := join.Join(dbmis, cmis, func(l, r interface{}) int {
+		dbm := l.(db.Machine)
+		m := r.(machine.Machine)
 
 		switch {
-		case dbm.Provider != m.Provider:
-			return -1
-		case dbm.Region != m.Region:
-			return -1
-		case dbm.Size != m.Size:
-			return -1
-		case m.DiskSize != 0 && dbm.DiskSize != m.DiskSize:
+		case dbm.Provider != m.Provider ||
+			dbm.Region != m.Region ||
+			dbm.Size != m.Size ||
+			(m.DiskSize != 0 && dbm.DiskSize != m.DiskSize):
 			return -1
 		case dbm.CloudID == m.ID:
-			return 0
-		case dbm.PublicIP == m.PublicIP:
-			return 1
-		case dbm.PrivateIP == m.PrivateIP:
-			return 2
+			panic("Not Reached") // Should have been hit by the first join.
 		case dbm.FloatingIP == m.FloatingIP:
-			return 3
+			return 1
+		case dbm.PublicIP == m.PublicIP || dbm.PrivateIP == m.PrivateIP:
+			return 2
 		default:
-			return 4
+			return 3
 		}
+	})
+
+	for _, cm := range cmis {
+		ret.stop = append(ret.stop, cm.(machine.Machine))
 	}
 
-	var dbmIface, cmIface []interface{}
-	ret.pairs, dbmIface, cmIface = join.Join(dbMachines, cloudMachines, scoreFun)
-
-	for _, cm := range cmIface {
-		m := cm.(machine.Machine)
-		ret.stop = append(ret.stop, m)
-	}
-
-	for _, dbm := range dbmIface {
+	for _, dbm := range dbmis {
 		m := dbm.(db.Machine)
 		ret.boot = append(ret.boot, machine.Machine{
 			Size:     m.Size,
@@ -384,7 +388,7 @@ func syncDB(cloudMachines []machine.Machine, dbMachines []db.Machine) syncDBResu
 			SSHKeys:  m.SSHKeys})
 	}
 
-	for _, pair := range ret.pairs {
+	for _, pair := range append(pair1, pair2...) {
 		dbm := pair.L.(db.Machine)
 		m := pair.R.(machine.Machine)
 
@@ -392,6 +396,8 @@ func syncDB(cloudMachines []machine.Machine, dbMachines []db.Machine) syncDBResu
 			m.FloatingIP = dbm.FloatingIP
 			ret.updateIPs = append(ret.updateIPs, m)
 		}
+
+		ret.pairs = append(ret.pairs, pair)
 	}
 
 	return ret

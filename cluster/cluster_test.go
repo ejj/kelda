@@ -149,10 +149,10 @@ func TestSyncDB(t *testing.T) {
 	checkSyncDB := func(cloudMachines []machine.Machine,
 		databaseMachines []db.Machine, expected syncDBResult) {
 		dbRes := syncDB(cloudMachines, databaseMachines)
+
 		assert.Equal(t, expected.boot, dbRes.boot, "boot")
 		assert.Equal(t, expected.stop, dbRes.stop, "stop")
-		assert.Equal(t, expected.updateIPs, dbRes.updateIPs,
-			"updateIPs")
+		assert.Equal(t, expected.updateIPs, dbRes.updateIPs, "updateIPs")
 	}
 
 	var noMachines []machine.Machine
@@ -167,13 +167,13 @@ func TestSyncDB(t *testing.T) {
 	dbWithIP := db.Machine{Provider: FakeAmazon, FloatingIP: "ip"}
 
 	// Test boot with no size
-	checkSyncDB(noMachines, []db.Machine{dbNoSize}, syncDBResult{
-		boot: []machine.Machine{cmNoSize},
+	checkSyncDB(noMachines, []db.Machine{dbNoSize, dbNoSize}, syncDBResult{
+		boot: []machine.Machine{cmNoSize, cmNoSize},
 	})
 
 	// Test boot with size
-	checkSyncDB(noMachines, []db.Machine{dbLarge}, syncDBResult{
-		boot: []machine.Machine{cmLarge},
+	checkSyncDB(noMachines, []db.Machine{dbLarge, dbLarge}, syncDBResult{
+		boot: []machine.Machine{cmLarge, cmLarge},
 	})
 
 	// Test mixed boot
@@ -189,8 +189,8 @@ func TestSyncDB(t *testing.T) {
 	)
 
 	// Test stop
-	checkSyncDB([]machine.Machine{cmNoSize}, []db.Machine{}, syncDBResult{
-		stop: []machine.Machine{cmNoSize},
+	checkSyncDB([]machine.Machine{cmNoSize, cmNoSize}, []db.Machine{}, syncDBResult{
+		stop: []machine.Machine{cmNoSize, cmNoSize},
 	})
 
 	// Test partial stop
@@ -213,6 +213,14 @@ func TestSyncDB(t *testing.T) {
 	checkSyncDB([]machine.Machine{cNewIP}, []db.Machine{dbWithIP}, syncDBResult{
 		updateIPs: []machine.Machine{cmWithIP},
 	})
+
+	// Test bad disk size
+	checkSyncDB([]machine.Machine{{DiskSize: 3}}, []db.Machine{{DiskSize: 4}},
+		syncDBResult{
+			stop: []machine.Machine{{DiskSize: 3}},
+			boot: []machine.Machine{{DiskSize: 4}},
+		})
+
 }
 
 func TestSync(t *testing.T) {

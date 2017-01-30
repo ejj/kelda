@@ -15,10 +15,25 @@ func GetContainer(c client.Client, stitchID string) (db.Container, error) {
 		return db.Container{}, err
 	}
 
+	var choice *db.Container
 	for _, c := range containers {
-		if c.StitchID == stitchID {
-			return c, nil
+		if len(stitchID) > len(c.StitchID) ||
+			c.StitchID[0:len(stitchID)] != stitchID {
+			continue
 		}
+
+		if choice != nil {
+			err := fmt.Errorf("ambiguous stitchIDs %s and %s",
+				choice.StitchID, c.StitchID)
+			return db.Container{}, err
+		}
+
+		copy := c
+		choice = &copy
+	}
+
+	if choice != nil {
+		return *choice, nil
 	}
 
 	return db.Container{}, fmt.Errorf("no container with stitchID %q", stitchID)

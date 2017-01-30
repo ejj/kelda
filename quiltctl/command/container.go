@@ -16,6 +16,7 @@ import (
 	"github.com/NetSys/quilt/api/client"
 	"github.com/NetSys/quilt/api/client/getter"
 	"github.com/NetSys/quilt/db"
+	"github.com/NetSys/quilt/util"
 )
 
 // Container contains the options for querying containers.
@@ -162,8 +163,8 @@ func writeContainers(fd io.Writer, containers []db.Container, machines []db.Mach
 				publicPorts)
 
 			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-				dbc.StitchID, machine, container, labels, status,
-				created, publicIP)
+				util.ShortUUID(dbc.StitchID), machine, container, labels,
+				status, created, publicIP)
 		}
 	}
 }

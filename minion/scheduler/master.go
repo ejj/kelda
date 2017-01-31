@@ -2,8 +2,11 @@ package scheduler
 
 import (
 	"container/heap"
+	"fmt"
+	"sort"
 
 	"github.com/NetSys/quilt/db"
+	"github.com/NetSys/quilt/util"
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -220,6 +223,11 @@ func makeContext(minions []db.Minion, constraints []db.Placement,
 		minion.containers = append(minion.containers, dbc)
 	}
 
+	// XXX: We sort containers based on their image and command in an effort to
+	// encourage the scheduler to spread them out.  This is somewhat of a hack -- we
+	// need a more clever scheduler at some point.
+	sort.Sort(dbcSlice(ctx.unassigned))
+
 	return &ctx
 }
 
@@ -236,4 +244,25 @@ func (mh *minionHeap) Pop() interface{}   { panic("Not Reached") }
 
 func (mh minionHeap) Less(i, j int) bool {
 	return len(mh[i].containers) < len(mh[j].containers)
+}
+
+type dbcSlice []*db.Container
+
+func (s dbcSlice) Less(i, j int) bool {
+	switch {
+	case s[i].Image != s[j].Image:
+		return s[i].Image < s[j].Image
+	case !util.StrSliceEqual(s[i].Command, s[j].Command):
+		return fmt.Sprintf("%s", s[i].Command) < fmt.Sprintf("%s", s[j].Command)
+	default:
+		return s[i].StitchID < s[j].StitchID
+	}
+}
+
+func (s dbcSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s dbcSlice) Len() int {
+	return len(s)
 }

@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/NetSys/quilt/db"
@@ -615,6 +616,17 @@ func TestValidPlacementMachine(t *testing.T) {
 	}
 	res = validPlacement(constraints, m, m.containers, dbc)
 	assert.False(t, res)
+}
+
+func TestSort(t *testing.T) {
+	a := &db.Container{Image: "1", StitchID: "1"}
+	b := &db.Container{Image: "1", StitchID: "2"}
+	c := &db.Container{Image: "2", Command: []string{"1", "2"}}
+	d := &db.Container{Image: "2", Command: []string{"3", "4"}}
+
+	slice := []*db.Container{d, c, b, a}
+	sort.Sort(dbcSlice(slice))
+	assert.Equal(t, slice, []*db.Container{a, b, c, d})
 }
 
 func (m minion) String() string {

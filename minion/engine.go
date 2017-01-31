@@ -6,7 +6,6 @@ import (
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/stitch"
-	"github.com/NetSys/quilt/util"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -120,25 +119,12 @@ func queryContainers(spec stitch.Stitch) []db.Container {
 }
 
 func updateContainers(view db.Database, spec stitch.Stitch) {
-	score := func(l, r interface{}) int {
-		left := l.(db.Container)
-		right := r.(db.Container)
-
-		if left.Image != right.Image ||
-			!util.StrSliceEqual(left.Command, right.Command) ||
-			!util.StrStrMapEqual(left.Env, right.Env) {
-			return -1
-		}
-
-		score := util.EditDistance(left.Labels, right.Labels)
-		if left.StitchID != right.StitchID {
-			score++
-		}
-		return score
+	key := func(val interface{}) interface{} {
+		return val.(db.Container).StitchID
 	}
 
-	pairs, news, dbcs := join.Join(queryContainers(spec),
-		view.SelectFromContainer(nil), score)
+	pairs, news, dbcs := join.HashJoin(db.ContainerSlice(queryContainers(spec)),
+		db.ContainerSlice(view.SelectFromContainer(nil)), key, key)
 
 	for _, dbc := range dbcs {
 		view.Remove(dbc.(db.Container))

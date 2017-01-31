@@ -1,13 +1,11 @@
 package minion
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/stitch"
-	"github.com/NetSys/quilt/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -99,9 +97,7 @@ func testContainerTxn(t *testing.T, conn db.Conn, spec string) {
 	for _, e := range queryContainers(compiled) {
 		found := false
 		for i, c := range containers {
-			if e.Image == c.Image &&
-				reflect.DeepEqual(e.Command, c.Command) &&
-				util.EditDistance(c.Labels, e.Labels) == 0 {
+			if e.StitchID == c.StitchID {
 				containers = append(containers[:i], containers[i+1:]...)
 				found = true
 				break

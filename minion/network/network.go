@@ -17,8 +17,6 @@ import (
 
 const labelMac = "0a:00:00:00:00:00"
 const lSwitch = "quilt"
-const quiltBridge = "quilt-int"
-const ovnBridge = "br-int"
 
 // Run blocks implementing the network services.
 func Run(conn db.Conn) {

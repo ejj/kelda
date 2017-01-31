@@ -18,6 +18,12 @@ var (
 
 	// GatewayMac is the Mac address of the default gateway.
 	GatewayMac = IPToMac(GatewayIP)
+
+	// QuiltBridge is the Open vSwitch bridge controlled by the Quilt minion.
+	QuiltBridge = "quilt-int"
+
+	// OvnBridge is the Open vSwitch bridge controlled by OVN.
+	OvnBridge = "br-int"
 )
 
 // IPStrToMac converts the given IP address string into a MAC address.
@@ -48,4 +54,10 @@ func IFName(name string) string {
 		return name
 	}
 	return name[0:size]
+}
+
+// PatchPorts takes an ID and converts it to two patch port names.  One for the
+// QuiltBridge and one for the OvnBridge.
+func PatchPorts(id string) (br, quilt string) {
+	return IFName("br_" + id), IFName("q_" + id)
 }

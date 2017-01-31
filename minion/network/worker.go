@@ -257,20 +257,20 @@ func generateTargetPorts(containers []db.Container) ovsdb.InterfaceSlice {
 	var configs ovsdb.InterfaceSlice
 	for _, dbc := range containers {
 		vethOut := ipdef.IFName(dbc.EndpointID)
-		peerBr, peerQuilt := patchPorts(dbc.DockerID)
+		peerBr, peerQuilt := ipdef.PatchPorts(dbc.DockerID)
 		configs = append(configs, ovsdb.Interface{
 			Name:   vethOut,
-			Bridge: quiltBridge,
+			Bridge: ipdef.QuiltBridge,
 		})
 		configs = append(configs, ovsdb.Interface{
 			Name:   peerQuilt,
-			Bridge: quiltBridge,
+			Bridge: ipdef.QuiltBridge,
 			Type:   ovsdb.InterfaceTypePatch,
 			Peer:   peerBr,
 		})
 		configs = append(configs, ovsdb.Interface{
 			Name:        peerBr,
-			Bridge:      ovnBridge,
+			Bridge:      ipdef.OvnBridge,
 			Type:        ovsdb.InterfaceTypePatch,
 			Peer:        peerQuilt,
 			AttachedMAC: ipdef.IPStrToMac(dbc.IP),
@@ -305,7 +305,7 @@ func generateOFPorts(ifaces []ovsdb.Interface, dbcs []db.Container) []ofPort {
 	var ofcs []ofPort
 	for _, dbc := range dbcs {
 		vethOut := ipdef.IFName(dbc.EndpointID)
-		_, peerQuilt := patchPorts(dbc.DockerID)
+		_, peerQuilt := ipdef.PatchPorts(dbc.DockerID)
 
 		ofVeth, ok := ifaceMap[vethOut]
 		if !ok {
@@ -324,10 +324,6 @@ func generateOFPorts(ifaces []ovsdb.Interface, dbcs []db.Container) []ofPort {
 		})
 	}
 	return ofcs
-}
-
-func patchPorts(id string) (br, quilt string) {
-	return ipdef.IFName("br_" + id), ipdef.IFName("q_" + id)
 }
 
 // Returns (Stdout, Stderr, error)
@@ -439,7 +435,7 @@ func getPublicInterface() (string, error) {
 
 func ofctlReplaceFlows(flows []string) error {
 	cmd := exec.Command("ovs-ofctl", "-O", "OpenFlow13", "replace-flows",
-		quiltBridge, "-")
+		ipdef.QuiltBridge, "-")
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

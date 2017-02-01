@@ -18,58 +18,58 @@ import (
 
 // A Stitch is an abstract representation of the policy language.
 type Stitch struct {
-	Containers  []Container
-	Labels      []Label
-	Connections []Connection
-	Placements  []Placement
-	Machines    []Machine
+	Containers  []Container  `json:",omitempty"`
+	Labels      []Label      `json:",omitempty"`
+	Connections []Connection `json:",omitempty"`
+	Placements  []Placement  `json:",omitempty"`
+	Machines    []Machine    `json:",omitempty"`
 
-	AdminACL  []string
-	MaxPrice  float64
-	Namespace string
+	AdminACL  []string `json:",omitempty"`
+	MaxPrice  float64  `json:",omitempty"`
+	Namespace string   `json:",omitempty"`
 
-	Invariants []invariant
+	Invariants []invariant `json:",omitempty"`
 }
 
 // A Placement constraint guides where containers may be scheduled, either relative to
 // the labels of other containers, or the machine the container will run on.
 type Placement struct {
-	TargetLabel string
+	TargetLabel string `json:",omitempty"`
 
-	Exclusive bool
+	Exclusive bool `json:",omitempty"`
 
 	// Label Constraint
-	OtherLabel string
+	OtherLabel string `json:",omitempty"`
 
 	// Machine Constraints
-	Provider   string
-	Size       string
-	Region     string
-	FloatingIP string
+	Provider   string `json:",omitempty"`
+	Size       string `json:",omitempty"`
+	Region     string `json:",omitempty"`
+	FloatingIP string `json:",omitempty"`
 }
 
 // A Container may be instantiated in the stitch and queried by users.
 type Container struct {
-	ID      string
-	Image   string
-	Command []string
-	Env     map[string]string
+	ID      string            `json:",omitempty"`
+	Image   string            `json:",omitempty"`
+	Command []string          `json:",omitempty"`
+	Env     map[string]string `json:",omitempty"`
 }
 
 // A Label represents a logical group of containers.
 type Label struct {
-	Name        string
-	IDs         []string
-	Annotations []string
+	Name        string   `json:",omitempty"`
+	IDs         []string `json:",omitempty"`
+	Annotations []string `json:",omitempty"`
 }
 
 // A Connection allows containers implementing the From label to speak to containers
 // implementing the To label in ports in the range [MinPort, MaxPort]
 type Connection struct {
-	From    string
-	To      string
-	MinPort int
-	MaxPort int
+	From    string `json:",omitempty"`
+	To      string `json:",omitempty"`
+	MinPort int    `json:",omitempty"`
+	MaxPort int    `json:",omitempty"`
 }
 
 // A ConnectionSlice allows for slices of Collections to be used in joins
@@ -77,21 +77,21 @@ type ConnectionSlice []Connection
 
 // A Machine specifies the type of VM that should be booted.
 type Machine struct {
-	Provider   string
-	Role       string
-	Size       string
-	CPU        Range
-	RAM        Range
-	DiskSize   int
-	Region     string
-	SSHKeys    []string
-	FloatingIP string
+	Provider   string   `json:",omitempty"`
+	Role       string   `json:",omitempty"`
+	Size       string   `json:",omitempty"`
+	CPU        Range    `json:",omitempty"`
+	RAM        Range    `json:",omitempty"`
+	DiskSize   int      `json:",omitempty"`
+	Region     string   `json:",omitempty"`
+	SSHKeys    []string `json:",omitempty"`
+	FloatingIP string   `json:",omitempty"`
 }
 
 // A Range defines a range of acceptable values for a Machine attribute
 type Range struct {
-	Min float64
-	Max float64
+	Min float64 `json:",omitempty"`
+	Max float64 `json:",omitempty"`
 }
 
 // PublicInternetLabel is a magic label that allows connections to or from the public

@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 const configPath = "/usr/local/etc/haproxy/haproxy.cfg"
@@ -17,6 +19,10 @@ func main() {
 	}
 
 	addrs := strings.Split(addrsVar, ",")
+	for _, addr := range addrs {
+		resolveHostname(strings.Split(addr, ":")[0])
+	}
+
 	if err := configureHAProxy(addrs); err != nil {
 		log.Fatalf("Error configuring HAProxy: %s", err.Error())
 	}
@@ -55,4 +61,17 @@ func configureHAProxy(addrs []string) error {
 
 	_, err = f.WriteString(fmt.Sprintf("%s\n", text))
 	return err
+}
+
+func resolveHostname(hostname string) []string {
+	for {
+		addrs, err := net.LookupHost(hostname)
+		if err == nil {
+			log.Printf("Resolved %s to %+v", hostname, addrs)
+			return addrs
+		}
+
+		log.Printf("Unable to resolve %s: %s. Retrying...", hostname, err.Error())
+		time.Sleep(time.Second)
+	}
 }

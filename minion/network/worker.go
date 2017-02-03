@@ -281,27 +281,20 @@ func generateTargetPorts(containers []db.Container) ovsdb.InterfaceSlice {
 }
 
 func updateOpenFlow(odb ovsdb.Client, containers []db.Container) {
-	ifaces, err := odb.ListInterfaces()
+	ifaceMap, err := odb.OpenFlowPorts()
 	if err != nil {
-		log.WithError(err).Error("failed to list OVS interfaces")
+		log.WithError(err).Error("Failed to get OpenFlow ports")
 		return
 	}
 
-	err = ofctlReplaceFlows(generateOpenFlow(generateOFPorts(ifaces, containers)))
+	err = ofctlReplaceFlows(generateOpenFlow(generateOFPorts(ifaceMap, containers)))
 	if err != nil {
 		log.WithError(err).Error("error replacing OpenFlow")
 		return
 	}
 }
 
-func generateOFPorts(ifaces []ovsdb.Interface, dbcs []db.Container) []ofPort {
-	ifaceMap := make(map[string]int)
-	for _, iface := range ifaces {
-		if iface.OFPort != nil && *iface.OFPort > 0 {
-			ifaceMap[iface.Name] = *iface.OFPort
-		}
-	}
-
+func generateOFPorts(ifaceMap map[string]int, dbcs []db.Container) []ofPort {
 	var ofcs []ofPort
 	for _, dbc := range dbcs {
 		vethOut := ipdef.IFName(dbc.EndpointID)

@@ -1,17 +1,15 @@
 package network
 
 import (
-	"fmt"
-	"sort"
-	"strconv"
-	"strings"
+	"errors"
 	"testing"
 
 	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/minion/ovsdb"
+	"github.com/NetSys/quilt/minion/ovsdb/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 type lportslice []ovsdb.LPort
@@ -29,14 +27,11 @@ func (lps lportslice) Swap(i, j int) {
 }
 
 func TestRunMaster(t *testing.T) {
-	client := ovsdb.NewFakeOvsdbClient()
-	client.CreateLogicalSwitch(lSwitch)
 	conn := db.New()
-	ovsdb.Open = func() (ovsdb.Client, error) {
-		return client, nil
-	}
 
-	expPorts := []ovsdb.LPort{}
+	// Supervisor isn't initialized, nothing should happen.
+	runMaster(conn)
+
 	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
 		etcd := view.InsertEtcd()
 		etcd.Leader = true
@@ -47,228 +42,61 @@ func TestRunMaster(t *testing.T) {
 		minion.Self = true
 		view.Commit(minion)
 
-		for i := 3; i < 5; i++ {
-			si := strconv.Itoa(i)
-			c := view.InsertContainer()
-			c.IP = fmt.Sprintf("0.0.0.%s", si)
-			view.Commit(c)
-			expPorts = append(expPorts, ovsdb.LPort{
-				Bridge:    lSwitch,
-				Name:      c.IP,
-				Addresses: []string{ipdef.IPStrToMac(c.IP), c.IP},
-			})
-		}
+		label := view.InsertLabel()
+		label.Label = "junk"
+		view.Commit(label)
 
+		c := view.InsertContainer()
+		c.IP = "1.2.3.4"
+		view.Commit(c)
 		return nil
 	})
 
-	for i := 1; i < 6; i++ {
-		si := strconv.Itoa(i)
-		mac := fmt.Sprintf("00:00:00:00:00:0%s", si)
-		if i < 3 {
-			mac = labelMac
-		}
-		ip := fmt.Sprintf("0.0.0.%s", si)
-		client.CreateLogicalPort(lSwitch, ip, mac, ip)
-	}
+	anErr := errors.New("err")
 
+	client := new(mocks.Client)
+	ovsdb.Open = func() (ovsdb.Client, error) { return nil, anErr }
 	runMaster(conn)
 
-	lports, err := client.ListLogicalPorts(lSwitch)
-	if err != nil {
-		t.Fatal("failed to fetch logical ports from mock client")
+	ovsdb.Open = func() (ovsdb.Client, error) {
+		return client, nil
 	}
 
-	if len(lports) != len(expPorts) {
-		t.Fatalf("wrong number of logical ports. Got %d, expected %d.",
-			len(lports), len(expPorts))
-	}
+	client.On("CreateLogicalSwitch", lSwitch).Return(nil)
+	client.On("Disconnect").Return(nil)
+	client.On("ListAddressSets").Return(nil, anErr)
+	client.On("ListACLs").Return(nil, anErr)
+	client.On("ListLogicalPorts").Return(nil, anErr).Once()
 
-	sort.Sort(lportslice(lports))
-	sort.Sort(lportslice(expPorts))
-	for i, port := range expPorts {
-		lport := lports[i]
-		if lport.Bridge != port.Bridge || lport.Name != port.Name {
-			t.Fatalf("Incorrect port %v, expected %v.", lport, port)
-		}
-	}
-}
+	runMaster(conn)
+	client.AssertCalled(t, "Disconnect")
+	client.AssertCalled(t, "CreateLogicalSwitch", mock.Anything)
 
-func checkAddressSet(t *testing.T, client ovsdb.Client,
-	labels []db.Label, exp []ovsdb.AddressSet) {
+	client.On("ListLogicalPorts").Return([]ovsdb.LPort{{Name: "1.2.3.5"}}, nil)
+	client.On("DeleteLogicalPort", lSwitch, ovsdb.LPort{
+		Name: "1.2.3.5", Addresses: nil}).Return(anErr).Once()
+	client.On("CreateLogicalPort", lSwitch, "1.2.3.4",
+		"02:00:01:02:03:04", "1.2.3.4").Return(anErr).Once()
+	runMaster(conn)
+	client.AssertCalled(t, "Disconnect")
+	client.AssertCalled(t, "ListLogicalPorts")
+	client.AssertCalled(t, "CreateLogicalSwitch", mock.Anything)
+	client.AssertCalled(t, "DeleteLogicalPort", mock.Anything, mock.Anything)
+	client.AssertCalled(t, "CreateLogicalPort", mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything)
 
-	syncAddressSets(client, labels)
-	actual, _ := client.ListAddressSets(lSwitch)
-
-	ovsdbKey := func(intf interface{}) interface{} {
-		addrSet := intf.(ovsdb.AddressSet)
-		// OVSDB returns the addresses in a non-deterministic order, so we
-		// sort them.
-		sort.Strings(addrSet.Addresses)
-		return addressSetKey{
-			name:      addrSet.Name,
-			addresses: strings.Join(addrSet.Addresses, " "),
-		}
-	}
-	if _, lefts, rights := join.HashJoin(addressSlice(actual), addressSlice(exp),
-		ovsdbKey, ovsdbKey); len(lefts) != 0 || len(rights) != 0 {
-		t.Errorf("Wrong address sets: expected %v, got %v.", exp, actual)
-	}
-}
-
-func TestAddressSetSync(t *testing.T) {
-	t.Parallel()
-
-	client := ovsdb.NewFakeOvsdbClient()
-	client.CreateLogicalSwitch(lSwitch)
-
-	redLabel := db.Label{
-		Label:        "red",
-		ContainerIPs: []string{"8.8.8.8"},
-		IP:           "8.8.8.8",
-	}
-	blueLabel := db.Label{
-		Label:        "blue",
-		ContainerIPs: []string{"10.10.10.10", "11.11.11.11"},
-		IP:           "9.9.9.9",
-	}
-	redAddressSet := ovsdb.AddressSet{
-		Name:      "red",
-		Addresses: []string{"8.8.8.8"},
-	}
-	blueAddressSet := ovsdb.AddressSet{
-		Name:      "blue",
-		Addresses: []string{"9.9.9.9", "10.10.10.10", "11.11.11.11"},
-	}
-	checkAddressSet(t, client,
-		[]db.Label{redLabel},
-		[]ovsdb.AddressSet{redAddressSet},
-	)
-	checkAddressSet(t, client,
-		[]db.Label{redLabel, blueLabel},
-		[]ovsdb.AddressSet{redAddressSet, blueAddressSet},
-	)
-	checkAddressSet(t, client,
-		[]db.Label{blueLabel},
-		[]ovsdb.AddressSet{blueAddressSet},
-	)
-
-	// Test hyphen conversion.
-	dashLabel := db.Label{
-		Label: "spark-ms",
-		IP:    "9.9.9.9",
-	}
-	dashAddressSet := ovsdb.AddressSet{
-		Name:      "SPARK_MS",
-		Addresses: []string{"9.9.9.9"},
-	}
-	checkAddressSet(t, client,
-		[]db.Label{dashLabel},
-		[]ovsdb.AddressSet{dashAddressSet},
-	)
-}
-
-func checkACLs(t *testing.T, client ovsdb.Client,
-	connections []db.Connection, exp []ovsdb.ACL) {
-
-	syncACLs(client, connections)
-
-	actual, _ := client.ListACLs(lSwitch)
-
-	ovsdbKey := func(ovsdbIntf interface{}) interface{} {
-		return ovsdbIntf.(ovsdb.ACL).Core
-	}
-	if _, left, right := join.HashJoin(ovsdbACLSlice(actual), ovsdbACLSlice(exp),
-		ovsdbKey, ovsdbKey); len(left) != 0 || len(right) != 0 {
-		t.Errorf("Wrong ACLs: expected %v, got %v.", exp, actual)
-	}
-}
-
-func TestACLSync(t *testing.T) {
-	t.Parallel()
-
-	client := ovsdb.NewFakeOvsdbClient()
-	client.CreateLogicalSwitch(lSwitch)
-
-	dropACLs := directedACLs(ovsdb.ACL{
-		Core: ovsdb.ACLCore{
-			Priority: 0,
-			Match:    "ip",
-			Action:   "drop",
-		},
-	})
-
-	redBlueConnection := db.Connection{
-		From:    "red",
-		To:      "blue",
-		MinPort: 80,
-		MaxPort: 80,
-	}
-	redBlueACLs := directedACLs(ovsdb.ACL{
-		Core: ovsdb.ACLCore{
-			Priority: 1,
-			Match: "(((ip4.src == $red && ip4.dst == $blue) && " +
-				"(icmp || 80 <= udp.dst <= 80 || " +
-				"80 <= tcp.dst <= 80)) || ((ip4.src == $blue && " +
-				"ip4.dst == $red) && (icmp || 80 <= udp.src <= 80 || " +
-				"80 <= tcp.src <= 80)))",
-			Action: "allow",
-		},
-	})
-
-	redYellowConnection := db.Connection{
-		From:    "red",
-		To:      "yellow",
-		MinPort: 80,
-		MaxPort: 81,
-	}
-	redYellowACLs := directedACLs(ovsdb.ACL{
-		Core: ovsdb.ACLCore{
-			Priority: 1,
-			Match: "(((ip4.src == $red && ip4.dst == $yellow) && " +
-				"(icmp || 80 <= udp.dst <= 81 || " +
-				"80 <= tcp.dst <= 81)) || ((ip4.src == $yellow && " +
-				"ip4.dst == $red) && (icmp || 80 <= udp.src <= 81 || " +
-				"80 <= tcp.src <= 81)))",
-			Action: "allow",
-		},
-	})
-
-	checkACLs(t, client,
-		[]db.Connection{redBlueConnection},
-		append(dropACLs, redBlueACLs...),
-	)
-	checkACLs(t, client,
-		[]db.Connection{redBlueConnection, redYellowConnection},
-		append(dropACLs, append(redBlueACLs, redYellowACLs...)...),
-	)
-	checkACLs(t, client,
-		[]db.Connection{redYellowConnection},
-		append(dropACLs, redYellowACLs...),
-	)
-
-	// Test hyphen conversion.
-	dashConnection := db.Connection{
-		From:    "spark-ms",
-		To:      "spark-wk",
-		MinPort: 80,
-		MaxPort: 80,
-	}
-	dashACLs := directedACLs(ovsdb.ACL{
-		Core: ovsdb.ACLCore{
-			Priority: 1,
-			Match: "(((ip4.src == $SPARK_MS && ip4.dst == $SPARK_WK) && " +
-				"(icmp || 80 <= udp.dst <= 80 || " +
-				"80 <= tcp.dst <= 80)) || ((ip4.src == $SPARK_WK && " +
-				"ip4.dst == $SPARK_MS) && " +
-				"(icmp || 80 <= udp.src <= 80 || 80 <= tcp.src <= 80)))",
-			Action: "allow",
-		},
-	})
-	checkACLs(t, client,
-		[]db.Connection{dashConnection},
-		append(dropACLs, dashACLs...),
-	)
+	client.On("ListLogicalPorts").Return([]ovsdb.LPort{{Name: "1.2.3.5"}}, nil)
+	client.On("DeleteLogicalPort", lSwitch, ovsdb.LPort{
+		Name: "1.2.3.5", Addresses: []string(nil)}).Return(nil)
+	client.On("CreateLogicalPort", lSwitch, "1.2.3.4",
+		"02:00:01:02:03:04", "1.2.3.4").Return(nil).Once()
+	runMaster(conn)
+	client.AssertCalled(t, "Disconnect")
+	client.AssertCalled(t, "ListLogicalPorts")
+	client.AssertCalled(t, "CreateLogicalSwitch", mock.Anything)
+	client.AssertCalled(t, "DeleteLogicalPort", mock.Anything, mock.Anything)
+	client.AssertCalled(t, "CreateLogicalPort", mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything)
 }
 
 func TestGenerateOFPorts(t *testing.T) {

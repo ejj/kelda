@@ -40,7 +40,7 @@ func runWorker(conn db.Conn) {
 		log.Warning("Failed to connect to ovsdb-server: %s", err)
 		return
 	}
-	defer odb.Close()
+	defer odb.Disconnect()
 
 	// XXX: By doing all the work within a transaction, we (kind of) guarantee that
 	// containers won't be removed while we're in the process of setting them up.

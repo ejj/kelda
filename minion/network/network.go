@@ -71,10 +71,10 @@ func runMaster(conn db.Conn) {
 		log.WithError(err).Error("Failed to connect to OVSDB.")
 		return
 	}
-	defer ovsdbClient.Close()
+	defer ovsdbClient.Disconnect()
 
 	ovsdbClient.CreateLogicalSwitch(lSwitch)
-	lports, err := ovsdbClient.ListLogicalPorts(lSwitch)
+	lports, err := ovsdbClient.ListLogicalPorts()
 	if err != nil {
 		log.WithError(err).Error("Failed to list OVN ports.")
 		return

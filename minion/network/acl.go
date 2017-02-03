@@ -39,7 +39,7 @@ func unique(lst []string) (uniq []string) {
 }
 
 func syncAddressSets(ovsdbClient ovsdb.Client, labels []db.Label) {
-	ovsdbAddresses, err := ovsdbClient.ListAddressSets(lSwitch)
+	ovsdbAddresses, err := ovsdbClient.ListAddressSets()
 	if err != nil {
 		log.WithError(err).Error("Failed to list address sets")
 		return
@@ -72,7 +72,7 @@ func syncAddressSets(ovsdbClient ovsdb.Client, labels []db.Label) {
 
 	for _, intf := range toDelete {
 		addr := intf.(ovsdb.AddressSet)
-		if err := ovsdbClient.DeleteAddressSet(lSwitch, addr.Name); err != nil {
+		if err := ovsdbClient.DeleteAddressSet(addr.Name); err != nil {
 			log.WithError(err).Warn("Error deleting address set")
 		}
 	}
@@ -80,7 +80,7 @@ func syncAddressSets(ovsdbClient ovsdb.Client, labels []db.Label) {
 	for _, intf := range toCreate {
 		addr := intf.(ovsdb.AddressSet)
 		if err := ovsdbClient.CreateAddressSet(
-			lSwitch, addr.Name, addr.Addresses); err != nil {
+			addr.Name, addr.Addresses); err != nil {
 			log.WithError(err).Warn("Error adding address set")
 		}
 	}
@@ -106,7 +106,7 @@ func directedACLs(acl ovsdb.ACL) (res []ovsdb.ACL) {
 }
 
 func syncACLs(ovsdbClient ovsdb.Client, connections []db.Connection) {
-	ovsdbACLs, err := ovsdbClient.ListACLs(lSwitch)
+	ovsdbACLs, err := ovsdbClient.ListACLs()
 	if err != nil {
 		log.WithError(err).Error("Failed to list ACLs")
 		return

@@ -1,462 +1,329 @@
 package ovsdb
 
 import (
-	"fmt"
-	"reflect"
-	"sort"
-	"strings"
+	"errors"
 	"testing"
 
-	"github.com/NetSys/quilt/join"
 	ovs "github.com/socketplane/libovsdb"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestCreateLogicalSwitch(t *testing.T) {
-	ovsdbClient := NewFakeOvsdbClient()
+	t.Parallel()
 
-	// Create new switch.
-	lswitch := "test-switch"
-	err := ovsdbClient.CreateLogicalSwitch(lswitch)
-	assert.Nil(t, err)
+	anErr := errors.New("err")
+	api := new(mockTransact)
+	odb := Client(client{api})
 
-	// Check existence of created switch.
-	switchReply, err := ovsdbClient.transact("OVN_Northbound", ovs.Operation{
+	selectOp := []ovs.Operation{{
 		Op:    "select",
 		Table: "Logical_Switch",
-		Where: newCondition("name", "==", lswitch),
-	})
-	assert.Nil(t, err)
-	assert.Equal(t, 1, len(switchReply[0].Rows))
+		Where: newCondition("name", "==", "foo")}}
+	api.On("Transact", "OVN_Northbound", selectOp).Return(nil, anErr).Once()
+	assert.EqualError(t, odb.CreateLogicalSwitch("foo"),
+		"transaction error: listing logical switches: err")
 
-	// Try to create the same switch. Should now return error since it exists.
-	err = ovsdbClient.CreateLogicalSwitch(lswitch)
-	assert.NotNil(t, err)
+	api.On("Transact", "OVN_Northbound", selectOp).Return([]ovs.OperationResult{{
+		Rows: []map[string]interface{}{nil}}}, nil).Once()
+	assert.EqualError(t, odb.CreateLogicalSwitch("foo"),
+		"logical switch foo already exists")
+
+	api.On("Transact", "OVN_Northbound", selectOp).Return(
+		[]ovs.OperationResult{{}}, nil)
+
+	op := []ovs.Operation{{
+		Op:    "insert",
+		Table: "Logical_Switch",
+		Row:   map[string]interface{}{"name": "foo"}}}
+	result := []ovs.OperationResult{{}}
+	api.On("Transact", "OVN_Northbound", op).Return(result, nil).Once()
+	assert.NoError(t, odb.CreateLogicalSwitch("foo"))
+
+	api.On("Transact", mock.Anything, mock.Anything).Return(nil, anErr)
+	err := odb.CreateLogicalSwitch("foo")
+	assert.EqualError(t, err, "transaction error: creating switch foo: err")
 }
 
 func TestLogicalPorts(t *testing.T) {
-	ovsdbClient := NewFakeOvsdbClient()
+	t.Parallel()
 
-	scoreFun := func(left, right interface{}) int {
-		ovsdbPort := left.(LPort)
-		localPort := right.(LPort)
+	anErr := errors.New("err")
+	api := new(mockTransact)
+	odb := Client(client{api})
 
-		switch {
-		case ovsdbPort.Name != localPort.Name:
-			return -1
-		case !reflect.DeepEqual(ovsdbPort.Addresses,
-			localPort.Addresses):
-			return -1
-		default:
-			return 0
-		}
-	}
+	api.On("Transact", mock.Anything, mock.Anything).Return(nil, anErr).Once()
+	_, err := odb.ListLogicalPorts()
+	assert.EqualError(t, err, "transaction error: listing lports: err")
 
-	checkCorrectness := func(ovsdbLPorts []LPort, localLPorts ...LPort) {
-		pair, _, _ := join.Join(ovsdbLPorts, localLPorts, scoreFun)
-		assert.Equal(t, len(pair), len(localLPorts))
-	}
+	api.On("Transact", "OVN_Northbound", []ovs.Operation{{
+		Op:    "select",
+		Table: "Logical_Switch_Port",
+		Where: noCondition,
+	}}).Return([]ovs.OperationResult{{Rows: nil}}, nil).Once()
+	lports, err := odb.ListLogicalPorts()
+	assert.Zero(t, lports)
+	assert.NoError(t, err)
 
-	// Create new switch.
-	lswitch := "test-switch"
-	err := ovsdbClient.CreateLogicalSwitch(lswitch)
-	assert.Nil(t, err)
+	r := map[string]interface{}{
+		"_uuid":     []interface{}{"a", "b"},
+		"name":      "name",
+		"addresses": ""}
+	api.On("Transact", "OVN_Northbound", []ovs.Operation{{
+		Op:    "select",
+		Table: "Logical_Switch_Port",
+		Where: noCondition,
+	}}).Return([]ovs.OperationResult{{
+		Rows: []map[string]interface{}{r}}}, nil).Once()
 
-	// Nothing happens yet. It should have zero logical port to be listed.
-	ovsdbLPorts, err := ovsdbClient.ListLogicalPorts(lswitch)
-	assert.Nil(t, err)
-	assert.Zero(t, len(ovsdbLPorts))
-
-	// Create logical port.
-	name1, mac1, ip1 := "lp1", "00:00:00:00:00:00", "0.0.0.0"
-	lport1 := LPort{
-		Name:      "lp1",
-		Addresses: []string{fmt.Sprintf("%s %s", mac1, ip1)},
-	}
-	err = ovsdbClient.CreateLogicalPort(lswitch, name1, mac1, ip1)
-	assert.Nil(t, err)
-
-	// It should now have one logical port to be listed.
-	ovsdbLPorts, err = ovsdbClient.ListLogicalPorts(lswitch)
-	assert.Nil(t, err)
-	assert.Equal(t, 1, len(ovsdbLPorts))
-
-	ovsdbLPort1 := ovsdbLPorts[0]
-
-	checkCorrectness(ovsdbLPorts, lport1)
-
-	// Create a second logical port.
-	name2, mac2, ip2 := "lp2", "00:00:00:00:00:01", "0.0.0.1"
-	lport2 := LPort{
-		Name:      "lp2",
-		Addresses: []string{fmt.Sprintf("%s %s", mac2, ip2)},
-	}
-	err = ovsdbClient.CreateLogicalPort(lswitch, name2, mac2, ip2)
-	assert.Nil(t, err)
-
-	// It should now have two logical ports to be listed.
-	ovsdbLPorts, err = ovsdbClient.ListLogicalPorts(lswitch)
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(ovsdbLPorts))
-
-	checkCorrectness(ovsdbLPorts, lport1, lport2)
-
-	// Delete the first logical port.
-	err = ovsdbClient.DeleteLogicalPort(lswitch, ovsdbLPort1)
-	assert.Nil(t, err)
-
-	// It should now have one logical port to be listed.
-	ovsdbLPorts, err = ovsdbClient.ListLogicalPorts(lswitch)
-	assert.Nil(t, err)
-	assert.Equal(t, 1, len(ovsdbLPorts))
-
-	ovsdbLPort2 := ovsdbLPorts[0]
-
-	checkCorrectness(ovsdbLPorts, lport2)
-
-	// Delete the last one as well.
-	err = ovsdbClient.DeleteLogicalPort(lswitch, ovsdbLPort2)
-	assert.Nil(t, err)
-
-	// It should now have one logical port to be listed.
-	ovsdbLPorts, err = ovsdbClient.ListLogicalPorts(lswitch)
-	assert.Nil(t, err)
-	assert.Zero(t, len(ovsdbLPorts))
+	lports, err = odb.ListLogicalPorts()
+	assert.Len(t, lports, 1)
+	assert.Equal(t, "name", lports[0].Name)
+	assert.NoError(t, err)
 }
 
-func TestACLs(t *testing.T) {
-	ovsdbClient := NewFakeOvsdbClient()
+func TestCreateLogicalPort(t *testing.T) {
+	t.Parallel()
 
-	key := func(val interface{}) interface{} {
-		return val.(ACL).Core
-	}
+	api := new(mockTransact)
+	odb := Client(client{api})
 
-	checkCorrectness := func(ovsdbACLs []ACL, localACLs ...ACL) {
-		pair, _, _ := join.HashJoin(ACLSlice(ovsdbACLs), ACLSlice(localACLs),
-			key, key)
-		assert.Equal(t, len(pair), len(localACLs))
-	}
+	addrs := newOvsSet([]string{"mac ip"})
+	ops := []ovs.Operation{{
+		Op:       "insert",
+		Table:    "Logical_Switch_Port",
+		Row:      map[string]interface{}{"name": "name", "addresses": addrs},
+		UUIDName: "qlportadd",
+	}, {
+		Op:    "mutate",
+		Table: "Logical_Switch",
+		Mutations: []interface{}{
+			newMutation("ports", "insert", ovs.UUID{GoUUID: "qlportadd"}),
+		},
+		Where: newCondition("name", "==", "lswitch")}}
+	api.On("Transact", "OVN_Northbound", ops).Return(nil, errors.New("err")).Once()
+	err := odb.CreateLogicalPort("lswitch", "name", "mac", "ip")
+	assert.EqualError(t, err,
+		"transaction error: creating lport name on lswitch: err")
 
-	// Create new switch.
-	lswitch := "test-switch"
-	err := ovsdbClient.CreateLogicalSwitch(lswitch)
-	assert.Nil(t, err)
+	api.On("Transact", "OVN_Northbound", ops).Return(
+		[]ovs.OperationResult{{}, {}}, nil)
+	err = odb.CreateLogicalPort("lswitch", "name", "mac", "ip")
+	assert.NoError(t, err)
+}
 
-	// Create one ACL rule.
-	localCore1 := ACLCore{
+func TestDeleteLogicalPort(t *testing.T) {
+	t.Parallel()
+
+	api := new(mockTransact)
+	odb := Client(client{api})
+
+	lport := LPort{Name: "name", uuid: ovs.UUID{GoUUID: "uuid"}}
+	ops := []ovs.Operation{{
+		Op:    "delete",
+		Table: "Logical_Switch_Port",
+		Where: newCondition("_uuid", "==", ovs.UUID{GoUUID: "uuid"}),
+	}, {
+		Op:    "mutate",
+		Table: "Logical_Switch",
+		Mutations: []interface{}{newMutation("ports", "delete",
+			ovs.UUID{GoUUID: "uuid"})},
+		Where: newCondition("name", "==", "lswitch")}}
+	api.On("Transact", "OVN_Northbound", ops).Return(nil, errors.New("err")).Once()
+	err := odb.DeleteLogicalPort("lswitch", lport)
+	assert.EqualError(t, err,
+		"transaction error: deleting lport name on lswitch: err")
+
+	api.On("Transact", "OVN_Northbound", ops).Return(
+		[]ovs.OperationResult{{}, {}}, nil)
+	err = odb.DeleteLogicalPort("lswitch", lport)
+	assert.NoError(t, err)
+}
+
+func TestListACLs(t *testing.T) {
+	t.Parallel()
+
+	anErr := errors.New("err")
+	api := new(mockTransact)
+	odb := Client(client{api})
+
+	ops := []ovs.Operation{{
+		Op:    "select",
+		Table: "ACL",
+		Where: noCondition}}
+	api.On("Transact", "OVN_Northbound", ops).Return(nil, anErr).Once()
+	_, err := odb.ListACLs()
+	assert.EqualError(t, err, "transaction error: listing ACLs: err")
+
+	r := map[string]interface{}{
+		"_uuid":     []interface{}{"a", "b"},
+		"priority":  float64(1),
+		"direction": "left",
+		"match":     "match",
+		"action":    "action",
+		"log":       false}
+	api.On("Transact", "OVN_Northbound", ops).Return(
+		[]ovs.OperationResult{{
+			Rows: []map[string]interface{}{r}}}, nil).Once()
+
+	acls, err := odb.ListACLs()
+	assert.NoError(t, err)
+	acls[0].uuid = ovs.UUID{}
+	assert.Equal(t, ACL{Core: ACLCore{
 		Priority:  1,
-		Direction: "from-lport",
-		Match:     "0.0.0.0",
-		Action:    "allow",
-	}
-
-	localACL1 := ACL{
-		Core: localCore1,
-		Log:  false,
-	}
-
-	err = ovsdbClient.CreateACL(lswitch, localCore1.Direction, localCore1.Priority,
-		localCore1.Match, localCore1.Action)
-	assert.Nil(t, err)
-
-	// It should now have one ACL entry to be listed.
-	ovsdbACLs, err := ovsdbClient.ListACLs(lswitch)
-	assert.Nil(t, err)
-	assert.Equal(t, 1, len(ovsdbACLs))
-
-	ovsdbACL1 := ovsdbACLs[0]
-
-	checkCorrectness(ovsdbACLs, localACL1)
-
-	// Create one more ACL rule.
-	localCore2 := ACLCore{
-		Priority:  2,
-		Direction: "from-lport",
-		Match:     "0.0.0.1",
-		Action:    "drop",
-	}
-	localACL2 := ACL{
-		Core: localCore2,
-		Log:  false,
-	}
-
-	err = ovsdbClient.CreateACL(lswitch, localCore2.Direction, localCore2.Priority,
-		localCore2.Match, localCore2.Action)
-	assert.Nil(t, err)
-
-	// It should now have two ACL entries to be listed.
-	ovsdbACLs, err = ovsdbClient.ListACLs(lswitch)
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(ovsdbACLs))
-
-	checkCorrectness(ovsdbACLs, localACL1, localACL2)
-
-	// Delete the first ACL rule.
-	err = ovsdbClient.DeleteACL(lswitch, ovsdbACL1)
-	assert.Nil(t, err)
-
-	// It should now have only one ACL entry to be listed.
-	ovsdbACLs, err = ovsdbClient.ListACLs(lswitch)
-	assert.Nil(t, err)
-
-	ovsdbACL2 := ovsdbACLs[0]
-
-	assert.Equal(t, 1, len(ovsdbACLs))
-
-	checkCorrectness(ovsdbACLs, localACL2)
-
-	// Delete the other ACL rule.
-	err = ovsdbClient.DeleteACL(lswitch, ovsdbACL2)
-	assert.Nil(t, err)
-
-	// It should now have only one ACL entry to be listed.
-	ovsdbACLs, err = ovsdbClient.ListACLs(lswitch)
-	assert.Nil(t, err)
-	assert.Zero(t, len(ovsdbACLs))
+		Direction: "left",
+		Match:     "match",
+		Action:    "action"}}, acls[0])
 }
 
-// We can't use a slice in the HashJoin key, so we represent the addresses in
-// an address set as the addresses concatenated together.
-type addressSetKey struct {
-	name      string
-	addresses string
+func TestCreateACL(t *testing.T) {
+	t.Parallel()
+
+	api := new(mockTransact)
+	odb := Client(client{api})
+
+	aclRow := map[string]interface{}{
+		"priority":  1,
+		"direction": "direction",
+		"match":     "match",
+		"action":    "action",
+		"log":       false}
+	ops := []ovs.Operation{{
+		Op:       "insert",
+		Table:    "ACL",
+		Row:      aclRow,
+		UUIDName: "qacladd",
+	}, {
+		Op:    "mutate",
+		Table: "Logical_Switch",
+		Mutations: []interface{}{
+			newMutation("acls", "insert", ovs.UUID{GoUUID: "qacladd"}),
+		},
+		Where: newCondition("name", "==", "lswitch"),
+	}}
+
+	api.On("Transact", "OVN_Northbound", ops).Return(nil, errors.New("err")).Once()
+	err := odb.CreateACL("lswitch", "direction", 1, "match", "action")
+	assert.EqualError(t, err, "transaction error: creating ACL on lswitch: err")
+
+	api.On("Transact", "OVN_Northbound", ops).Return(
+		[]ovs.OperationResult{{}, {}}, nil)
+	err = odb.CreateACL("lswitch", "direction", 1, "match", "action")
+	assert.NoError(t, err)
 }
 
-func newAddressSetKey(name string, addresses []string) addressSetKey {
-	// OVSDB returns the addresses in a non-deterministic order, so we
-	// sort them.
-	sort.Strings(addresses)
-	return addressSetKey{
-		name:      name,
-		addresses: strings.Join(addresses, " "),
-	}
+func TestDeleteACL(t *testing.T) {
+	t.Parallel()
+
+	api := new(mockTransact)
+	odb := Client(client{api})
+
+	acl := ACL{uuid: ovs.UUID{GoUUID: "uuid"}}
+	ops := []ovs.Operation{{
+		Op:    "delete",
+		Table: "ACL",
+		Where: newCondition("_uuid", "==", acl.uuid),
+	}, {
+		Op:    "mutate",
+		Table: "Logical_Switch",
+		Mutations: []interface{}{
+			newMutation("acls", "delete", acl.uuid),
+		},
+		Where: newCondition("name", "==", "lswitch"),
+	}}
+	api.On("Transact", "OVN_Northbound", ops).Return(nil, errors.New("err")).Once()
+	err := odb.DeleteACL("lswitch", acl)
+	assert.EqualError(t, err, "transaction error: deleting ACL on lswitch: err")
+
+	api.On("Transact", "OVN_Northbound", ops).Return(
+		[]ovs.OperationResult{{}, {}}, nil)
+	err = odb.DeleteACL("lswitch", acl)
+	assert.NoError(t, err)
 }
 
-func TestAddressSets(t *testing.T) {
-	ovsdbClient := NewFakeOvsdbClient()
+func TestListAddressSets(t *testing.T) {
+	t.Parallel()
 
-	key := func(intf interface{}) interface{} {
-		addrSet := intf.(AddressSet)
-		// OVSDB returns the addresses in a non-deterministic order, so we
-		// sort them.
-		sort.Strings(addrSet.Addresses)
-		return addressSetKey{
-			name:      addrSet.Name,
-			addresses: strings.Join(addrSet.Addresses, " "),
-		}
-	}
+	api := new(mockTransact)
+	odb := Client(client{api})
 
-	checkCorrectness := func(ovsdbAddrSets []AddressSet, expAddrSets ...AddressSet) {
-		pair, _, _ := join.HashJoin(addressSlice(ovsdbAddrSets),
-			addressSlice(expAddrSets), key, key)
-		assert.Equal(t, len(pair), len(expAddrSets))
-	}
+	ops := []ovs.Operation{{
+		Op:    "select",
+		Table: "Address_Set",
+		Where: noCondition}}
+	api.On("Transact", "OVN_Northbound", ops).Return(nil, errors.New("err")).Once()
+	_, err := odb.ListAddressSets()
+	assert.EqualError(t, err, "transaction error: list address sets: err")
 
-	// Create new switch.
-	lswitch := "test-switch"
-	err := ovsdbClient.CreateLogicalSwitch(lswitch)
-	assert.Nil(t, err)
-
-	// Create one Address Set.
-	addrSet1 := AddressSet{
-		Name:      "red",
-		Addresses: []string{"foo", "bar"},
-	}
-
-	err = ovsdbClient.CreateAddressSet(lswitch, addrSet1.Name, addrSet1.Addresses)
-	assert.Nil(t, err)
-
-	// It should now have one ACL entry to be listed.
-	ovsdbAddrSets, err := ovsdbClient.ListAddressSets(lswitch)
-	assert.Nil(t, err)
-	assert.Equal(t, 1, len(ovsdbAddrSets))
-
-	checkCorrectness(ovsdbAddrSets, addrSet1)
-
-	// Create one more address set.
-	addrSet2 := AddressSet{
-		Name:      "blue",
-		Addresses: []string{"bar", "baz"},
-	}
-
-	err = ovsdbClient.CreateAddressSet(lswitch, addrSet2.Name, addrSet2.Addresses)
-	assert.Nil(t, err)
-
-	// It should now have two address sets to be listed.
-	ovsdbAddrSets, err = ovsdbClient.ListAddressSets(lswitch)
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(ovsdbAddrSets))
-
-	checkCorrectness(ovsdbAddrSets, addrSet1, addrSet2)
-
-	// Delete the first address set.
-	err = ovsdbClient.DeleteAddressSet(lswitch, addrSet1.Name)
-	assert.Nil(t, err)
-
-	// It should now have only one address set to be listed.
-	ovsdbAddrSets, err = ovsdbClient.ListAddressSets(lswitch)
-	assert.Nil(t, err)
-	assert.Equal(t, 1, len(ovsdbAddrSets))
-
-	checkCorrectness(ovsdbAddrSets, addrSet2)
-
-	// Delete the other ACL rule.
-	err = ovsdbClient.DeleteAddressSet(lswitch, addrSet2.Name)
-	assert.Nil(t, err)
-
-	// It should now have only one address set to be listed.
-	ovsdbAddrSets, err = ovsdbClient.ListAddressSets(lswitch)
-	assert.Nil(t, err)
-	assert.Zero(t, len(ovsdbAddrSets))
+	r := map[string]interface{}{
+		"name":      "name",
+		"addresses": ""}
+	api.On("Transact", "OVN_Northbound", ops).Return(
+		[]ovs.OperationResult{{Rows: []map[string]interface{}{r}}}, nil).Once()
+	res, err := odb.ListAddressSets()
+	assert.NoError(t, err)
+	assert.Equal(t, []AddressSet{{Name: "name", Addresses: []string{""}}}, res)
 }
 
-func TestInterfaces(t *testing.T) {
-	ovsdbClient := NewFakeOvsdbClient()
+func TestCreateAddressSet(t *testing.T) {
+	t.Parallel()
 
-	// Create new switch.
-	lswitch1 := "test-switch-1"
-	err := ovsdbClient.CreateLogicalSwitch(lswitch1)
-	assert.Nil(t, err)
+	api := new(mockTransact)
+	odb := Client(client{api})
 
-	key := func(val interface{}) interface{} {
-		iface := val.(Interface)
-		return struct {
-			name, bridge string
-			ofport       int
-		}{
-			name:   iface.Name,
-			bridge: iface.Bridge,
-			ofport: *iface.OFPort,
-		}
-	}
-
-	checkCorrectness := func(ovsdbIfaces []Interface, localIfaces ...Interface) {
-		pair, _, _ := join.HashJoin(InterfaceSlice(ovsdbIfaces),
-			InterfaceSlice(localIfaces), key, key)
-		assert.Equal(t, len(pair), len(ovsdbIfaces))
-	}
-
-	// Create a new Bridge. In quilt this is usually done in supervisor.
-	_, err = ovsdbClient.transact("Open_vSwitch", ovs.Operation{
+	ops := []ovs.Operation{{
 		Op:    "insert",
-		Table: "Bridge",
-		Row:   map[string]interface{}{"name": lswitch1},
-	})
-	assert.Nil(t, err)
+		Table: "Address_Set",
+		Row: map[string]interface{}{
+			"name":      "name",
+			"addresses": newOvsSet([]string{})}}}
+	api.On("Transact", "OVN_Northbound", ops).Return(nil, errors.New("err")).Once()
+	err := odb.CreateAddressSet("name", nil)
+	assert.EqualError(t, err, "transaction error: creating address set: err")
 
-	// Ovsdb mock uses defaultOFPort as the ofport created for each interface.
-	expectedOFPort := int(defaultOFPort)
-
-	// Create one interface.
-	iface1 := Interface{
-		Name:   "iface1",
-		Bridge: lswitch1,
-		OFPort: &expectedOFPort,
-	}
-
-	err = ovsdbClient.CreateInterface(iface1.Bridge, iface1.Name)
-	assert.Nil(t, err)
-
-	ifaces, err := ovsdbClient.ListInterfaces()
-	assert.Nil(t, err)
-	assert.Equal(t, 1, len(ifaces))
-
-	checkCorrectness(ifaces, iface1)
-
-	// Now create a new switch and bridge. Attach one new interface to them.
-
-	// Create new switch.
-	lswitch2 := "test-switch-2"
-	err = ovsdbClient.CreateLogicalSwitch(lswitch2)
-	assert.Nil(t, err)
-
-	// Create a new Bridge.
-	_, err = ovsdbClient.transact("Open_vSwitch", ovs.Operation{
-		Op:    "insert",
-		Table: "Bridge",
-		Row:   map[string]interface{}{"name": lswitch2},
-	})
-	assert.Nil(t, err)
-
-	// Create a new interface.
-	iface2 := Interface{
-		Name:   "iface2",
-		Bridge: lswitch2,
-		OFPort: &expectedOFPort,
-	}
-
-	err = ovsdbClient.CreateInterface(iface2.Bridge, iface2.Name)
-	assert.Nil(t, err)
-
-	ifaces, err = ovsdbClient.ListInterfaces()
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(ifaces))
-
-	checkCorrectness(ifaces, iface1, iface2)
-
-	iface1, iface2 = ifaces[0], ifaces[1]
-
-	// Delete interface 1.
-	err = ovsdbClient.DeleteInterface(iface1)
-	assert.Nil(t, err)
-
-	ifaces, err = ovsdbClient.ListInterfaces()
-	assert.Nil(t, err)
-
-	assert.Equal(t, 1, len(ifaces))
-
-	checkCorrectness(ifaces, iface2)
-
-	// Delete interface 2.
-	err = ovsdbClient.DeleteInterface(iface2)
-	assert.Nil(t, err)
-
-	ifaces, err = ovsdbClient.ListInterfaces()
-	assert.Nil(t, err)
-	assert.Zero(t, len(ifaces))
-
-	// Test ModifyInterface. We do this by creating an interface with type peer,
-	// attach a mac address to it, and add external_ids.
-	iface := Interface{
-		Name:        "test-modify-iface",
-		Peer:        "lolz",
-		AttachedMAC: "00:00:00:00:00:00",
-		Bridge:      lswitch1,
-		Type:        "patch",
-	}
-
-	err = ovsdbClient.CreateInterface(iface.Bridge, iface.Name)
-	assert.Nil(t, err)
-
-	err = ovsdbClient.ModifyInterface(iface)
-	assert.Nil(t, err)
-
-	ifaces, err = ovsdbClient.ListInterfaces()
-	assert.Nil(t, err)
-
-	ovsdbIface := ifaces[0]
-	iface.uuid = ovsdbIface.uuid
-	iface.portUUID = ovsdbIface.portUUID
-	iface.OFPort = ovsdbIface.OFPort
-	assert.Equal(t, iface, ovsdbIface)
+	api.On("Transact", "OVN_Northbound", ops).Return([]ovs.OperationResult{{}}, nil)
+	err = odb.CreateAddressSet("name", nil)
+	assert.NoError(t, err)
 }
 
-type ACLSlice []ACL
+func TestDeleteAddressSet(t *testing.T) {
+	t.Parallel()
 
-func (acls ACLSlice) Get(i int) interface{} {
-	return acls[i]
+	api := new(mockTransact)
+	odb := Client(client{api})
+
+	ops := []ovs.Operation{{
+		Op:    "delete",
+		Table: "Address_Set",
+		Where: newCondition("name", "==", "name")}}
+	api.On("Transact", "OVN_Northbound", ops).Return(nil, errors.New("err")).Once()
+	err := odb.DeleteAddressSet("name")
+	assert.EqualError(t, err, "transaction error: deleting address set: err")
+
+	api.On("Transact", "OVN_Northbound", ops).Return([]ovs.OperationResult{{}}, nil)
+	err = odb.DeleteAddressSet("name")
+	assert.NoError(t, err)
 }
 
-func (acls ACLSlice) Len() int {
-	return len(acls)
+func TestOvsStringSetToSlice(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, []string{"b"}, ovsStringSetToSlice("b"))
+	assert.Equal(t, []string{"b"},
+		ovsStringSetToSlice([]interface{}{"set", []interface{}{"b"}}))
 }
 
-type addressSlice []AddressSet
-
-func (slc addressSlice) Len() int {
-	return len(slc)
+func TestErrorCheck(t *testing.T) {
+	t.Parallel()
+	assert.EqualError(t, errorCheck(nil, 3), "mismatched responses and operations")
+	assert.EqualError(t, errorCheck([]ovs.OperationResult{{Error: "foo"}}, 1),
+		"operation 0 failed due to error: foo: ")
+	assert.NoError(t, errorCheck([]ovs.OperationResult{{}}, 1))
 }
 
-func (slc addressSlice) Get(i int) interface{} {
-	return slc[i]
+func TestLPortSlice(t *testing.T) {
+	t.Parallel()
+	slice := LPortSlice([]LPort{{Name: "name"}})
+	assert.Equal(t, slice[0], slice.Get(0))
+	assert.Equal(t, 1, slice.Len())
 }

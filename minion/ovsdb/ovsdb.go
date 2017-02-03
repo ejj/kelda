@@ -1,3 +1,6 @@
+//go:generate mockery -name=transact -inpkg
+//go:generate mockery -name=Client
+
 package ovsdb
 
 import (
@@ -9,35 +12,37 @@ import (
 	ovs "github.com/socketplane/libovsdb"
 )
 
-// This is simply a wrapper around all the libovsdb calls we are currently using. This
-// makes it very easy to mock for testing.
-type ovsdbAPI interface {
-	disconnect()
-	transact(db string, operation ...ovs.Operation) ([]ovs.OperationResult, error)
+type transact interface {
+	Transact(db string, operation ...ovs.Operation) ([]ovs.OperationResult, error)
+	Disconnect()
 }
 
 // Client is a connection to the ovsdb-server database.
-type Client struct {
-	ovsdbAPI
+type Client interface {
+	CreateLogicalSwitch(lswitch string) error
+	ListLogicalPorts() ([]LPort, error)
+	CreateLogicalPort(lswitch, name, mac, ip string) error
+	DeleteLogicalPort(lswitch string, lport LPort) error
+	ListACLs() ([]ACL, error)
+	CreateACL(lswitch, direction string, priority int, match, action string) error
+	DeleteACL(lswitch string, ovsdbACL ACL) error
+	ListAddressSets() ([]AddressSet, error)
+	CreateAddressSet(name string, addresses []string) error
+	DeleteAddressSet(name string) error
+	ListInterfaces() ([]Interface, error)
+	CreateInterface(bridge, name string) error
+	DeleteInterface(iface Interface) error
+	ModifyInterface(iface Interface) error
+	Disconnect()
 }
 
-type ovsdbClient struct {
-	*ovs.OvsdbClient
-}
-
-func (client ovsdbClient) disconnect() {
-	client.Disconnect()
-}
-
-func (client ovsdbClient) transact(db string, operation ...ovs.Operation) (
-	[]ovs.OperationResult, error) {
-	return client.Transact(db, operation...)
+type client struct {
+	transact
 }
 
 // LPort is a logical port in OVN.
 type LPort struct {
 	uuid      ovs.UUID
-	Bridge    string
 	Name      string
 	Addresses []string
 }
@@ -94,9 +99,7 @@ type mutation interface{}
 // Base on RFC 7047, empty condition should return all rows from a table. However,
 // libovsdb does not seem to support that yet. This is the simplist, most common solution
 // to it.
-func noCondition() []interface{} {
-	return []interface{}{ovs.NewCondition("_uuid", "!=", ovs.UUID{GoUUID: "_"})}
-}
+var noCondition = []interface{}{ovs.NewCondition("_uuid", "!=", ovs.UUID{GoUUID: "_"})}
 
 func newCondition(column, function string, value interface{}) []interface{} {
 	return []interface{}{ovs.NewCondition(column, function, value)}
@@ -105,18 +108,13 @@ func newCondition(column, function string, value interface{}) []interface{} {
 // Open creates a new Ovsdb connection.
 // It's stored in a variable so we can mock it out for the unit tests.
 var Open = func() (Client, error) {
-	client, err := ovs.Connect("127.0.0.1", 6640)
-	return Client{ovsdbClient{client}}, err
-}
-
-// Close destroys an Ovsdb connection created by Open.
-func (ovsdb Client) Close() {
-	ovsdb.disconnect()
+	odb, err := ovs.Connect("127.0.0.1", 6640)
+	return client{odb}, err
 }
 
 // CreateLogicalSwitch creates a new logical switch in OVN.
-func (ovsdb Client) CreateLogicalSwitch(lswitch string) error {
-	check, err := ovsdb.transact("OVN_Northbound", ovs.Operation{
+func (ovsdb client) CreateLogicalSwitch(lswitch string) error {
+	check, err := ovsdb.Transact("OVN_Northbound", ovs.Operation{
 		Op:    "select",
 		Table: "Logical_Switch",
 		Where: newCondition("name", "==", lswitch),
@@ -134,7 +132,7 @@ func (ovsdb Client) CreateLogicalSwitch(lswitch string) error {
 		Row:   map[string]interface{}{"name": lswitch},
 	}
 
-	results, err := ovsdb.transact("OVN_Northbound", insertOp)
+	results, err := ovsdb.Transact("OVN_Northbound", insertOp)
 	if err != nil {
 		return fmt.Errorf("transaction error: creating switch %s: %s",
 			lswitch, err)
@@ -143,55 +141,30 @@ func (ovsdb Client) CreateLogicalSwitch(lswitch string) error {
 }
 
 // ListLogicalPorts lists the logical ports in OVN.
-func (ovsdb Client) ListLogicalPorts(lswitch string) ([]LPort, error) {
-	result := []LPort{}
-
-	switchReply, err := ovsdb.transact("OVN_Northbound", ovs.Operation{
-		Op:    "select",
-		Table: "Logical_Switch",
-		Where: noCondition(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("transaction error: listing switches: %s", err)
-	}
-	if len(switchReply[0].Rows) == 0 {
-		return result, nil
-	}
-	logicalSwitch := switchReply[0].Rows[0]
-
-	portReply, err := ovsdb.transact("OVN_Northbound", ovs.Operation{
+func (ovsdb client) ListLogicalPorts() ([]LPort, error) {
+	portReply, err := ovsdb.Transact("OVN_Northbound", ovs.Operation{
 		Op:    "select",
 		Table: "Logical_Switch_Port",
-		Where: noCondition(),
+		Where: noCondition,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("transaction error: listing lports on %s: %s",
-			lswitch, err)
+		return nil, fmt.Errorf("transaction error: listing lports: %s", err)
 	}
-	portMap := rowUUIDMap(portReply[0].Rows)
 
-	for _, portUUID := range ovsUUIDSetToSlice(logicalSwitch["ports"]) {
-		portrow, ok := portMap[portUUID]
-		if !ok {
-			return nil, fmt.Errorf("missing port %v", portUUID)
-		}
-
+	var result []LPort
+	for _, row := range portReply[0].Rows {
 		result = append(result, LPort{
-			uuid:      portUUID,
-			Bridge:    lswitch,
-			Name:      portrow["name"].(string),
-			Addresses: ovsStringSetToSlice(portrow["addresses"]),
+			uuid:      ovsUUIDFromRow(row),
+			Name:      row["name"].(string),
+			Addresses: ovsStringSetToSlice(row["addresses"]),
 		})
 	}
 	return result, nil
 }
 
 // CreateLogicalPort creates a new logical port in OVN.
-func (ovsdb Client) CreateLogicalPort(lswitch, name, mac, ip string) error {
-	addrs, err := ovs.NewOvsSet([]string{fmt.Sprintf("%s %s", mac, ip)})
-	if err != nil {
-		return err
-	}
+func (ovsdb client) CreateLogicalPort(lswitch, name, mac, ip string) error {
+	addrs := newOvsSet([]string{fmt.Sprintf("%s %s", mac, ip)})
 
 	port := map[string]interface{}{"name": name, "addresses": addrs}
 
@@ -211,7 +184,7 @@ func (ovsdb Client) CreateLogicalPort(lswitch, name, mac, ip string) error {
 		Where: newCondition("name", "==", lswitch),
 	}
 
-	results, err := ovsdb.transact("OVN_Northbound", insertOp, mutateOp)
+	results, err := ovsdb.Transact("OVN_Northbound", insertOp, mutateOp)
 	if err != nil {
 		return fmt.Errorf("transaction error: creating lport %s on %s: %s",
 			name, lswitch, err)
@@ -221,7 +194,7 @@ func (ovsdb Client) CreateLogicalPort(lswitch, name, mac, ip string) error {
 }
 
 // DeleteLogicalPort removes a logical port from OVN.
-func (ovsdb Client) DeleteLogicalPort(lswitch string, lport LPort) error {
+func (ovsdb client) DeleteLogicalPort(lswitch string, lport LPort) error {
 	deleteOp := ovs.Operation{
 		Op:    "delete",
 		Table: "Logical_Switch_Port",
@@ -235,59 +208,36 @@ func (ovsdb Client) DeleteLogicalPort(lswitch string, lport LPort) error {
 		Where:     newCondition("name", "==", lswitch),
 	}
 
-	results, err := ovsdb.transact("OVN_Northbound", deleteOp, mutateOp)
+	results, err := ovsdb.Transact("OVN_Northbound", deleteOp, mutateOp)
 	if err != nil {
 		return fmt.Errorf("transaction error: deleting lport %s on %s: %s",
-			lport, lswitch, err)
+			lport.Name, lswitch, err)
 	}
 	return errorCheck(results, 2)
 }
 
 // ListACLs lists the access control rules in OVN.
-func (ovsdb Client) ListACLs(lswitch string) ([]ACL, error) {
-	result := []ACL{}
-
-	switchReply, err := ovsdb.transact("OVN_Northbound", ovs.Operation{
-		Op:    "select",
-		Table: "Logical_Switch",
-		Where: newCondition("name", "==", lswitch),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("transaction error: retrieving lswitch %s: %s",
-			lswitch, err)
-	}
-	if len(switchReply[0].Rows) == 0 {
-		return result, nil
-	}
-	logicalSwitch := switchReply[0].Rows[0]
-
-	aclReply, err := ovsdb.transact("OVN_Northbound", ovs.Operation{
+func (ovsdb client) ListACLs() ([]ACL, error) {
+	aclReply, err := ovsdb.Transact("OVN_Northbound", ovs.Operation{
 		Op:    "select",
 		Table: "ACL",
-		Where: noCondition(),
+		Where: noCondition,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("transaction error: listing ACLs on %s: %s",
-			lswitch, err)
+		return nil, fmt.Errorf("transaction error: listing ACLs: %s", err)
 	}
-	aclMap := rowUUIDMap(aclReply[0].Rows)
 
-	for _, aclUUID := range ovsUUIDSetToSlice(logicalSwitch["acls"]) {
-		aclrow, ok := aclMap[aclUUID]
-		if !ok {
-			return nil, fmt.Errorf("missing ACL %v", aclUUID)
-		}
-
+	var result []ACL
+	for _, row := range aclReply[0].Rows {
 		result = append(result, ACL{
-			uuid: aclUUID,
+			uuid: ovsUUIDFromRow(row),
 			Core: ACLCore{
-				Priority:  int(aclrow["priority"].(float64)),
-				Direction: aclrow["direction"].(string),
-				Match:     aclrow["match"].(string),
-				Action:    aclrow["action"].(string),
+				Priority:  int(row["priority"].(float64)),
+				Direction: row["direction"].(string),
+				Match:     row["match"].(string),
+				Action:    row["action"].(string),
 			},
-			Log: aclrow["log"].(bool),
-		})
+			Log: row["log"].(bool)})
 	}
 	return result, nil
 }
@@ -304,8 +254,8 @@ func (ovsdb Client) ListACLs(lswitch string) ([]ACL, error) {
 //
 // direction and match may be wildcarded by passing the value "*". priority may also
 // be wildcarded by passing a value less than 0.
-func (ovsdb Client) CreateACL(lswitch string, direction string, priority int,
-	match string, action string) error {
+func (ovsdb client) CreateACL(lswitch, direction string, priority int,
+	match, action string) error {
 	aclRow := map[string]interface{}{
 		"priority": int(math.Max(0.0, float64(priority))),
 		"action":   action,
@@ -334,7 +284,7 @@ func (ovsdb Client) CreateACL(lswitch string, direction string, priority int,
 		Where: newCondition("name", "==", lswitch),
 	}
 
-	results, err := ovsdb.transact("OVN_Northbound", insertOp, mutateOp)
+	results, err := ovsdb.Transact("OVN_Northbound", insertOp, mutateOp)
 	if err != nil {
 		return fmt.Errorf("transaction error: creating ACL on %s: %s",
 			lswitch, err)
@@ -343,7 +293,7 @@ func (ovsdb Client) CreateACL(lswitch string, direction string, priority int,
 }
 
 // DeleteACL removes an access control rule from OVN.
-func (ovsdb Client) DeleteACL(lswitch string, ovsdbACL ACL) error {
+func (ovsdb client) DeleteACL(lswitch string, ovsdbACL ACL) error {
 	deleteOp := ovs.Operation{
 		Op:    "delete",
 		Table: "ACL",
@@ -359,7 +309,7 @@ func (ovsdb Client) DeleteACL(lswitch string, ovsdbACL ACL) error {
 		Where: newCondition("name", "==", lswitch),
 	}
 
-	results, err := ovsdb.transact("OVN_Northbound", deleteOp, mutateOp)
+	results, err := ovsdb.Transact("OVN_Northbound", deleteOp, mutateOp)
 	if err != nil {
 		return fmt.Errorf("transaction error: deleting ACL on %s: %s",
 			lswitch, err)
@@ -374,17 +324,16 @@ type AddressSet struct {
 }
 
 // ListAddressSets lists the address sets in OVN.
-func (ovsdb Client) ListAddressSets(lswitch string) ([]AddressSet, error) {
+func (ovsdb client) ListAddressSets() ([]AddressSet, error) {
 	result := []AddressSet{}
 
-	addressReply, err := ovsdb.transact("OVN_Northbound", ovs.Operation{
+	addressReply, err := ovsdb.Transact("OVN_Northbound", ovs.Operation{
 		Op:    "select",
 		Table: "Address_Set",
-		Where: noCondition(),
+		Where: noCondition,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("transaction error: "+
-			"listing address sets on %s: %s", lswitch, err)
+		return nil, fmt.Errorf("transaction error: list address sets: %s", err)
 	}
 
 	for _, addr := range addressReply[0].Rows {
@@ -397,14 +346,8 @@ func (ovsdb Client) ListAddressSets(lswitch string) ([]AddressSet, error) {
 }
 
 // CreateAddressSet creates an address set in OVN.
-func (ovsdb Client) CreateAddressSet(lswitch string, name string,
-	addresses []string) error {
-
-	addrs, err := ovs.NewOvsSet(addresses)
-	if err != nil {
-		return err
-	}
-
+func (ovsdb client) CreateAddressSet(name string, addresses []string) error {
+	addrs := newOvsSet(addresses)
 	addressRow := map[string]interface{}{
 		"name":      name,
 		"addresses": addrs,
@@ -416,55 +359,53 @@ func (ovsdb Client) CreateAddressSet(lswitch string, name string,
 		Row:   addressRow,
 	}
 
-	results, err := ovsdb.transact("OVN_Northbound", insertOp)
+	results, err := ovsdb.Transact("OVN_Northbound", insertOp)
 	if err != nil {
-		return fmt.Errorf("transaction error: creating address set on %s: %s",
-			lswitch, err)
+		return fmt.Errorf("transaction error: creating address set: %s", err)
 	}
 	return errorCheck(results, 1)
 }
 
 // DeleteAddressSet removes an address set from OVN.
-func (ovsdb Client) DeleteAddressSet(lswitch string, name string) error {
+func (ovsdb client) DeleteAddressSet(name string) error {
 	deleteOp := ovs.Operation{
 		Op:    "delete",
 		Table: "Address_Set",
 		Where: newCondition("name", "==", name),
 	}
 
-	results, err := ovsdb.transact("OVN_Northbound", deleteOp)
+	results, err := ovsdb.Transact("OVN_Northbound", deleteOp)
 	if err != nil {
-		return fmt.Errorf("transaction error: deleting address set on %s: %s",
-			lswitch, err)
+		return fmt.Errorf("transaction error: deleting address set: %s", err)
 	}
 	return errorCheck(results, 1)
 }
 
 // ListInterfaces gets all openflow interfaces.
-func (ovsdb Client) ListInterfaces() ([]Interface, error) {
-	bridgeReply, err := ovsdb.transact("Open_vSwitch", ovs.Operation{
+func (ovsdb client) ListInterfaces() ([]Interface, error) {
+	bridgeReply, err := ovsdb.Transact("Open_vSwitch", ovs.Operation{
 		Op:    "select",
 		Table: "Bridge",
-		Where: noCondition(),
+		Where: noCondition,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("transaction error: listing Bridges: %s", err)
 	}
 
-	portReply, err := ovsdb.transact("Open_vSwitch", ovs.Operation{
+	portReply, err := ovsdb.Transact("Open_vSwitch", ovs.Operation{
 		Op:    "select",
 		Table: "Port",
-		Where: noCondition(),
+		Where: noCondition,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("transaction error: listing Ports: %s", err)
 	}
 	portMap := rowUUIDMap(portReply[0].Rows)
 
-	ifaceReply, err := ovsdb.transact("Open_vSwitch", ovs.Operation{
+	ifaceReply, err := ovsdb.Transact("Open_vSwitch", ovs.Operation{
 		Op:    "select",
 		Table: "Interface",
-		Where: noCondition(),
+		Where: noCondition,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("transaction error: listing ifaces: %s", err)
@@ -510,7 +451,7 @@ func (ovsdb Client) ListInterfaces() ([]Interface, error) {
 //
 // A port cannot be created without an interface, that is why the "default"
 // interface (one with the same name as the port) is created along with it.
-func (ovsdb Client) CreateInterface(bridge, name string) error {
+func (ovsdb client) CreateInterface(bridge, name string) error {
 	var ops []ovs.Operation
 
 	ops = append(ops, ovs.Operation{
@@ -520,11 +461,7 @@ func (ovsdb Client) CreateInterface(bridge, name string) error {
 		UUIDName: "qifaceadd",
 	})
 
-	ifaces, err := ovs.NewOvsSet([]ovs.UUID{{GoUUID: "qifaceadd"}})
-	if err != nil {
-		return err
-	}
-
+	ifaces := newOvsSet([]ovs.UUID{{GoUUID: "qifaceadd"}})
 	ops = append(ops, ovs.Operation{
 		Op:       "insert",
 		Table:    "Port",
@@ -541,7 +478,7 @@ func (ovsdb Client) CreateInterface(bridge, name string) error {
 		Where: newCondition("name", "==", bridge),
 	})
 
-	results, err := ovsdb.transact("Open_vSwitch", ops...)
+	results, err := ovsdb.Transact("Open_vSwitch", ops...)
 	if err != nil {
 		return fmt.Errorf("transaction error: creating interface %s: %s",
 			name, err)
@@ -550,7 +487,7 @@ func (ovsdb Client) CreateInterface(bridge, name string) error {
 }
 
 // DeleteInterface deletes an openflow interface.
-func (ovsdb Client) DeleteInterface(iface Interface) error {
+func (ovsdb client) DeleteInterface(iface Interface) error {
 	deleteOp := ovs.Operation{
 		Op:    "delete",
 		Table: "Port",
@@ -566,7 +503,7 @@ func (ovsdb Client) DeleteInterface(iface Interface) error {
 		Where: newCondition("name", "==", iface.Bridge),
 	}
 
-	results, err := ovsdb.transact("Open_vSwitch", deleteOp, mutateOp)
+	results, err := ovsdb.Transact("Open_vSwitch", deleteOp, mutateOp)
 	if err != nil {
 		return fmt.Errorf("transaction error: deleting interface %s: %s",
 			iface.Name, err)
@@ -575,7 +512,7 @@ func (ovsdb Client) DeleteInterface(iface Interface) error {
 }
 
 // ModifyInterface modifies the openflow interface.
-func (ovsdb Client) ModifyInterface(iface Interface) error {
+func (ovsdb client) ModifyInterface(iface Interface) error {
 	var ops []ovs.Operation
 	var muts []mutation
 
@@ -616,7 +553,7 @@ func (ovsdb Client) ModifyInterface(iface Interface) error {
 		return nil
 	}
 
-	results, err := ovsdb.transact("Open_vSwitch", ops...)
+	results, err := ovsdb.Transact("Open_vSwitch", ops...)
 	if err != nil {
 		return fmt.Errorf("transaction error: modifying interface %s: %s",
 			iface.Name, err)
@@ -686,23 +623,19 @@ func newMutation(column, mutator string, value interface{}) mutation {
 	switch typedValue := value.(type) {
 	case ovs.UUID:
 		uuidSlice := []ovs.UUID{typedValue}
-		mutateValue, _ := ovs.NewOvsSet(uuidSlice)
+		mutateValue := newOvsSet(uuidSlice)
 		return ovs.NewMutation(column, mutator, mutateValue)
 	default:
 		var mutateValue interface{}
-		var err error
 		switch reflect.ValueOf(typedValue).Kind() {
 		case reflect.Slice:
-			mutateValue, err = ovs.NewOvsSet(typedValue)
+			mutateValue = newOvsSet(typedValue)
 		case reflect.Map:
-			mutateValue, err = ovs.NewOvsMap(typedValue)
+			mutateValue, _ = ovs.NewOvsMap(typedValue)
 		default:
 			panic(fmt.Sprintf(
 				"unhandled value in mutation: value %s, type %s",
 				value, typedValue))
-		}
-		if err != nil {
-			return err
 		}
 		return ovs.NewMutation(column, mutator, mutateValue)
 	}
@@ -799,6 +732,14 @@ func errorCheck(results []ovs.OperationResult, expectedResponses int) error {
 		}
 	}
 	return nil
+}
+
+func newOvsSet(slice interface{}) *ovs.OvsSet {
+	result, err := ovs.NewOvsSet(slice)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 // InterfaceSlice is used for HashJoin.

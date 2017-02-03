@@ -1,14 +1,16 @@
 export GO15VENDOREXPERIMENT=1
 PACKAGES=$(shell govendor list -no-status +local)
 NOVENDOR=$(shell find . -path ./specs/**/*/vendor -prune -o -path ./vendor -prune -o -name '*.go' -print)
-LINE_LENGTH_EXCLUDE=./cluster/machine/amazon.go \
-		    ./cluster/machine/google.go \
-		    ./cluster/cloudcfg/template.go \
+LINE_LENGTH_EXCLUDE=./api/pb/pb.pb.go \
 		    ./cluster/amazon/mock_client.go \
+		    ./cluster/cloudcfg/template.go \
 		    ./cluster/google/mock_client_test.go \
+		    ./cluster/machine/amazon.go \
+		    ./cluster/machine/google.go \
 		    ./minion/network/link_test.go \
+		    ./minion/ovsdb/mock_transact.go \
+		    ./minion/ovsdb/mocks/Client.go \
 		    ./minion/pb/pb.pb.go \
-		    ./api/pb/pb.pb.go \
 		    ./stitch/bindings.js.go
 
 REPO = quilt
@@ -34,6 +36,7 @@ COV_SKIP= /api/client/mocks \
 	  /cluster/provider/mocks \
 	  /constants \
 	  /minion/pprofile \
+	  /minion/ovsdb/mocks \
 	  /quilt-tester \
 	  /quilt-tester/tests/10-network \
 	  /quilt-tester/tests/15-bandwidth \

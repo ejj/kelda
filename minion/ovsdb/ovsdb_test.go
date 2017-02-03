@@ -306,6 +306,30 @@ func TestDeleteAddressSet(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestOpenFlowPorts(t *testing.T) {
+	t.Parallel()
+
+	api := new(mockTransact)
+	odb := Client(client{api})
+
+	ops := []ovs.Operation{{
+		Op:    "select",
+		Table: "Interface",
+		Where: noCondition}}
+	api.On("Transact", "Open_vSwitch", ops).Return(nil, errors.New("err")).Once()
+	_, err := odb.OpenFlowPorts()
+	assert.EqualError(t, err, "select interface error: err")
+
+	res := []ovs.OperationResult{{Rows: []map[string]interface{}{
+		{},
+		{"name": "bad"},
+		{"name": "name", "ofport": float64(12)}}}}
+	api.On("Transact", "Open_vSwitch", ops).Return(res, nil).Once()
+	mp, err := odb.OpenFlowPorts()
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]int{"name": 12}, mp)
+}
+
 func TestOvsStringSetToSlice(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, []string{"b"}, ovsStringSetToSlice("b"))

@@ -33,6 +33,7 @@ type Client interface {
 	CreateInterface(bridge, name string) error
 	DeleteInterface(iface Interface) error
 	ModifyInterface(iface Interface) error
+	OpenFlowPorts() (map[string]int, error)
 	Disconnect()
 }
 
@@ -445,6 +446,38 @@ func (ovsdb client) ListInterfaces() ([]Interface, error) {
 	}
 
 	return result, nil
+}
+
+// OpenFlowPorts returns a map from interface name to OpenFlow port number for every
+// interface in ovsdb.  Those interfaces without a port number are silently omitted.
+func (ovsdb client) OpenFlowPorts() (map[string]int, error) {
+	reply, err := ovsdb.Transact("Open_vSwitch", ovs.Operation{
+		Op:    "select",
+		Table: "Interface",
+		Where: noCondition,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("select interface error: %s", err)
+	}
+
+	ifaceMap := map[string]int{}
+	for _, iface := range reply[0].Rows {
+		name, ok := iface["name"].(string)
+		if !ok {
+			continue
+		}
+
+		ofport, ok := iface["ofport"].(float64)
+		if !ok {
+			continue
+		}
+
+		if ofport > 0 {
+			ifaceMap[name] = int(ofport)
+		}
+	}
+
+	return ifaceMap, nil
 }
 
 // CreateInterface creates an openflow port on specified bridge.

@@ -102,18 +102,11 @@ func TestRunMaster(t *testing.T) {
 func TestGenerateOFPorts(t *testing.T) {
 	t.Parallel()
 
-	var ptr = func(x int) *int {
-		return &x
-	}
-
-	ifaces := []ovsdb.Interface{
-		{Name: "1", OFPort: ptr(101)},
-		{Name: "q_1", OFPort: ptr(201)},
-		{Name: "2", OFPort: ptr(102)},
-		{Name: "q_2", OFPort: ptr(-1)},
-		{Name: "q_3", OFPort: ptr(203)},
-	}
-
+	ifaces := map[string]int{
+		"1":   101,
+		"q_1": 201,
+		"2":   102,
+		"q_3": 203}
 	containers := []db.Container{
 		{EndpointID: "1", DockerID: "1", IP: "1.1.1.1"},
 		{EndpointID: "2", DockerID: "2", IP: "2.2.2.2"},

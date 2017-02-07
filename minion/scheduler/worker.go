@@ -79,60 +79,53 @@ func syncWorker(dbcs []db.Container, dkcs []docker.Container) (
 	return changed, toBoot, toKill
 }
 
-func doContainers(dk docker.Client, containers []interface{},
-	do func(docker.Client, chan interface{})) {
+func doContainers(dk docker.Client, ifaces []interface{},
+	do func(docker.Client, interface{})) {
 
-	in := make(chan interface{})
 	var wg sync.WaitGroup
-	wg.Add(concurrencyLimit)
-	for i := 0; i < concurrencyLimit; i++ {
-		go func() {
-			do(dk, in)
+	wg.Add(len(ifaces))
+	defer wg.Wait()
+
+	semaphore := make(chan struct{}, concurrencyLimit)
+	for _, iface := range ifaces {
+		semaphore <- struct{}{}
+		go func(iface interface{}) {
+			do(dk, iface)
+			<-semaphore
 			wg.Done()
-		}()
-	}
-
-	for _, dbc := range containers {
-		in <- dbc
-	}
-	close(in)
-	wg.Wait()
-}
-
-func dockerRun(dk docker.Client, in chan interface{}) {
-	for i := range in {
-		dbc := i.(db.Container)
-		log.WithField("container", dbc).Info("Start container")
-		_, err := dk.Run(docker.RunOptions{
-			Image:       dbc.Image,
-			Args:        dbc.Command,
-			Env:         dbc.Env,
-			Labels:      map[string]string{labelKey: labelValue},
-			IP:          dbc.IP,
-			NetworkMode: plugin.NetworkName,
-			DNS:         []string{ipdef.GatewayIP.String()},
-			DNSSearch:   []string{"q"},
-		})
-		if err != nil {
-			log.WithFields(log.Fields{
-				"error":     err,
-				"container": dbc,
-			}).WithError(err).Warning("Failed to run container", dbc)
-			continue
-		}
+		}(iface)
 	}
 }
 
-func dockerKill(dk docker.Client, in chan interface{}) {
-	for i := range in {
-		dkc := i.(docker.Container)
-		log.WithField("container", dkc.ID).Info("Remove container")
-		if err := dk.RemoveID(dkc.ID); err != nil {
-			log.WithFields(log.Fields{
-				"error": err,
-				"id":    dkc.ID,
-			}).Warning("Failed to remove container.")
-		}
+func dockerRun(dk docker.Client, iface interface{}) {
+	dbc := iface.(db.Container)
+	log.WithField("container", dbc).Info("Start container")
+	_, err := dk.Run(docker.RunOptions{
+		Image:       dbc.Image,
+		Args:        dbc.Command,
+		Env:         dbc.Env,
+		Labels:      map[string]string{labelKey: labelValue},
+		IP:          dbc.IP,
+		NetworkMode: plugin.NetworkName,
+		DNS:         []string{ipdef.GatewayIP.String()},
+		DNSSearch:   []string{"q"},
+	})
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error":     err,
+			"container": dbc,
+		}).WithError(err).Warning("Failed to run container", dbc)
+	}
+}
+
+func dockerKill(dk docker.Client, iface interface{}) {
+	dkc := iface.(docker.Container)
+	log.WithField("container", dkc.ID).Info("Remove container")
+	if err := dk.RemoveID(dkc.ID); err != nil {
+		log.WithFields(log.Fields{
+			"error": err,
+			"id":    dkc.ID,
+		}).Warning("Failed to remove container.")
 	}
 }
 

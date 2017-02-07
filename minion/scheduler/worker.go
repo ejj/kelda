@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"sync"
+	"time"
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
@@ -46,8 +47,15 @@ func runWorker(conn db.Conn, dk docker.Client, myIP string) {
 			return nil
 		})
 
+		if len(toBoot) == 0 && len(toKill) == 0 {
+			return
+		}
+
+		start := time.Now()
 		doContainers(dk, toBoot, dockerRun)
 		doContainers(dk, toKill, dockerKill)
+		log.Infof("Scheduler spent %v starting/stopping containers",
+			time.Since(start))
 	}
 }
 

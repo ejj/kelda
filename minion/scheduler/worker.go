@@ -19,10 +19,19 @@ const labelValue = "scheduler"
 const labelPair = labelKey + "=" + labelValue
 const concurrencyLimit = 32
 
+var once sync.Once
+
 func runWorker(conn db.Conn, dk docker.Client, myIP string) {
 	if myIP == "" {
 		return
 	}
+
+	// In order for the flows installed by the plugin to work, the basic flows must
+	// already be installed.  Thus, the first time we run we pre-populate the
+	// OpenFlow table.
+	once.Do(func() {
+		updateOpenflow(conn, myIP)
+	})
 
 	filter := map[string][]string{"label": {labelPair}}
 

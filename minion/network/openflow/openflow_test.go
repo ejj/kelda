@@ -9,10 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestReplaceFlows(t *testing.T) {
+func TestAddReplaceFlows(t *testing.T) {
 	anErr := errors.New("err")
 	ovsdb.Open = func() (ovsdb.Client, error) { return nil, anErr }
 	assert.EqualError(t, ReplaceFlows(nil), "ovsdb-server connection: err")
+	assert.EqualError(t, AddFlows(nil), "ovsdb-server connection: err")
 
 	client := new(mocks.Client)
 	ovsdb.Open = func() (ovsdb.Client, error) {
@@ -32,12 +33,22 @@ func TestReplaceFlows(t *testing.T) {
 	assert.NoError(t, ReplaceFlows(nil))
 	client.AssertCalled(t, "Disconnect")
 	client.AssertCalled(t, "OpenFlowPorts")
-
 	assert.Equal(t, "replace-flows", action)
 	assert.Equal(t, allFlows(nil), flows)
 
+	assert.NoError(t, AddFlows(nil))
+	client.AssertCalled(t, "Disconnect")
+	client.AssertCalled(t, "OpenFlowPorts")
+
+	assert.Equal(t, "add-flows", action)
+	assert.Equal(t, containerFlows(nil), flows)
+
 	ofctl = func(a string, f []string) error { return anErr }
 	assert.EqualError(t, ReplaceFlows(nil), "ovs-ofctl: err")
+	client.AssertCalled(t, "Disconnect")
+	client.AssertCalled(t, "OpenFlowPorts")
+
+	assert.EqualError(t, AddFlows(nil), "ovs-ofctl: err")
 	client.AssertCalled(t, "Disconnect")
 	client.AssertCalled(t, "OpenFlowPorts")
 }

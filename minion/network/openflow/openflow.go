@@ -173,6 +173,22 @@ func ReplaceFlows(containers []Container) error {
 	return nil
 }
 
+// AddFlows adds flows associated with the provided containers without touching flows
+// that may already be installed.
+func AddFlows(containers []Container) error {
+	ofports, err := openflowPorts()
+	if err != nil {
+		return err
+	}
+
+	flows := containerFlows(resolveContainers(ofports, containers))
+	if err := ofctl("add-flows", flows); err != nil {
+		return fmt.Errorf("ovs-ofctl: %s", err)
+	}
+
+	return nil
+}
+
 func containerFlows(containers []container) []string {
 	var flows []string
 	for _, c := range containers {

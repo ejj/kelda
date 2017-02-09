@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/NetSys/quilt/minion/ipdef"
+	"github.com/NetSys/quilt/minion/network/openflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 
@@ -78,6 +79,7 @@ func TestCreateEndpoint(t *testing.T) {
 	anErr := errors.New("err")
 
 	vsctl = func(a [][]string) error { return anErr }
+	ofctl = func(c openflow.Container) error { return anErr }
 
 	req := &dnet.CreateEndpointRequest{}
 	req.EndpointID = zero

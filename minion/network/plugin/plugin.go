@@ -8,9 +8,12 @@ import (
 	"time"
 
 	"github.com/NetSys/quilt/minion/ipdef"
+	"github.com/NetSys/quilt/minion/network/openflow"
 
 	dnet "github.com/docker/go-plugins-helpers/network"
 	"github.com/vishvananda/netlink"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -35,6 +38,7 @@ const mtu int = 1400
 func Run() {
 	h := dnet.NewHandler(driver{})
 
+	go ofctlRun()
 	go vsctlRun()
 
 	go func() {
@@ -104,6 +108,12 @@ func (d driver) CreateEndpoint(req *dnet.CreateEndpointRequest) (
 			"external-ids:iface-id=" + addr.String()}})
 	if err != nil {
 		return nil, fmt.Errorf("ovs-vsctl: %v", err)
+	}
+
+	err = ofctl(openflow.Container{Veth: outer, Patch: peerQuilt, Mac: mac})
+	if err != nil {
+		// Problems with OpenFlow can be repaired later so just log.
+		log.WithError(err).Warn("Failed to add OpenFlow rules")
 	}
 
 	resp := &dnet.CreateEndpointResponse{

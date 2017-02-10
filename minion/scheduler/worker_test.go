@@ -1,16 +1,20 @@
 package scheduler
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/minion/docker"
+	"github.com/NetSys/quilt/minion/network/openflow"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRunWorker(t *testing.T) {
 	t.Parallel()
+
+	replaceFlows = func(ofcs []openflow.Container) error { return errors.New("err") }
 
 	md, dk := docker.NewMock()
 	conn := db.New()
@@ -177,4 +181,10 @@ func TestSyncJoinScore(t *testing.T) {
 	score = syncJoinScore(dbc, dkc)
 	assert.Equal(t, -1, score)
 	dbc.Env = dkc.Env
+}
+
+func TestOpenFlowContainers(t *testing.T) {
+	res := openflowContainers([]db.Container{{EndpointID: "f", IP: "1.2.3.4"}})
+	exp := []openflow.Container{{Veth: "f", Patch: "q_f", Mac: "02:00:01:02:03:04"}}
+	assert.Equal(t, exp, res)
 }

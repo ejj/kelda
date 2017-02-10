@@ -12,7 +12,6 @@ import (
 
 	"github.com/NetSys/quilt/db"
 	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/minion/ovsdb"
 	"github.com/NetSys/quilt/stitch"
 
@@ -66,8 +65,6 @@ func runWorker(conn db.Conn) {
 			updateNAT(containers, connections)
 			wg.Done()
 		}()
-
-		updateOpenFlow(odb, containers)
 
 		wg.Wait()
 		return nil
@@ -192,45 +189,6 @@ func generateTargetNatRules(publicInterface string, containers []db.Container,
 	return rules
 }
 
-func updateOpenFlow(odb ovsdb.Client, containers []db.Container) {
-	ifaceMap, err := odb.OpenFlowPorts()
-	if err != nil {
-		log.WithError(err).Error("Failed to get OpenFlow ports")
-		return
-	}
-
-	err = ofctlReplaceFlows(generateOpenFlow(generateOFPorts(ifaceMap, containers)))
-	if err != nil {
-		log.WithError(err).Error("error replacing OpenFlow")
-		return
-	}
-}
-
-func generateOFPorts(ifaceMap map[string]int, dbcs []db.Container) []ofPort {
-	var ofcs []ofPort
-	for _, dbc := range dbcs {
-		vethOut := ipdef.IFName(dbc.EndpointID)
-		_, peerQuilt := ipdef.PatchPorts(dbc.EndpointID)
-
-		ofVeth, ok := ifaceMap[vethOut]
-		if !ok {
-			continue
-		}
-
-		ofQuilt, ok := ifaceMap[peerQuilt]
-		if !ok {
-			continue
-		}
-
-		ofcs = append(ofcs, ofPort{
-			PatchPort: ofQuilt,
-			VethPort:  ofVeth,
-			Mac:       ipdef.IPStrToMac(dbc.IP),
-		})
-	}
-	return ofcs
-}
-
 // Returns (Stdout, Stderr, error)
 //
 // It's critical that the error returned here is the exact error
@@ -336,31 +294,6 @@ func getPublicInterface() (string, error) {
 	}
 
 	return link.Attrs().Name, err
-}
-
-func ofctlReplaceFlows(flows []string) error {
-	cmd := exec.Command("ovs-ofctl", "-O", "OpenFlow13", "replace-flows",
-		ipdef.QuiltBridge, "-")
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	for _, f := range flows {
-		stdin.Write([]byte(f + "\n"))
-	}
-	stdin.Close()
-
-	if err := cmd.Wait(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (iprs ipRuleSlice) Get(ii int) interface{} {

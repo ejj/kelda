@@ -8,6 +8,7 @@ import (
 	"github.com/NetSys/quilt/join"
 	"github.com/NetSys/quilt/minion/docker"
 	"github.com/NetSys/quilt/minion/ipdef"
+	"github.com/NetSys/quilt/minion/network/openflow"
 	"github.com/NetSys/quilt/minion/network/plugin"
 	"github.com/NetSys/quilt/util"
 	log "github.com/Sirupsen/logrus"
@@ -48,7 +49,7 @@ func runWorker(conn db.Conn, dk docker.Client, myIP string) {
 		})
 
 		if len(toBoot) == 0 && len(toKill) == 0 {
-			return
+			break
 		}
 
 		start := time.Now()
@@ -57,6 +58,8 @@ func runWorker(conn db.Conn, dk docker.Client, myIP string) {
 		log.Infof("Scheduler spent %v starting/stopping containers",
 			time.Since(start))
 	}
+
+	updateOpenflow(conn, myIP)
 }
 
 func syncWorker(dbcs []db.Container, dkcs []docker.Container) (
@@ -164,3 +167,28 @@ func syncJoinScore(left, right interface{}) int {
 
 	return 0
 }
+
+func updateOpenflow(conn db.Conn, myIP string) {
+	dbcs := conn.SelectFromContainer(func(dbc db.Container) bool {
+		return dbc.EndpointID != "" && dbc.IP != "" && dbc.Minion == myIP
+	})
+
+	ofcs := openflowContainers(dbcs)
+	if err := replaceFlows(ofcs); err != nil {
+		log.WithError(err).Warning("Failed to update OpenFlow")
+	}
+}
+
+func openflowContainers(dbcs []db.Container) []openflow.Container {
+	var ofcs []openflow.Container
+	for _, dbc := range dbcs {
+		_, peerQuilt := ipdef.PatchPorts(dbc.EndpointID)
+		ofcs = append(ofcs, openflow.Container{
+			Veth:  ipdef.IFName(dbc.EndpointID),
+			Patch: peerQuilt,
+			Mac:   ipdef.IPStrToMac(dbc.IP)})
+	}
+	return ofcs
+}
+
+var replaceFlows = openflow.ReplaceFlows

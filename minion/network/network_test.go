@@ -5,10 +5,8 @@ import (
 	"testing"
 
 	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/minion/ipdef"
 	"github.com/NetSys/quilt/minion/ovsdb"
 	"github.com/NetSys/quilt/minion/ovsdb/mocks"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -97,24 +95,4 @@ func TestRunMaster(t *testing.T) {
 	client.AssertCalled(t, "DeleteLogicalPort", mock.Anything, mock.Anything)
 	client.AssertCalled(t, "CreateLogicalPort", mock.Anything, mock.Anything,
 		mock.Anything, mock.Anything)
-}
-
-func TestGenerateOFPorts(t *testing.T) {
-	t.Parallel()
-
-	ifaces := map[string]int{
-		"1":   101,
-		"q_1": 201,
-		"2":   102,
-		"q_3": 203}
-	containers := []db.Container{
-		{EndpointID: "1", DockerID: "1", IP: "1.1.1.1"},
-		{EndpointID: "2", DockerID: "2", IP: "2.2.2.2"},
-		{EndpointID: "3", DockerID: "3", IP: "3.3.3.3"},
-	}
-
-	assert.Equal(t,
-		[]ofPort{{VethPort: 101, PatchPort: 201,
-			Mac: ipdef.IPStrToMac("1.1.1.1")}},
-		generateOFPorts(ifaces, containers))
 }

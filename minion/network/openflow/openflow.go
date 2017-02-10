@@ -1,10 +1,12 @@
-package network
+package openflow
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/NetSys/quilt/minion/ipdef"
+	"github.com/NetSys/quilt/minion/ovsdb"
 )
 
 /* OpenFlow Psuedocode -- Please, for the love of God, keep this updated.
@@ -15,7 +17,6 @@ OpenFlow code does, without the distraction of the go code required to implement
 
 Interpreting the Psuedocode
 ---------------------------
-
 The OpenFlow code is divided into a series of tables.  Packets start at Table_0 and only
 move to another table if explicitly instructed to by a `goto` statement.
 
@@ -126,10 +127,17 @@ Table_2 {
 }
 */
 
-type ofPort struct {
-	PatchPort int
-	VethPort  int
-	Mac       string
+// A Container that needs OpenFlow rules installed for it.
+type Container struct {
+	Veth  string
+	Patch string
+	Mac   string
+}
+
+type container struct {
+	veth  int
+	patch int
+	mac   string
 }
 
 var staticFlows = []string{
@@ -149,23 +157,94 @@ var staticFlows = []string{
 	"table=1,priority=400,reg0=2,actions=output:NXM_NX_REG1[]",
 }
 
-func generateOpenFlow(ofps []ofPort) []string {
-	flows := staticFlows
-	var gatewayBroadcastActions []string
-	for _, ofp := range ofps {
-		gatewayBroadcastActions = append(gatewayBroadcastActions,
-			fmt.Sprintf("output:%d", ofp.VethPort))
+// ReplaceFlows adds flows associated with the provided containers, and removes all
+// other flows.
+func ReplaceFlows(containers []Container) error {
+	ofports, err := openflowPorts()
+	if err != nil {
+		return err
+	}
+
+	flows := allFlows(resolveContainers(ofports, containers))
+	if err := ofctl("replace-flows", flows); err != nil {
+		return fmt.Errorf("ovs-ofctl: %s", err)
+	}
+
+	return nil
+}
+
+func containerFlows(containers []container) []string {
+	var flows []string
+	for _, c := range containers {
 		template := fmt.Sprintf("table=0,priority=1000,in_port=%s%s,"+
 			"actions=load:0x%s->NXM_NX_REG0[],load:0x%x->NXM_NX_REG1[],"+
 			"load:0x%x->NXM_NX_REG2[],resubmit(,1)",
-			"%d", "%s", "%x", ofp.VethPort, ofp.PatchPort)
+			"%d", "%s", "%x", c.veth, c.patch)
 		flows = append(flows,
-			fmt.Sprintf(template, ofp.VethPort, ",dl_src="+ofp.Mac, 1),
-			fmt.Sprintf(template, ofp.PatchPort, "", 2),
+			fmt.Sprintf(template, c.veth, ",dl_src="+c.mac, 1),
+			fmt.Sprintf(template, c.patch, "", 2),
 			fmt.Sprintf("table=2,priority=1000,dl_dst=%s,actions=output:%d",
-				ofp.Mac, ofp.VethPort))
+				c.mac, c.veth))
 	}
-	flows = append(flows, "table=1,priority=850,dl_dst=ff:ff:ff:ff:ff:ff,actions="+
-		strings.Join(gatewayBroadcastActions, ","))
 	return flows
+}
+
+func allFlows(containers []container) []string {
+	var gatewayBroadcastActions []string
+	for _, c := range containers {
+		gatewayBroadcastActions = append(gatewayBroadcastActions,
+			fmt.Sprintf("output:%d", c.veth))
+	}
+	flows := append(staticFlows, containerFlows(containers)...)
+	return append(flows, "table=1,priority=850,dl_dst=ff:ff:ff:ff:ff:ff,actions="+
+		strings.Join(gatewayBroadcastActions, ","))
+}
+
+func resolveContainers(portMap map[string]int, containers []Container) []container {
+	var ofcs []container
+	for _, c := range containers {
+		veth, okVeth := portMap[c.Veth]
+		patch, okPatch := portMap[c.Patch]
+		if !okVeth || !okPatch {
+			continue
+		}
+
+		ofcs = append(ofcs, container{patch: patch, veth: veth, mac: c.Mac})
+	}
+	return ofcs
+}
+
+func openflowPorts() (map[string]int, error) {
+	odb, err := ovsdb.Open()
+	if err != nil {
+		return nil, fmt.Errorf("ovsdb-server connection: %s", err)
+	}
+	defer odb.Disconnect()
+
+	return odb.OpenFlowPorts()
+}
+
+var ofctl = func(action string, flows []string) error {
+	cmd := exec.Command("ovs-ofctl", "-O", "OpenFlow13", action,
+		ipdef.QuiltBridge, "-")
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	for _, f := range flows {
+		stdin.Write([]byte(f + "\n"))
+	}
+	stdin.Close()
+
+	if err := cmd.Wait(); err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -75,7 +75,9 @@ func TestGetCapabilities(t *testing.T) {
 func TestCreateEndpoint(t *testing.T) {
 	setup()
 
-	vsctl = func(a [][]string) error { return errors.New("err") }
+	anErr := errors.New("err")
+
+	vsctl = func(a [][]string) error { return anErr }
 
 	req := &dnet.CreateEndpointRequest{}
 	req.EndpointID = zero
@@ -87,22 +89,37 @@ func TestCreateEndpoint(t *testing.T) {
 	_, err := d.CreateEndpoint(req)
 	assert.EqualError(t, err, "invalid IP: ")
 
-	req.Interface.Address = "10.1.0.1"
-	_, err = d.CreateEndpoint(req)
-	assert.EqualError(t, err, "invalid IP: 10.1.0.1")
-
 	req.Interface.Address = "10.1.0.1/8"
+
+	linkAdd = func(link netlink.Link) error { return anErr }
+	_, err = d.CreateEndpoint(req)
+	assert.EqualError(t, err, "failed to create veth: err")
+
+	setup()
+	linkByName = func(eid string) (netlink.Link, error) { return nil, anErr }
+	_, err = d.CreateEndpoint(req)
+	assert.EqualError(t, err, "failed to find link 000000000000000: err")
+
+	setup()
+	linkSetUp = func(link netlink.Link) error { return anErr }
+	_, err = d.CreateEndpoint(req)
+	assert.EqualError(t, err, "failed to bring up link 000000000000000: err")
+
+	setup()
 	req.Interface.MacAddress = ""
-	expResp := dnet.EndpointInterface{
-		MacAddress: ipdef.IPStrToMac("10.1.0.1"),
-	}
 	_, err = d.CreateEndpoint(req)
 	assert.EqualError(t, err, "ovs-vsctl: err")
+
+	setup()
 
 	var args [][]string
 	vsctl = func(a [][]string) error {
 		args = a
 		return nil
+	}
+
+	expResp := dnet.EndpointInterface{
+		MacAddress: ipdef.IPStrToMac("10.1.0.1"),
 	}
 
 	resp, err := d.CreateEndpoint(req)
@@ -130,60 +147,64 @@ func TestCreateEndpoint(t *testing.T) {
 func TestDeleteEndpoint(t *testing.T) {
 	var args [][]string
 
+	setup()
+
 	vsctl = func(a [][]string) error {
 		args = a
 		return nil
 	}
 
-	d := driver{}
+	links["foo"] = &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: "foo"}}
+
 	req := &dnet.DeleteEndpointRequest{EndpointID: "foo"}
 
+	d := driver{}
 	err := d.DeleteEndpoint(req)
 	assert.NoError(t, err)
-	assert.Equal(t, [][]string{
+
+	expOvsArgs := [][]string{
 		{"del-port", "quilt-int", "foo"},
 		{"del-port", "quilt-int", "q_foo"},
-		{"del-port", "br-int", "br_foo"}}, args)
+		{"del-port", "br-int", "br_foo"}}
+	assert.Equal(t, expOvsArgs, args)
+
+	err = d.DeleteEndpoint(req)
+	assert.EqualError(t, err, "failed to find link foo: byName: no such veth: foo")
+
+	links["foo"] = &netlink.Dummy{}
+	err = d.DeleteEndpoint(req)
+	assert.EqualError(t, err, "failed to delete link foo: del: no such veth: ")
 
 	vsctl = func(a [][]string) error { return errors.New("err") }
 	err = d.DeleteEndpoint(req)
 	assert.EqualError(t, err, "ovs-vsctl: err")
 }
 
-func TestEndpointOperInfo(t *testing.T) {
+func TestEndpointInfo(t *testing.T) {
 	setup()
 
 	d := driver{}
-	req := &dnet.JoinRequest{EndpointID: zero, SandboxKey: "/test/docker0"}
-	_, err := d.Join(req)
-	assert.NoError(t, err)
+	_, err := d.EndpointInfo(&dnet.InfoRequest{EndpointID: "foo"})
+	assert.EqualError(t, err, "byName: no such veth: foo")
 
-	_, err = d.EndpointInfo(&dnet.InfoRequest{EndpointID: zero})
+	links["foo"] = &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: "foo"}}
+	resp, err := d.EndpointInfo(&dnet.InfoRequest{EndpointID: "foo"})
 	assert.NoError(t, err)
-
-	d.Leave(&dnet.LeaveRequest{EndpointID: zero})
-	_, err = d.EndpointInfo(&dnet.InfoRequest{EndpointID: one})
-	assert.EqualError(t, err, "byName: no such veth: 111111111111111")
+	assert.Equal(t, &dnet.InfoResponse{}, resp)
 }
 
 func TestJoin(t *testing.T) {
-	setup()
+	t.Parallel()
 
 	d := driver{}
 	jreq := &dnet.JoinRequest{EndpointID: zero, SandboxKey: "/test/docker0"}
 	resp, err := d.Join(jreq)
 	assert.NoError(t, err)
-
-	ifaceName := resp.InterfaceName
-	expIFace := dnet.InterfaceName{
-		SrcName:   ipdef.IFName("tmp_" + zero),
-		DstPrefix: ifacePrefix,
-	}
-	assert.Equal(t, expIFace, ifaceName)
-
-	jreq = &dnet.JoinRequest{EndpointID: zero, SandboxKey: "/test/docker2"}
-	_, err = d.Join(jreq)
-	assert.EqualError(t, err, "failed to create veth: veth exists: 000000000000000")
+	assert.Equal(t, &dnet.JoinResponse{
+		InterfaceName: dnet.InterfaceName{
+			SrcName:   "tmp_00000000000",
+			DstPrefix: "eth"},
+		Gateway: "10.0.0.1"}, resp)
 }
 
 func TestLeave(t *testing.T) {

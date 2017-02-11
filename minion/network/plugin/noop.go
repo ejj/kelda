@@ -36,6 +36,11 @@ func (d driver) DiscoverDelete(n *dnet.DiscoveryNotification) error {
 	return nil
 }
 
+// Leave is a noop.
+func (d driver) Leave(req *dnet.LeaveRequest) error {
+	return nil
+}
+
 // ProgramExternalConnectivity is a noop.
 func (d driver) ProgramExternalConnectivity(
 	req *dnet.ProgramExternalConnectivityRequest) error {

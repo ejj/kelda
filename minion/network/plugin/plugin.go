@@ -73,8 +73,22 @@ func (d driver) CreateEndpoint(req *dnet.CreateEndpointRequest) (
 		return nil, fmt.Errorf("invalid IP: %s", req.Interface.Address)
 	}
 
-	if _, err := getOuterLink(req.EndpointID); err == nil {
-		return nil, fmt.Errorf("endpoint %s exists", req.EndpointID)
+	outer := ipdef.IFName(req.EndpointID)
+	inner := ipdef.IFName("tmp_" + req.EndpointID)
+	err = linkAdd(&netlink.Veth{
+		LinkAttrs: netlink.LinkAttrs{Name: outer, MTU: mtu},
+		PeerName:  inner})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create veth: %s", err)
+	}
+
+	outerLink, err := getOuterLink(req.EndpointID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find link %s: %s", outer, err)
+	}
+
+	if err := linkSetUp(outerLink); err != nil {
+		return nil, fmt.Errorf("failed to bring up link %s: %s", outer, err)
 	}
 
 	mac := ipdef.IPToMac(addr)
@@ -118,48 +132,26 @@ func (d driver) DeleteEndpoint(req *dnet.DeleteEndpointRequest) error {
 	if err != nil {
 		return fmt.Errorf("ovs-vsctl: %v", err)
 	}
+
+	outer, err := getOuterLink(req.EndpointID)
+	if err != nil {
+		return fmt.Errorf("failed to find link %s: %s", req.EndpointID, err)
+	}
+
+	if err := linkDel(outer); err != nil {
+		return fmt.Errorf("failed to delete link %s: %s", req.EndpointID, err)
+	}
+
 	return nil
 }
 
-// Join creates a Veth pair for the given endpoint ID, returning the interface info.
+// Join method is invoked when a Sandbox is attached to an endpoint.
 func (d driver) Join(req *dnet.JoinRequest) (*dnet.JoinResponse, error) {
-	outer := ipdef.IFName(req.EndpointID)
 	inner := ipdef.IFName("tmp_" + req.EndpointID)
-	err := linkAdd(&netlink.Veth{
-		LinkAttrs: netlink.LinkAttrs{Name: outer, MTU: mtu},
-		PeerName:  inner,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create veth: %s", err)
-	}
-
-	outerLink, err := getOuterLink(req.EndpointID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find interface %s: %s", outer, err)
-	}
-
-	err = linkSetUp(outerLink)
-	if err != nil {
-		return nil, fmt.Errorf("failed to bring up link %s: %s", outer, err)
-	}
-
 	resp := &dnet.JoinResponse{}
 	resp.Gateway = ipdef.GatewayIP.String()
 	resp.InterfaceName = dnet.InterfaceName{SrcName: inner, DstPrefix: ifacePrefix}
 	return resp, nil
-}
-
-// Leave destroys a veth pair for the given endpoint ID.
-func (d driver) Leave(req *dnet.LeaveRequest) error {
-	outer, err := getOuterLink(req.EndpointID)
-	if err != nil {
-		return fmt.Errorf("failed to find link %s: %s", outer, err)
-	}
-
-	if err := linkDel(outer); err != nil {
-		return fmt.Errorf("failed to delete link %s: %s", outer, err)
-	}
-	return nil
 }
 
 func getOuterLink(eid string) (netlink.Link, error) {

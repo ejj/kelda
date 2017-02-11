@@ -29,6 +29,9 @@ func TestNoop(t *testing.T) {
 	err = d.RevokeExternalConnectivity(&dnet.RevokeExternalConnectivityRequest{})
 	assert.NoError(t, err)
 
+	err = d.Leave(&dnet.LeaveRequest{})
+	assert.NoError(t, err)
+
 	resp, err := d.AllocateNetwork(&dnet.AllocateNetworkRequest{})
 	assert.NoError(t, err)
 

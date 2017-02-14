@@ -38,7 +38,7 @@ web proxy:
 [//]: # (b1)
 ```javascript
     var Node = require("github.com/NetSys/quilt/specs/node/node");
-    var HaProxy = require("github.com/NetSys/quilt/specs/haproxy/haproxy").Haproxy;
+    var HaProxy = require("github.com/quilt/haproxy").Haproxy;
     var Mongo = require("github.com/NetSys/quilt/specs/mongo/mongo");
 
     // Create 3 replicated instances of each service.

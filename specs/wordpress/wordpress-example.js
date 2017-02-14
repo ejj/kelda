@@ -1,7 +1,7 @@
 var wordpress = require("github.com/NetSys/quilt/specs/wordpress/wordpress");
 var memcached = require("github.com/NetSys/quilt/specs/memcached/memcached");
 var mysql = require("github.com/NetSys/quilt/specs/mysql/mysql");
-var haproxy = require("github.com/NetSys/quilt/specs/haproxy/haproxy");
+var haproxy = require("github.com/quilt/haproxy");
 var spark = require("github.com/NetSys/quilt/specs/spark/spark");
 
 var memcd = new memcached.Memcached(3);

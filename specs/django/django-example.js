@@ -1,5 +1,5 @@
 var Django = require("github.com/NetSys/quilt/specs/django/django")
-var HaProxy = require("github.com/NetSys/quilt/specs/haproxy/haproxy").Haproxy;
+var HaProxy = require("github.com/quilt/haproxy").Haproxy;
 var Mongo = require("github.com/NetSys/quilt/specs/mongo/mongo");
 
 // Infrastructure

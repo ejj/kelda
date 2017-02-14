@@ -1,4 +1,4 @@
-var HaProxy = require("github.com/NetSys/quilt/specs/haproxy/haproxy").Haproxy;
+var HaProxy = require("github.com/quilt/haproxy").Haproxy;
 var Mongo = require("github.com/NetSys/quilt/specs/mongo/mongo");
 var Node = require("github.com/NetSys/quilt/specs/node/node");
 var infrastructure = require("github.com/NetSys/quilt/quilt-tester/config/infrastructure")

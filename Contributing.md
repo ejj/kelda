@@ -1,6 +1,5 @@
 # Contributing
 
-We highly encourage contributions to Quilt from the Open Source community!
 Everything from fixing spelling errors to major contributions to the
 architecture is welcome.  If you'd like to contribute but don't know
 where to get started, feel free to reach out to

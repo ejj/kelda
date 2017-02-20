@@ -4,7 +4,7 @@ package db
 import (
 	"errors"
 
-	"github.com/NetSys/quilt/minion/pb"
+	"github.com/quilt/quilt/minion/pb"
 )
 
 // The Role a machine may take on within the cluster.

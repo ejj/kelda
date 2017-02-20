@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/NetSys/quilt/api/client/mocks"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/quiltctl/ssh"
+	"github.com/quilt/quilt/api/client/mocks"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/quiltctl/ssh"
 )
 
 func checkSSHParsing(t *testing.T, args []string, expArgs SSH, expErrMsg string) {

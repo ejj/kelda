@@ -8,8 +8,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/NetSys/quilt/api/pb"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/api/pb"
+	"github.com/quilt/quilt/db"
 )
 
 type mockAPIClient struct {

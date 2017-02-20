@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/util"
 
 	log "github.com/Sirupsen/logrus"
 	homedir "github.com/mitchellh/go-homedir"

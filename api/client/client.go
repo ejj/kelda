@@ -8,9 +8,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/NetSys/quilt/api"
-	"github.com/NetSys/quilt/api/pb"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/api"
+	"github.com/quilt/quilt/api/pb"
+	"github.com/quilt/quilt/db"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

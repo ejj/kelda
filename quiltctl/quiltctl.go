@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/NetSys/quilt/quiltctl/command"
+	"github.com/quilt/quilt/quiltctl/command"
 
 	log "github.com/Sirupsen/logrus"
 )

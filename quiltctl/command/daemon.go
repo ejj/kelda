@@ -4,10 +4,10 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/NetSys/quilt/api/server"
-	"github.com/NetSys/quilt/cluster"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/engine"
+	"github.com/quilt/quilt/api/server"
+	"github.com/quilt/quilt/cluster"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/engine"
 )
 
 // Daemon contains the options for running the Quilt daemon.

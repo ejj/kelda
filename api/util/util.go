@@ -3,8 +3,8 @@ package util
 import (
 	"fmt"
 
-	"github.com/NetSys/quilt/api/client"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/api/client"
+	"github.com/quilt/quilt/db"
 )
 
 // GetContainer retrieves the container tracked by the given client with the

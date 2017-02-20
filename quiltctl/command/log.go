@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/NetSys/quilt/api/client"
-	"github.com/NetSys/quilt/api/client/getter"
-	"github.com/NetSys/quilt/quiltctl/ssh"
+	"github.com/quilt/quilt/api/client"
+	"github.com/quilt/quilt/api/client/getter"
+	"github.com/quilt/quilt/quiltctl/ssh"
 
 	log "github.com/Sirupsen/logrus"
 )

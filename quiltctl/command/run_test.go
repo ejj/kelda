@@ -15,10 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	clientMock "github.com/NetSys/quilt/api/client/mocks"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/stitch"
-	"github.com/NetSys/quilt/util"
+	clientMock "github.com/quilt/quilt/api/client/mocks"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/stitch"
+	"github.com/quilt/quilt/util"
 )
 
 type file struct {

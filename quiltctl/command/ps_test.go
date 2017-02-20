@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/NetSys/quilt/api"
-	clientMock "github.com/NetSys/quilt/api/client/mocks"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/api"
+	clientMock "github.com/quilt/quilt/api/client/mocks"
+	"github.com/quilt/quilt/db"
 )
 
 func TestPsFlags(t *testing.T) {

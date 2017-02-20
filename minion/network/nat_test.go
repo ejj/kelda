@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/db"
 )
 
 func TestMakeIPRule(t *testing.T) {

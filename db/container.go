@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/util"
 )
 
 // A Container row is created for each container specified by the policy.  Each row will

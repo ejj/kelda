@@ -7,8 +7,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/NetSys/quilt/api"
-	"github.com/NetSys/quilt/api/client/getter"
+	"github.com/quilt/quilt/api"
+	"github.com/quilt/quilt/api/client/getter"
 )
 
 func main() {

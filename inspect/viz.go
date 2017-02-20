@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"sort"
 
-	"github.com/NetSys/quilt/stitch"
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/stitch"
+	"github.com/quilt/quilt/util"
 )
 
 func getSlug(configPath string) (string, error) {

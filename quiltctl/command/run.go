@@ -17,9 +17,9 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/robertkrimen/otto"
 
-	"github.com/NetSys/quilt/api/client"
-	"github.com/NetSys/quilt/api/client/getter"
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/api/client"
+	"github.com/quilt/quilt/api/client/getter"
+	"github.com/quilt/quilt/stitch"
 )
 
 // Run contains the options for running Stitches.

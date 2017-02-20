@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/join"
+	"github.com/quilt/quilt/stitch"
 	"github.com/stretchr/testify/assert"
 )
 

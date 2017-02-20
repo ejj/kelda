@@ -3,7 +3,7 @@ package command
 import (
 	"flag"
 
-	"github.com/NetSys/quilt/api"
+	"github.com/quilt/quilt/api"
 )
 
 type flagParser interface {

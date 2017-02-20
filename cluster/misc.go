@@ -3,10 +3,10 @@ package cluster
 import (
 	"fmt"
 
-	"github.com/NetSys/quilt/cluster/amazon"
-	"github.com/NetSys/quilt/cluster/google"
-	"github.com/NetSys/quilt/cluster/machine"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/cluster/amazon"
+	"github.com/quilt/quilt/cluster/google"
+	"github.com/quilt/quilt/cluster/machine"
+	"github.com/quilt/quilt/db"
 )
 
 // DefaultRegion populates `m.Region` for the provided db.Machine if one isn't

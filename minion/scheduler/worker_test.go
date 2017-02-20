@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/minion/docker"
-	"github.com/NetSys/quilt/minion/network/openflow"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/minion/docker"
+	"github.com/quilt/quilt/minion/network/openflow"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 )

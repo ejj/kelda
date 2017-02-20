@@ -50,7 +50,7 @@ COV_SKIP= /api/client/mocks \
 	  /scripts \
 	  /minion/pb
 
-COV_PKG = $(subst github.com/NetSys/quilt,,$(PACKAGES))
+COV_PKG = $(subst github.com/quilt/quilt,,$(PACKAGES))
 coverage: $(addsuffix .cov, $(filter-out $(COV_SKIP), $(COV_PKG)))
 	echo "" > coverage.txt
 	for f in $^ ; do \

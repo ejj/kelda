@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/NetSys/quilt/minion/network/openflow"
+	"github.com/quilt/quilt/minion/network/openflow"
 	"github.com/stretchr/testify/assert"
 )
 

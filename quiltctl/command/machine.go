@@ -9,10 +9,10 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/NetSys/quilt/api/client"
-	"github.com/NetSys/quilt/api/client/getter"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/api/client"
+	"github.com/quilt/quilt/api/client/getter"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/util"
 )
 
 // Machine contains the options for querying machines.

@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NetSys/quilt/cluster/acl"
-	"github.com/NetSys/quilt/cluster/cloudcfg"
-	"github.com/NetSys/quilt/cluster/machine"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
+	"github.com/quilt/quilt/cluster/acl"
+	"github.com/quilt/quilt/cluster/cloudcfg"
+	"github.com/quilt/quilt/cluster/machine"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/join"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/satori/go.uuid"

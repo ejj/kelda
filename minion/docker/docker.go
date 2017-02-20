@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NetSys/quilt/minion/ipdef"
+	"github.com/quilt/quilt/minion/ipdef"
 
 	log "github.com/Sirupsen/logrus"
 	dkc "github.com/fsouza/go-dockerclient"

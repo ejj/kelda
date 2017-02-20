@@ -3,8 +3,8 @@ package machine
 import (
 	"fmt"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/stitch"
 )
 
 // Description describes a VM type offered by a cloud provider.

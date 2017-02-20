@@ -1,7 +1,7 @@
 package mocks
 
 import (
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/db"
 )
 
 // Client implements a mocked version of a Quilt client.

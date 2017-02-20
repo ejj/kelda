@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/join"
 
 	log "github.com/Sirupsen/logrus"
 )

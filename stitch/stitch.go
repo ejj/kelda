@@ -13,7 +13,7 @@ import (
 	// the Stitch VM.
 	_ "github.com/robertkrimen/otto/underscore"
 
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/util"
 )
 
 // A Stitch is an abstract representation of the policy language.

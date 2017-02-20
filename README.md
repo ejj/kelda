@@ -1,6 +1,6 @@
-[![Build Status](https://travis-ci.org/NetSys/quilt.svg?branch=master)](https://travis-ci.org/NetSys/quilt)
-[![Go Report Card](https://goreportcard.com/badge/github.com/NetSys/quilt)](https://goreportcard.com/report/github.com/NetSys/quilt)
-[![Code Coverage](https://codecov.io/gh/NetSys/quilt/branch/master/graph/badge.svg)](https://codecov.io/gh/NetSys/quilt)
+[![Build Status](https://travis-ci.org/quilt/quilt.svg?branch=master)](https://travis-ci.org/quilt/quilt)
+[![Go Report Card](https://goreportcard.com/badge/github.com/quilt/quilt)](https://goreportcard.com/report/github.com/quilt/quilt)
+[![Code Coverage](https://codecov.io/gh/quilt/quilt/branch/master/graph/badge.svg)](https://codecov.io/gh/quilt/quilt)
 
 # Quilt
 
@@ -128,7 +128,7 @@ E.g.:
 #### Download Quilt
 Download and install Quilt and its dependencies using `go get`
 
-    go get github.com/NetSys/quilt
+    go get github.com/quilt/quilt
 
 Quilt is now installed! Check out the
 [Getting Started](./docs/GettingStarted.md) guide for more detailed

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NetSys/quilt/cluster/acl"
-	"github.com/NetSys/quilt/cluster/machine"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/cluster/acl"
+	"github.com/quilt/quilt/cluster/machine"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/stitch"
 	"github.com/stretchr/testify/assert"
 )
 

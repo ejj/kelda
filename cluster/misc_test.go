@@ -3,8 +3,8 @@ package cluster
 import (
 	"testing"
 
-	"github.com/NetSys/quilt/cluster/machine"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/cluster/machine"
+	"github.com/quilt/quilt/db"
 )
 
 func TestDefaultRegion(t *testing.T) {

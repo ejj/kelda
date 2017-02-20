@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NetSys/quilt/cluster/acl"
-	"github.com/NetSys/quilt/cluster/cloudcfg"
-	"github.com/NetSys/quilt/cluster/machine"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/cluster/acl"
+	"github.com/quilt/quilt/cluster/cloudcfg"
+	"github.com/quilt/quilt/cluster/machine"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/join"
+	"github.com/quilt/quilt/util"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"

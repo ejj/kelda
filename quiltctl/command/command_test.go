@@ -12,7 +12,7 @@ import (
 	units "github.com/docker/go-units"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/db"
 )
 
 func TestMachineFlags(t *testing.T) {

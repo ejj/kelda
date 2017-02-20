@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/util"
 
 	log "github.com/Sirupsen/logrus"
 )

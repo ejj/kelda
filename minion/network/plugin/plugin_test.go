@@ -6,8 +6,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/NetSys/quilt/minion/ipdef"
-	"github.com/NetSys/quilt/minion/network/openflow"
+	"github.com/quilt/quilt/minion/ipdef"
+	"github.com/quilt/quilt/minion/network/openflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 

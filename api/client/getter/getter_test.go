@@ -5,10 +5,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/NetSys/quilt/api"
-	"github.com/NetSys/quilt/api/client"
-	"github.com/NetSys/quilt/api/client/mocks"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/api"
+	"github.com/quilt/quilt/api/client"
+	"github.com/quilt/quilt/api/client/mocks"
+	"github.com/quilt/quilt/db"
 )
 
 func TestGetLeaderClient(t *testing.T) {

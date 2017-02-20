@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NetSys/quilt/api"
-	"github.com/NetSys/quilt/api/pb"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/api"
+	"github.com/quilt/quilt/api/pb"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/stitch"
 
 	"github.com/docker/distribution/reference"
 	"golang.org/x/net/context"

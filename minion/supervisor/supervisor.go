@@ -7,10 +7,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/minion/docker"
-	"github.com/NetSys/quilt/minion/ipdef"
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/minion/docker"
+	"github.com/quilt/quilt/minion/ipdef"
+	"github.com/quilt/quilt/util"
 	"github.com/vishvananda/netlink"
 
 	log "github.com/Sirupsen/logrus"

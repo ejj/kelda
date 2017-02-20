@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/stitch"
 )
 
 // Usage prints the usage string for the inspect tool.

@@ -3,7 +3,7 @@ package command
 import (
 	"flag"
 
-	"github.com/NetSys/quilt/minion"
+	"github.com/quilt/quilt/minion"
 )
 
 // Minion contains the options for running the Quilt minion.

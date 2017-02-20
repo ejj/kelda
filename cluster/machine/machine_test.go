@@ -3,7 +3,7 @@ package machine
 import (
 	"testing"
 
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/stitch"
 )
 
 func TestConstraints(t *testing.T) {

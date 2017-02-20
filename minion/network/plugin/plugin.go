@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/NetSys/quilt/minion/ipdef"
-	"github.com/NetSys/quilt/minion/network/openflow"
+	"github.com/quilt/quilt/minion/ipdef"
+	"github.com/quilt/quilt/minion/network/openflow"
 
 	dnet "github.com/docker/go-plugins-helpers/network"
 	"github.com/vishvananda/netlink"

@@ -1,5 +1,5 @@
 var spark = require("github.com/quilt/spark");
-var infrastructure = require("github.com/NetSys/quilt/quilt-tester/config/infrastructure");
+var infrastructure = require("github.com/quilt/quilt/quilt-tester/config/infrastructure");
 
 // Application
 // sprk.exclusive enforces that no two Spark containers should be on the

@@ -86,16 +86,16 @@ started.
 
 Checkout the source code:
 
-    git clone https://github.com/NetSys/quilt $GOPATH/src/github.com/NetSys/quilt
+    git clone https://github.com/quilt/quilt $GOPATH/src/github.com/quilt/quilt
 
 Once this is done you can install the AWS API and various other dependencies
 automatically:
 
-    go get github.com/NetSys/quilt/...
+    go get github.com/quilt/quilt/...
 
 And finally to build the project run:
 
-    go install github.com/NetSys/quilt
+    go install github.com/quilt/quilt
 
 Or alternatively just "go install" if you're in the repo.
 

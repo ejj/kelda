@@ -3,7 +3,7 @@ package etcd
 import (
 	"time"
 
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/db"
 	"github.com/coreos/etcd/client"
 
 	log "github.com/Sirupsen/logrus"

@@ -10,11 +10,11 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
 
-	"github.com/NetSys/quilt/api/client"
-	"github.com/NetSys/quilt/api/client/getter"
-	"github.com/NetSys/quilt/api/util"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/quiltctl/ssh"
+	"github.com/quilt/quilt/api/client"
+	"github.com/quilt/quilt/api/client/getter"
+	"github.com/quilt/quilt/api/util"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/quiltctl/ssh"
 )
 
 // SSH contains the options for SSHing into machines.

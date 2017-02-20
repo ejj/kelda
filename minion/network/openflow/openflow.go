@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/NetSys/quilt/minion/ipdef"
-	"github.com/NetSys/quilt/minion/ovsdb"
+	"github.com/quilt/quilt/minion/ipdef"
+	"github.com/quilt/quilt/minion/ovsdb"
 )
 
 /* OpenFlow Psuedocode -- Please, for the love of God, keep this updated.

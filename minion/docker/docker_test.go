@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NetSys/quilt/minion/ipdef"
+	"github.com/quilt/quilt/minion/ipdef"
 	dkc "github.com/fsouza/go-dockerclient"
 	"github.com/stretchr/testify/assert"
 )

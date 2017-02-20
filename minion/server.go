@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/minion/pb"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/minion/pb"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

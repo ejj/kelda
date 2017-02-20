@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/util"
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -83,8 +83,8 @@ func (mr *mockRepo) create(dir string) error {
 }
 
 // The root is always the directory.
-// e.g. github.com/NetSys/quilt/specs/spark => github.com/NetSys/quilt/specs,
-// NOT github.com/NetSys/quilt
+// e.g. github.com/quilt/quilt/specs/spark => github.com/quilt/quilt/specs,
+// NOT github.com/quilt/quilt
 func (mr *mockRepo) root() string {
 	dir, _ := filepath.Split(mr.repoName)
 	return dir
@@ -140,7 +140,7 @@ func TestGetCreate(t *testing.T) {
 	util.AppFs = afero.NewMemMapFs()
 
 	quiltPath := "./getspecs"
-	repoName := "github.com/NetSys/quilt"
+	repoName := "github.com/quilt/quilt"
 	importPath := filepath.Join(repoName, "foo")
 
 	logger := newRepoLogger()
@@ -206,7 +206,7 @@ func TestGetUpdate(t *testing.T) {
 	util.AppFs = afero.NewMemMapFs()
 
 	quiltPath := "./getspecs"
-	repoName := "github.com/NetSys/quilt"
+	repoName := "github.com/quilt/quilt"
 	util.AppFs.Mkdir(filepath.Join(quiltPath, repoName), 755)
 
 	logger := newRepoLogger()

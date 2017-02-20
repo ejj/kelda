@@ -7,9 +7,9 @@ import (
 	"net"
 	"sort"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/minion/ipdef"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/join"
+	"github.com/quilt/quilt/minion/ipdef"
 
 	log "github.com/Sirupsen/logrus"
 )

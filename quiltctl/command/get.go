@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/stitch"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/robertkrimen/otto"

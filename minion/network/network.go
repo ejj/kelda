@@ -6,10 +6,10 @@
 package network
 
 import (
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/minion/ipdef"
-	"github.com/NetSys/quilt/minion/ovsdb"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/join"
+	"github.com/quilt/quilt/minion/ipdef"
+	"github.com/quilt/quilt/minion/ovsdb"
 
 	log "github.com/Sirupsen/logrus"
 )

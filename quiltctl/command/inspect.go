@@ -2,7 +2,7 @@ package command
 
 import (
 	"flag"
-	"github.com/NetSys/quilt/inspect"
+	"github.com/quilt/quilt/inspect"
 )
 
 // Inspect contains the options for inspecting Stitches.

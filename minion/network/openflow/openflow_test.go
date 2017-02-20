@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/NetSys/quilt/minion/ovsdb"
-	"github.com/NetSys/quilt/minion/ovsdb/mocks"
+	"github.com/quilt/quilt/minion/ovsdb"
+	"github.com/quilt/quilt/minion/ovsdb/mocks"
 	"github.com/stretchr/testify/assert"
 )
 

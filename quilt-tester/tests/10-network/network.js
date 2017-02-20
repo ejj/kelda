@@ -1,4 +1,4 @@
-var infrastructure = require("github.com/NetSys/quilt/quilt-tester/config/infrastructure")
+var infrastructure = require("github.com/quilt/quilt/quilt-tester/config/infrastructure")
 
 var deployment = createDeployment({});
 deployment.deploy(infrastructure);

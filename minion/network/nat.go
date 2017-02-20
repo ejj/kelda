@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/join"
+	"github.com/quilt/quilt/stitch"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/vishvananda/netlink"

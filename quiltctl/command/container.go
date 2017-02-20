@@ -13,10 +13,10 @@ import (
 	log "github.com/Sirupsen/logrus"
 	units "github.com/docker/go-units"
 
-	"github.com/NetSys/quilt/api/client"
-	"github.com/NetSys/quilt/api/client/getter"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/api/client"
+	"github.com/quilt/quilt/api/client/getter"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/util"
 )
 
 // Container contains the options for querying containers.

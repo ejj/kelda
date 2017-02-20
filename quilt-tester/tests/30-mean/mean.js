@@ -1,7 +1,7 @@
 var HaProxy = require("github.com/quilt/haproxy").Haproxy;
 var Mongo = require("github.com/quilt/mongo");
 var Node = require("github.com/quilt/nodejs");
-var infrastructure = require("github.com/NetSys/quilt/quilt-tester/config/infrastructure")
+var infrastructure = require("github.com/quilt/quilt/quilt-tester/config/infrastructure")
 
 var deployment = createDeployment({});
 deployment.deploy(infrastructure);

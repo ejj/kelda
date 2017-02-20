@@ -4,13 +4,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/join"
-	"github.com/NetSys/quilt/minion/docker"
-	"github.com/NetSys/quilt/minion/ipdef"
-	"github.com/NetSys/quilt/minion/network/openflow"
-	"github.com/NetSys/quilt/minion/network/plugin"
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/join"
+	"github.com/quilt/quilt/minion/docker"
+	"github.com/quilt/quilt/minion/ipdef"
+	"github.com/quilt/quilt/minion/network/openflow"
+	"github.com/quilt/quilt/minion/network/plugin"
+	"github.com/quilt/quilt/util"
 	log "github.com/Sirupsen/logrus"
 )
 

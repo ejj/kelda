@@ -13,17 +13,17 @@ import (
 
 	"github.com/Sirupsen/logrus"
 
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/stitch"
 )
 
 const (
 	testRoot           = "/tests"
 	quiltPath          = "/.quilt"
-	infrastructureSpec = quiltPath + "/github.com/NetSys/quilt/quilt-tester/" +
+	infrastructureSpec = quiltPath + "/github.com/quilt/quilt/quilt-tester/" +
 		"config/infrastructure-runner.js"
 	slackEndpoint = "https://hooks.slack.com/services/T04Q3TL41/B0M25TWP5/" +
 		"soKJeP5HbWcjkUJzEHh7ylYm"
-	testerImport = "github.com/NetSys/quilt"
+	testerImport = "github.com/quilt/quilt"
 	webRoot      = "/var/www/quilt-tester"
 )
 

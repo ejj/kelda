@@ -6,9 +6,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/NetSys/quilt/api/pb"
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/api/pb"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/stitch"
 	"github.com/stretchr/testify/assert"
 )
 

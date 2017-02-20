@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/NetSys/quilt/api"
-	"github.com/NetSys/quilt/api/client/getter"
+	"github.com/quilt/quilt/api"
+	"github.com/quilt/quilt/api/client/getter"
 	log "github.com/Sirupsen/logrus"
 )
 

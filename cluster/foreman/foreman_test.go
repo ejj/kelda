@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/NetSys/quilt/db"
-	"github.com/NetSys/quilt/minion/pb"
+	"github.com/quilt/quilt/db"
+	"github.com/quilt/quilt/minion/pb"
 )
 
 type clients struct {

@@ -3,8 +3,8 @@ package google
 import (
 	"testing"
 
-	"github.com/NetSys/quilt/cluster/machine"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/cluster/machine"
+	"github.com/quilt/quilt/db"
 	"github.com/stretchr/testify/suite"
 
 	compute "google.golang.org/api/compute/v1"

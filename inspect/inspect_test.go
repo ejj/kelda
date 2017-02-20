@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/NetSys/quilt/stitch"
-	"github.com/NetSys/quilt/util"
+	"github.com/quilt/quilt/stitch"
+	"github.com/quilt/quilt/util"
 )
 
 func TestSlug(t *testing.T) {

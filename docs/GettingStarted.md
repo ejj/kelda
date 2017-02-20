@@ -21,7 +21,7 @@ It would be a good idea to add these commands to your `.bashrc` so that they do
 not have to be run again.
 
 ## Download and Install Quilt
-Clone the repository into your Go workspace: `go get github.com/NetSys/quilt`.
+Clone the repository into your Go workspace: `go get github.com/quilt/quilt`.
 
 This command also automatically installs Quilt. If the installation was
 successful, then the `quilt` command should execute successfully in your shell.
@@ -160,4 +160,4 @@ A starter Spark example to explore is [SparkPI](https://github.com/quilt/spark).
 You can download specs into your `QUILT_PATH` by executing
 `quilt get <IMPORT_PATH>`, where `<IMPORT_PATH>` is a path to a repository
 containing specs (e.g. `github.com/quilt/nginx`). You can read more about this
-functionality [here](https://github.com/NetSys/quilt/blob/master/docs/Stitch.md#quilt_path).
+functionality [here](https://github.com/quilt/quilt/blob/master/docs/Stitch.md#quilt_path).

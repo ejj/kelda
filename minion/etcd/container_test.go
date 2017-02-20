@@ -3,7 +3,7 @@ package etcd
 import (
 	"testing"
 
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/db"
 	"github.com/stretchr/testify/assert"
 )
 

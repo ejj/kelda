@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/NetSys/quilt/api/client/mocks"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/api/client/mocks"
+	"github.com/quilt/quilt/db"
 )
 
 func TestGetContainer(t *testing.T) {

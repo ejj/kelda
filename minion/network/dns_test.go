@@ -4,7 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/db"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 )

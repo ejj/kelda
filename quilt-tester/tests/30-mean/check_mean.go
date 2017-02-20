@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/NetSys/quilt/api"
-	"github.com/NetSys/quilt/api/client/getter"
-	"github.com/NetSys/quilt/db"
+	"github.com/quilt/quilt/api"
+	"github.com/quilt/quilt/api/client/getter"
+	"github.com/quilt/quilt/db"
 
 	log "github.com/Sirupsen/logrus"
 )

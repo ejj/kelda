@@ -6,9 +6,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/NetSys/quilt/api/client"
-	"github.com/NetSys/quilt/api/client/getter"
-	"github.com/NetSys/quilt/stitch"
+	"github.com/quilt/quilt/api/client"
+	"github.com/quilt/quilt/api/client/getter"
+	"github.com/quilt/quilt/stitch"
 )
 
 // Stop contains the options for stopping namespaces.

@@ -92,7 +92,7 @@ func New(namespace, zone string) (*Cluster, error) {
 	clst.baseURL = fmt.Sprintf("%s/%s", computeBaseURL, clst.projID)
 	clst.intFW = fmt.Sprintf("%s-internal", clst.ns)
 	clst.imgURL = fmt.Sprintf("%s/%s", computeBaseURL,
-		"ubuntu-os-cloud/global/images/ubuntu-1604-xenial-v20160921")
+		"ubuntu-os-cloud/global/images/ubuntu-1604-xenial-v20170220")
 
 	if err := clst.netInit(); err != nil {
 		log.WithError(err).Debug("failed to start up gce network")

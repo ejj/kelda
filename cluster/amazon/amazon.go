@@ -43,11 +43,11 @@ var Regions = []string{"ap-southeast-2", "us-west-1", "us-west-2"}
 
 const spotPrice = "0.5"
 
-// Ubuntu 16.04, 64-bit hvm-ssd
+// Ubuntu 16.04, 64-bit hvm:ebs-ssd
 var amis = map[string]string{
-	"ap-southeast-2": "ami-550c3c36",
-	"us-west-1":      "ami-26074946",
-	"us-west-2":      "ami-e1fe2281",
+	"ap-southeast-2": "ami-943d3bf7",
+	"us-west-1":      "ami-79df8219",
+	"us-west-2":      "ami-d206bdb2",
 }
 
 var sleep = time.Sleep

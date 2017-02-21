@@ -1,6 +1,6 @@
 FROM ubuntu:16.04
 
-RUN ovs_ver="2.6.1" linux="linux-headers-4.4.0-38-generic" \
+RUN ovs_ver="2.6.1" linux="linux-headers-4.4.0-63-generic" \
 build_deps="${linux} build-essential libssl-dev python python-six wget" \
 && mkdir /build && cd /build \
 && apt-get update \
@@ -9,7 +9,7 @@ build_deps="${linux} build-essential libssl-dev python python-six wget" \
 && tar -xf openvswitch-${ovs_ver}.tar.gz \
 && cd openvswitch-${ovs_ver} \
 && ./configure --localstatedir="/var" --sysconfdir="/etc" --prefix="/usr" \
-    --with-linux=/lib/modules/4.4.0-38-generic/build --enable-ssl \
+    --with-linux=/lib/modules/4.4.0-63-generic/build --enable-ssl \
 && make all install \
 && mkdir /modules \
 && cp datapath/linux/openvswitch.ko \

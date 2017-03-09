@@ -319,6 +319,12 @@
 			"revisionTime": "2016-10-29T20:57:26Z"
 		},
 		{
+			"checksumSHA1": "ssjeHp6Pauywq1sTax5hSq7tlpY=",
+			"path": "github.com/digitalocean/godo",
+			"revision": "d59ed2fe842bbb3cbee91c9df8bb7659dc9ee86f",
+			"revisionTime": "2017-03-17T20:27:44Z"
+		},
+		{
 			"checksumSHA1": "Gj+xR1VgFKKmFXYOJMnAczC3Znk=",
 			"path": "github.com/docker/distribution/digestset",
 			"revision": "62d8d910b5a00cfdc425d8d62faa1e86f69e3527",
@@ -556,6 +562,12 @@
 			"revisionTime": "2016-11-17T03:31:26Z"
 		},
 		{
+			"checksumSHA1": "p3IB18uJRs4dL2K5yx24MrLYE9A=",
+			"path": "github.com/google/go-querystring/query",
+			"revision": "53e6ce116135b80d037921a7fdd5138cf32d7a8a",
+			"revisionTime": "2017-01-11T10:11:55Z"
+		},
+		{
 			"checksumSHA1": "Uzyon2091lmwacNsl1hCytjhHtg=",
 			"path": "github.com/hashicorp/go-cleanhttp",
 			"revision": "ad28ea4487f05916463e2423a55166280e8254b5",
@@ -748,6 +760,12 @@
 			"path": "github.com/stretchr/testify/suite",
 			"revision": "2402e8e7a02fc811447d11f881aa9746cdc57983",
 			"revisionTime": "2016-12-17T20:04:45Z"
+		},
+		{
+			"checksumSHA1": "GQ9bu6PuydK3Yor1JgtVKUfEJm8=",
+			"path": "github.com/tent/http-link-go",
+			"revision": "ac974c61c2f990f4115b119354b5e0b47550e888",
+			"revisionTime": "2013-07-02T22:55:49Z"
 		},
 		{
 			"checksumSHA1": "UADS3X1kxl+/qqeGcmTo0rBiXlQ=",

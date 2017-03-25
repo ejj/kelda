@@ -1,7 +1,7 @@
 FROM ubuntu:16.04
 
 ENV ovs_ver="2.6.1"
-ENV kernel_versions="4.4.0-62-generic"
+ENV kernel_versions="4.4.0-62-generic 4.4.0-66-generic"
 
 RUN build_deps="build-essential libssl-dev python python-six wget" \
 && mkdir /build && cd /build \

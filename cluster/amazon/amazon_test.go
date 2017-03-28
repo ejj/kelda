@@ -538,6 +538,79 @@ func TestBoot(t *testing.T) {
 	mc.AssertExpectations(t)
 }
 
+// This test attempts to boot a preemptible and non-preemptible instance,
+// but simulates a boot error where the machines never show up in `List`.
+// We should consider this a boot failure, and try to clean up by stopping
+// the pending instances.
+func TestBootUnsuccessful(t *testing.T) {
+	util.After = func(t time.Time) bool { return true }
+
+	mc := new(mockClient)
+	mc.On("DescribeSecurityGroups", mock.Anything).Return(
+		&ec2.DescribeSecurityGroupsOutput{
+			SecurityGroups: []*ec2.SecurityGroup{
+				{
+					GroupId: aws.String("groupId"),
+				},
+			},
+		}, nil,
+	)
+	mc.On("RequestSpotInstances", mock.Anything).Return(
+		&ec2.RequestSpotInstancesOutput{
+			SpotInstanceRequests: []*ec2.SpotInstanceRequest{
+				{
+					SpotInstanceRequestId: aws.String("spot1"),
+				},
+			},
+		}, nil,
+	)
+	mc.On("RunInstances", mock.Anything).Return(
+		&ec2.Reservation{
+			Instances: []*ec2.Instance{
+				{
+					InstanceId: aws.String("reserved1"),
+				},
+			},
+		}, nil,
+	)
+	mc.On("CreateTags", mock.Anything).Return(
+		&ec2.CreateTagsOutput{}, nil,
+	)
+	mc.On("DescribeInstances", mock.Anything).Return(
+		&ec2.DescribeInstancesOutput{
+			Reservations: []*ec2.Reservation{
+				{
+					Instances: nil,
+				},
+			},
+		}, nil,
+	)
+	mc.On("DescribeAddresses", mock.Anything).Return(
+		&ec2.DescribeAddressesOutput{}, nil,
+	)
+	mc.On("DescribeSpotInstanceRequests", mock.Anything).Return(
+		&ec2.DescribeSpotInstanceRequestsOutput{
+			SpotInstanceRequests: nil,
+		}, nil,
+	)
+	mc.On("TerminateInstances", &ec2.TerminateInstancesInput{
+		InstanceIds: aws.StringSlice([]string{"reserved1"}),
+	}).Return(nil, nil)
+	mc.On("CancelSpotInstanceRequests", &ec2.CancelSpotInstanceRequestsInput{
+		SpotInstanceRequestIds: aws.StringSlice([]string{"spot1"}),
+	}).Return(nil, nil)
+
+	amazonCluster := newAmazon(testNamespace, DefaultRegion)
+	amazonCluster.client = mc
+	err := amazonCluster.Boot([]machine.Machine{{Preemptible: false}})
+	assert.Error(t, err)
+
+	err = amazonCluster.Boot([]machine.Machine{{Preemptible: true}})
+	assert.Error(t, err)
+
+	mc.AssertExpectations(t)
+}
+
 func TestStop(t *testing.T) {
 	t.Parallel()
 
@@ -606,7 +679,13 @@ func TestStop(t *testing.T) {
 
 	mc.AssertCalled(t, "TerminateInstances",
 		&ec2.TerminateInstancesInput{
-			InstanceIds: aws.StringSlice([]string{reservedIDs[0], "inst1"}),
+			InstanceIds: aws.StringSlice([]string{"inst1"}),
+		},
+	)
+
+	mc.AssertCalled(t, "TerminateInstances",
+		&ec2.TerminateInstancesInput{
+			InstanceIds: aws.StringSlice([]string{reservedIDs[0]}),
 		},
 	)
 

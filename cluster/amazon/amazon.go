@@ -126,25 +126,22 @@ func (clst *Cluster) Boot(bootSet []machine.Machine) error {
 		bootReqMap[br] = bootReqMap[br] + 1
 	}
 
-	var ids []string
 	for br, count := range bootReqMap {
-		var newIDs []string
 		if br.preemptible {
-			newIDs, err = clst.bootSpot(br, count)
+			err = clst.bootSpot(br, count)
 		} else {
-			newIDs, err = clst.bootReserved(br, count)
+			err = clst.bootReserved(br, count)
 		}
 
 		if err != nil {
 			return err
 		}
-		ids = append(ids, newIDs...)
 	}
 
-	return clst.wait(ids, true)
+	return nil
 }
 
-func (clst *Cluster) bootReserved(br bootReq, count int64) (ids []string, err error) {
+func (clst *Cluster) bootReserved(br bootReq, count int64) error {
 	cloudConfig64 := base64.StdEncoding.EncodeToString([]byte(br.cfg))
 	resp, err := clst.client.RunInstances(&ec2.RunInstancesInput{
 		ImageId:          aws.String(amis[clst.region]),
@@ -157,16 +154,26 @@ func (clst *Cluster) bootReserved(br bootReq, count int64) (ids []string, err er
 		MinCount: &count,
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
+	var ids []string
 	for _, inst := range resp.Instances {
 		ids = append(ids, *inst.InstanceId)
 	}
-	return ids, nil
+
+	err = clst.wait(ids, true)
+	if err != nil {
+		if stopErr := clst.stopInstances(ids); stopErr != nil {
+			log.WithError(stopErr).WithField("ids", ids).
+				Error("Failed to cleanup failed boots")
+		}
+	}
+
+	return err
 }
 
-func (clst *Cluster) bootSpot(br bootReq, count int64) (ids []string, err error) {
+func (clst *Cluster) bootSpot(br bootReq, count int64) error {
 	cloudConfig64 := base64.StdEncoding.EncodeToString([]byte(br.cfg))
 	resp, err := clst.client.RequestSpotInstances(
 		&ec2.RequestSpotInstancesInput{
@@ -183,20 +190,32 @@ func (clst *Cluster) bootSpot(br bootReq, count int64) (ids []string, err error)
 			},
 		})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
+	var ids []string
 	for _, request := range resp.SpotInstanceRequests {
 		ids = append(ids, *request.SpotInstanceRequestId)
 	}
-	return ids, clst.tagSpotRequests(ids)
+
+	err = clst.tagSpotRequests(ids)
+	if err == nil {
+		err = clst.wait(ids, true)
+	}
+
+	if err != nil {
+		if stopErr := clst.stopSpots(ids); stopErr != nil {
+			log.WithError(stopErr).WithField("ids", ids).
+				Error("Failed to cleanup failed boots")
+		}
+	}
+	return err
 }
 
 // Stop shuts down `machines` in `clst.
-func (clst *Cluster) Stop(machines []machine.Machine) (err error) {
-	var ids, spotIDs, instIDs []string
+func (clst *Cluster) Stop(machines []machine.Machine) error {
+	var spotIDs, instIDs []string
 	for _, m := range machines {
-		ids = append(ids, m.ID)
 		if m.Preemptible {
 			spotIDs = append(spotIDs, m.ID)
 		} else {
@@ -204,39 +223,69 @@ func (clst *Cluster) Stop(machines []machine.Machine) (err error) {
 		}
 	}
 
+	var spotErr, instErr error
 	if len(spotIDs) != 0 {
-		spots, err := clst.client.DescribeSpotInstanceRequests(
-			&ec2.DescribeSpotInstanceRequestsInput{
-				SpotInstanceRequestIds: aws.StringSlice(spotIDs),
-			})
-		if err != nil {
-			return err
-		}
-
-		for _, spot := range spots.SpotInstanceRequests {
-			if spot.InstanceId != nil {
-				instIDs = append(instIDs, *spot.InstanceId)
-			}
-		}
-
-		_, err = clst.client.CancelSpotInstanceRequests(
-			&ec2.CancelSpotInstanceRequestsInput{
-				SpotInstanceRequestIds: aws.StringSlice(spotIDs),
-			})
-		if err != nil {
-			return err
-		}
+		spotErr = clst.stopSpots(spotIDs)
 	}
 
 	if len(instIDs) > 0 {
-		_, err = clst.client.TerminateInstances(&ec2.TerminateInstancesInput{
-			InstanceIds: aws.StringSlice(instIDs),
+		instErr = clst.stopInstances(instIDs)
+	}
+
+	switch {
+	case spotErr == nil:
+		return instErr
+	case instErr == nil:
+		return spotErr
+	default:
+		return fmt.Errorf("reserved: %v, and spot: %v", instErr, spotErr)
+	}
+}
+
+func (clst *Cluster) stopSpots(ids []string) error {
+	spots, err := clst.client.DescribeSpotInstanceRequests(
+		&ec2.DescribeSpotInstanceRequestsInput{
+			SpotInstanceRequestIds: aws.StringSlice(ids),
 		})
-		if err != nil {
-			return err
+	if err != nil {
+		return err
+	}
+
+	var instIDs []string
+	for _, spot := range spots.SpotInstanceRequests {
+		if spot.InstanceId != nil {
+			instIDs = append(instIDs, *spot.InstanceId)
 		}
 	}
 
+	var stopInstsErr, cancelSpotsErr error
+	if len(instIDs) != 0 {
+		stopInstsErr = clst.stopInstances(instIDs)
+	}
+	_, cancelSpotsErr = clst.client.CancelSpotInstanceRequests(
+		&ec2.CancelSpotInstanceRequestsInput{
+			SpotInstanceRequestIds: aws.StringSlice(ids),
+		})
+
+	switch {
+	case stopInstsErr == nil && cancelSpotsErr == nil:
+		return clst.wait(ids, false)
+	case stopInstsErr == nil:
+		return cancelSpotsErr
+	case cancelSpotsErr == nil:
+		return stopInstsErr
+	default:
+		return fmt.Errorf("stop: %v, cancel: %v", stopInstsErr, cancelSpotsErr)
+	}
+}
+
+func (clst *Cluster) stopInstances(ids []string) error {
+	_, err := clst.client.TerminateInstances(&ec2.TerminateInstancesInput{
+		InstanceIds: aws.StringSlice(ids),
+	})
+	if err != nil {
+		return err
+	}
 	return clst.wait(ids, false)
 }
 
@@ -313,6 +362,11 @@ func (clst *Cluster) listInstances() (instances []awsMachine, err error) {
 			{
 				Name:   aws.String("instance.group-name"),
 				Values: []*string{aws.String(clst.namespace)},
+			},
+			{
+				Name: aws.String("instance-state-name"),
+				Values: []*string{
+					aws.String(ec2.InstanceStateNameRunning)},
 			},
 		},
 	})

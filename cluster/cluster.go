@@ -95,12 +95,9 @@ func newCluster(conn db.Conn, namespace string) *cluster {
 
 	for _, p := range allProviders {
 		for _, r := range validRegions(p) {
-			prvdr, err := newProvider(p, namespace, r)
-			if err != nil {
+			if _, err := clst.getProvider(instance{p, r}); err != nil {
 				log.Debugf("Failed to connect to provider %s in %s: %s",
 					p, r, err)
-			} else {
-				clst.providers[instance{p, r}] = prvdr
 			}
 		}
 	}
@@ -165,14 +162,13 @@ func (clst cluster) updateCloud(machines []machine.Machine, act action) {
 	noFailures := true
 	groupedMachines := groupBy(machines)
 	for i, providerMachines := range groupedMachines {
-		providerInst, ok := clst.providers[i]
-		if !ok {
+		providerInst, err := clst.getProvider(i)
+		if err != nil {
 			noFailures = false
-			log.Warnf("Provider %s is unavailable in %s.", i.provider,
-				i.region)
+			log.Warnf("Provider %s is unavailable in %s: %s",
+				i.provider, i.region, err)
 			continue
 		}
-		var err error
 
 		switch act {
 		case boot:
@@ -441,6 +437,19 @@ func (clst cluster) get() ([]machine.Machine, error) {
 		cloudMachines = append(cloudMachines, providerMachines...)
 	}
 	return cloudMachines, nil
+}
+
+func (clst cluster) getProvider(inst instance) (provider, error) {
+	p, ok := clst.providers[inst]
+	if ok {
+		return p, nil
+	}
+
+	p, err := newProvider(inst.provider, clst.namespace, inst.region)
+	if err == nil {
+		clst.providers[inst] = p
+	}
+	return p, err
 }
 
 func groupBy(machines []machine.Machine) map[instance][]machine.Machine {

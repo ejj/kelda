@@ -24,6 +24,7 @@ _testmain.go
 *.prof
 
 quilt
+quilt.exe
 
 *.cov
 *.cov.html

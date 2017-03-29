@@ -13,7 +13,7 @@ install:
 
 script:
     - govendor test -i +local
-    - make -j 2 lint format-check coverage check-specs docker-build-quilt
+    - make -j 2 lint format-check coverage check-specs docker-build-quilt windows
 
 after_success:
     - bash <(curl -s https://codecov.io/bash)

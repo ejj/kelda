@@ -8,7 +8,7 @@ import (
 )
 
 // DefaultSocket is the socket the Quilt daemon listens on by default.
-const DefaultSocket = "unix:///tmp/quilt.sock"
+var DefaultSocket = "unix:///tmp/quilt.sock"
 
 // DefaultRemotePort is the port remote Quilt daemons (the minion) listen on by default.
 const DefaultRemotePort = 9000

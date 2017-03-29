@@ -32,6 +32,9 @@ clean:
 	rm -f *.cov.coverprofile cluster/*.cov.coverprofile minion/*.cov.coverprofile
 	rm -f *.cov.html cluster/*.cov.html minion/*.cov.html
 
+windows:
+	cd -P . && GOOS=windows GOARCH=386 go build .
+
 COV_SKIP= /api/client/mocks \
 	  /api/pb \
 	  /cluster/provider/mocks \

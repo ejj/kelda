@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"syscall"
 
 	"github.com/quilt/quilt/util"
 
@@ -170,7 +169,7 @@ func (p *pty) Request() error {
 		return err
 	}
 
-	signal.Notify(p.resizeSignal, syscall.SIGWINCH)
+	setupResizeSignal(p.resizeSignal)
 	go p.monitorWindowSize()
 	return nil
 }

@@ -9,12 +9,12 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
+// Note the `minion` command is in quiltclt_posix.go as it only runs on posix systems.
 var commands = map[string]command.SubCommand{
 	"daemon":  command.NewDaemonCommand(),
 	"get":     &command.Get{},
 	"inspect": &command.Inspect{},
 	"logs":    command.NewLogCommand(),
-	"minion":  command.NewMinionCommand(),
 	"ps":      command.NewPsCommand(),
 	"run":     command.NewRunCommand(),
 	"ssh":     command.NewSSHCommand(),

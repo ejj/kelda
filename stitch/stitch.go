@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/robertkrimen/otto"
+	"github.com/spf13/afero"
 
 	// Automatically import the Javascript underscore utility-belt library into
 	// the Stitch VM.
@@ -138,6 +139,9 @@ func newVM(getter ImportGetter) (*otto.Otto, error) {
 		return vm, err
 	}
 	if err := vm.Set("read", toOttoFunc(readImpl)); err != nil {
+		return vm, err
+	}
+	if err := vm.Set("readDir", toOttoFunc(readDirImpl)); err != nil {
 		return vm, err
 	}
 
@@ -280,26 +284,56 @@ func hashImpl(call otto.FunctionCall) (otto.Value, error) {
 }
 
 func readImpl(call otto.FunctionCall) (otto.Value, error) {
-	if len(call.ArgumentList) < 1 {
-		panic(call.Otto.MakeRangeError(
-			"read requires an argument"))
-	}
-
-	path, err := call.Argument(0).ToString()
+	path, err := getPath(call)
 	if err != nil {
 		return otto.Value{}, err
 	}
 
-	if !filepath.IsAbs(path) {
-		dir := filepath.Dir(call.Otto.Context().Filename)
-		path = filepath.Join(dir, path)
-	}
 	file, err := util.ReadFile(path)
 	if err != nil {
 		return otto.Value{}, err
 	}
 
 	return call.Otto.ToValue(file)
+}
+
+func readDirImpl(call otto.FunctionCall) (otto.Value, error) {
+	path, err := getPath(call)
+	if err != nil {
+		return otto.Value{}, err
+	}
+
+	filesGo, err := afero.Afero{Fs: util.AppFs}.ReadDir(path)
+	if err != nil {
+		return otto.Value{}, err
+	}
+
+	var filesJS []map[string]interface{}
+	for _, f := range filesGo {
+		filesJS = append(filesJS, map[string]interface{}{
+			"name":  f.Name(),
+			"isDir": f.IsDir(),
+		})
+	}
+
+	return call.Otto.ToValue(filesJS)
+}
+
+func getPath(call otto.FunctionCall) (string, error) {
+	if len(call.ArgumentList) < 1 {
+		panic(call.Otto.MakeRangeError("no path supplied"))
+	}
+
+	path, err := call.Argument(0).ToString()
+	if err != nil {
+		return "", err
+	}
+
+	if !filepath.IsAbs(path) {
+		dir := filepath.Dir(call.Otto.Context().Filename)
+		path = filepath.Join(dir, path)
+	}
+	return path, nil
 }
 
 // Get returns the value contained at the given index

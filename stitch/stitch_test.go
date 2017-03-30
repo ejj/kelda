@@ -653,7 +653,93 @@ func TestRead(t *testing.T) {
 	util.WriteFile("foo", []byte("bar"), 0644)
 	checkJavascript(t, `read("foo");`, "bar")
 
-	checkError(t, `read();`, "RangeError: read requires an argument")
+	checkError(t, `read();`, "RangeError: no path supplied")
+}
+
+func TestReadDir(t *testing.T) {
+	util.AppFs = afero.NewMemMapFs()
+	checkError(t, `readDir("/foo");`, "StitchError: open /foo: file does not exist")
+
+	util.AppFs.Mkdir("/foo", 0755)
+	util.AppFs.Mkdir("/foo/bar", 0755)
+	util.WriteFile("/foo/bar/baz", []byte("qux"), 0644)
+	util.WriteFile("/foo/hello", []byte("world"), 0644)
+	checkJavascript(t, `readDir("/foo");`, []map[string]interface{}{
+		{"name": "bar", "isDir": true},
+		{"name": "hello", "isDir": false},
+	})
+	checkJavascript(t, `readDir("/foo/bar");`, []map[string]interface{}{
+		{"name": "baz", "isDir": false},
+	})
+
+	checkJavascript(t, `(function() {
+		function walk(path, fn) {
+			var files = readDir(path);
+			for (var i = 0; i < files.length; i++) {
+				var filePath = path + "/" + files[i].name;
+				if (files[i].isDir) {
+					walk(filePath, fn);
+				} else {
+					fn(filePath)
+				}
+			}
+		}
+
+		var files = {};
+		walk("/foo", function(path) {
+			files[path] = read(path);
+		})
+
+		return files;
+	})();`, map[string]interface{}{
+		"/foo/bar/baz": "qux",
+		"/foo/hello":   "world",
+	})
+
+	checkContainers(t, `
+	function walk(path, fn) {
+		var files = readDir(path);
+		for (var i = 0; i < files.length; i++) {
+			var filePath = path + "/" + files[i].name;
+			if (files[i].isDir) {
+				walk(filePath, fn);
+			} else {
+				fn(filePath)
+			}
+		}
+	}
+
+	function chroot(root, files) {
+		var chrooted = {};
+		for (path in files) {
+			chrooted[root + "/" + path] = files[path];
+		}
+		return chrooted;
+	}
+
+	var files = {};
+	walk("/foo", function(path) {
+		files[path] = read(path);
+	})
+
+	var c = new Container("quilt/bearmaps");
+	c.filepathToContent = chroot("/src", files);
+	deployment.deploy(new Service("ignoreme", [c]));`,
+		map[string]Container{
+			"720caf060f8fe7428d85b39d269a8810e905b3e5": {
+				ID:      "720caf060f8fe7428d85b39d269a8810e905b3e5",
+				Image:   Image{Name: "quilt/bearmaps"},
+				Command: []string{},
+				Env:     map[string]string{},
+				FilepathToContent: map[string]string{
+					// XXX: We need path.join, which is available in
+					// node rather than just blindly concatenating
+					// paths.
+					"/src//foo/bar/baz": "qux",
+					"/src//foo/hello":   "world",
+				},
+			},
+		})
 }
 
 func checkJavascript(t *testing.T, code string, exp interface{}) {

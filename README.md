@@ -133,3 +133,8 @@ Download and install Quilt and its dependencies using `go get`
 Quilt is now installed! Check out the
 [Getting Started](./docs/GettingStarted.md) guide for more detailed
 instructions on how to get your Quilt deployment up and running.
+
+## Contact Us
+
+Questions? Comments? Feedback?  Please feel free to reach out to us
+[here](http://landing.quilt.io/contact.php)!

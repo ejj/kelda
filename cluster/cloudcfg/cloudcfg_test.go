@@ -19,7 +19,7 @@ func TestCloudConfig(t *testing.T) {
 
 	ver = "1.2.3"
 	res = Ubuntu([]string{"a", "b"}, db.Worker)
-	exp = "(quilt/quilt:v1.2.3) (a\nb) (xenial) (Worker)"
+	exp = "(quilt/quilt:1.2.3) (a\nb) (xenial) (Worker)"
 	if res != exp {
 		t.Errorf("res: %s\nexp: %s", res, exp)
 	}

@@ -2,6 +2,7 @@ package cloudcfg
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"text/template"
 
@@ -21,11 +22,7 @@ var ver = version.Version
 func Ubuntu(keys []string, role db.Role) string {
 	t := template.Must(template.New("cloudConfig").Parse(cfgTemplate))
 
-	img := quiltImage + ":"
-	if ver != "master" {
-		img += "v"
-	}
-	img += ver
+	img := fmt.Sprintf("%s:%s", quiltImage, ver)
 
 	var cloudConfigBytes bytes.Buffer
 	err := t.Execute(&cloudConfigBytes, struct {

@@ -35,6 +35,12 @@ clean:
 windows:
 	cd -P . && GOOS=windows GOARCH=386 go build .
 
+linux:
+	cd -P . && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build .
+
+darwin:
+	cd -P . && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build .
+
 COV_SKIP= /api/client/mocks \
 	  /api/pb \
 	  /cluster/provider/mocks \
@@ -114,9 +120,8 @@ go-get: get-build-tools
 	    github.com/golang/protobuf/{proto,protoc-gen-go} \
 	    github.com/vektra/mockery/.../
 
-docker-build-quilt:
+docker-build-quilt: linux
 	cd -P . && git show --pretty=medium --no-patch > buildinfo \
-		&& CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build . \
 	    && ${DOCKER} build -t ${REPO}/quilt .
 
 docker-push-quilt:

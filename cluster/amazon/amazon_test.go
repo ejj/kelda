@@ -117,18 +117,6 @@ func TestList(t *testing.T) {
 						},
 					},
 				},
-				// A spot request in another namespace.
-				{
-					SpotInstanceRequestId: aws.String("spot4"),
-					State: aws.String(ec2.SpotInstanceStateOpen),
-					Tags: []*ec2.Tag{
-						{
-							Key: aws.String(
-								namespaceTagKey),
-							Value: aws.String("notOurs"),
-						},
-					},
-				},
 			},
 		}, nil,
 	)
@@ -418,9 +406,6 @@ func TestBoot(t *testing.T) {
 			},
 		}, nil,
 	)
-	mc.On("CreateTags", mock.Anything).Return(
-		&ec2.CreateTagsOutput{}, nil,
-	)
 	mc.On("DescribeInstances", mock.Anything).Return(
 		&ec2.DescribeInstancesOutput{
 			Reservations: []*ec2.Reservation{
@@ -524,17 +509,6 @@ func TestBoot(t *testing.T) {
 		MaxCount: aws.Int64(2),
 		MinCount: aws.Int64(2),
 	})
-	mc.AssertCalled(t, "CreateTags",
-		&ec2.CreateTagsInput{
-			Tags: []*ec2.Tag{
-				{
-					Key:   aws.String(namespaceTagKey),
-					Value: aws.String(testNamespace),
-				},
-			},
-			Resources: aws.StringSlice([]string{"spot1", "spot2"}),
-		},
-	)
 	mc.AssertExpectations(t)
 }
 
@@ -572,9 +546,6 @@ func TestBootUnsuccessful(t *testing.T) {
 				},
 			},
 		}, nil,
-	)
-	mc.On("CreateTags", mock.Anything).Return(
-		&ec2.CreateTagsOutput{}, nil,
 	)
 	mc.On("DescribeInstances", mock.Anything).Return(
 		&ec2.DescribeInstancesOutput{
@@ -749,9 +720,6 @@ func TestWaitBoot(t *testing.T) {
 			},
 		}, nil,
 	)
-	mc.On("CreateTags", mock.Anything).Return(
-		&ec2.CreateTagsOutput{}, nil,
-	)
 	describeInstances := mc.On("DescribeInstances", mock.Anything)
 	describeInstances.Return(
 		&ec2.DescribeInstancesOutput{}, nil,
@@ -854,9 +822,6 @@ func TestWaitStop(t *testing.T) {
 				},
 			},
 		}, nil,
-	)
-	mc.On("CreateTags", mock.Anything).Return(
-		&ec2.CreateTagsOutput{}, nil,
 	)
 	describeInstances := mc.On("DescribeInstances", mock.Anything)
 	describeInstances.Return(

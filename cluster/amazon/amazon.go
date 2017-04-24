@@ -29,7 +29,6 @@ type Cluster struct {
 }
 
 type awsMachine struct {
-	namespace  string
 	instanceID string
 	spotID     string
 
@@ -41,8 +40,7 @@ const (
 	// user specified region preference.
 	DefaultRegion = "us-west-1"
 
-	namespaceTagKey = "namespace"
-	spotPrice       = "0.5"
+	spotPrice = "0.5"
 )
 
 // Regions is the list of supported AWS regions.
@@ -199,11 +197,7 @@ func (clst *Cluster) bootSpot(br bootReq, count int64) error {
 		ids = append(ids, *request.SpotInstanceRequestId)
 	}
 
-	err = clst.tagSpotRequests(ids)
-	if err == nil {
-		err = clst.wait(ids, true)
-	}
-
+	err = clst.wait(ids, true)
 	if err != nil {
 		if stopErr := clst.stopSpots(ids); stopErr != nil {
 			log.WithError(stopErr).WithField("ids", ids).
@@ -293,33 +287,21 @@ func (clst *Cluster) stopInstances(ids []string) error {
 var trackedSpotStates = aws.StringSlice(
 	[]string{ec2.SpotInstanceStateActive, ec2.SpotInstanceStateOpen})
 
-// `allSpots` fetches and parses all spot requests into a list of `awsMachine`s.
-func (clst *Cluster) allSpots() (machines []awsMachine, err error) {
-	spotsResp, err := clst.client.DescribeSpotInstanceRequests(
-		&ec2.DescribeSpotInstanceRequestsInput{
-			Filters: []*ec2.Filter{
-				{
-					Name:   aws.String("state"),
-					Values: trackedSpotStates,
-				},
-			},
-		})
+func (clst *Cluster) listSpots() (machines []awsMachine, err error) {
+	input := ec2.DescribeSpotInstanceRequestsInput{Filters: []*ec2.Filter{{
+		Name:   aws.String("state"),
+		Values: trackedSpotStates,
+	}, {
+		Name:   aws.String("launch.group-name"),
+		Values: []*string{aws.String(clst.namespace)}}}}
+	spotsResp, err := clst.client.DescribeSpotInstanceRequests(&input)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, spot := range spotsResp.SpotInstanceRequests {
-		var namespace string
-		for _, tag := range spot.Tags {
-			if tag != nil &&
-				resolveString(tag.Key) == namespaceTagKey {
-				namespace = resolveString(tag.Value)
-				break
-			}
-		}
 		machines = append(machines, awsMachine{
-			namespace: namespace,
-			spotID:    resolveString(spot.SpotInstanceRequestId),
+			spotID: resolveString(spot.SpotInstanceRequestId),
 		})
 	}
 	return machines, nil
@@ -419,7 +401,7 @@ func (clst *Cluster) listInstances() (instances []awsMachine, err error) {
 
 // List queries `clst` for the list of booted machines.
 func (clst *Cluster) List() (machines []machine.Machine, err error) {
-	allSpots, err := clst.allSpots()
+	allSpots, err := clst.listSpots()
 	if err != nil {
 		return nil, err
 	}
@@ -439,27 +421,11 @@ func (clst *Cluster) List() (machines []machine.Machine, err error) {
 	for _, mIntf := range reservedInstances {
 		awsMachines = append(awsMachines, mIntf.(awsMachine))
 	}
-
-	// Due to a race condition in the AWS API, it's possible that
-	// spot requests might lose their Tags. If handled naively,
-	// those spot requests would technically be without a namespace,
-	// meaning the instances they create would be live forever as
-	// zombies.
-	//
-	// To mitigate this issue, we rely not only on the spot request
-	// tags, but additionally on the instance security group. If a
-	// spot request has a running instance in the appropriate
-	// security group, it is by definition in our namespace.
-	// Thus, we only check the tags for spot requests without
-	// running instances.
 	for _, pair := range bootedSpots {
 		awsMachines = append(awsMachines, pair.R.(awsMachine))
 	}
 	for _, mIntf := range nonbootedSpots {
-		m := mIntf.(awsMachine)
-		if m.namespace == clst.namespace {
-			awsMachines = append(awsMachines, m)
-		}
+		awsMachines = append(awsMachines, mIntf.(awsMachine))
 	}
 
 	for _, awsm := range awsMachines {
@@ -550,33 +516,6 @@ func (clst Cluster) getInstanceID(spotID string) (string, error) {
 	}
 
 	return *spotResp.SpotInstanceRequests[0].InstanceId, nil
-}
-
-func (clst *Cluster) tagSpotRequests(ids []string) error {
-	var err error
-	for i := 0; i < 30; i++ {
-		_, err = clst.client.CreateTags(&ec2.CreateTagsInput{
-			Tags: []*ec2.Tag{
-				{
-					Key:   aws.String(namespaceTagKey),
-					Value: aws.String(clst.namespace),
-				},
-			},
-			Resources: aws.StringSlice(ids),
-		})
-		if err == nil {
-			return nil
-		}
-		time.Sleep(5 * time.Second)
-	}
-
-	log.Warn("Failed to tag spot requests: ", err)
-	clst.client.CancelSpotInstanceRequests(
-		&ec2.CancelSpotInstanceRequestsInput{
-			SpotInstanceRequestIds: aws.StringSlice(ids),
-		})
-
-	return err
 }
 
 /* Wait for the 'ids' to have booted or terminated depending on the value

@@ -16,8 +16,6 @@ type client interface {
 	CreateSecurityGroup(*ec2.CreateSecurityGroupInput) (
 		*ec2.CreateSecurityGroupOutput, error)
 
-	CreateTags(*ec2.CreateTagsInput) (*ec2.CreateTagsOutput, error)
-
 	DescribeSecurityGroups(*ec2.DescribeSecurityGroupsInput) (
 		*ec2.DescribeSecurityGroupsOutput, error)
 

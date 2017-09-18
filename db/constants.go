@@ -3,7 +3,6 @@ package db
 //The Role within the cluster each machine assumes.
 import (
 	"errors"
-	"fmt"
 
 	"github.com/kelda/kelda/minion/pb"
 )
@@ -74,17 +73,6 @@ var AllProviders = []ProviderName{
 	Google,
 	DigitalOcean,
 	Vagrant,
-}
-
-// ParseProvider returns the ProviderName represented by 'name' or an error.
-func ParseProvider(name string) (ProviderName, error) {
-	for _, provider := range AllProviders {
-		if string(provider) == name {
-			return provider, nil
-		}
-	}
-	return "", fmt.Errorf("provider %s not supported (supported "+
-		"providers: %v)", name, AllProviders)
 }
 
 // ParseRole returns the Role represented by the string 'role', or an error.

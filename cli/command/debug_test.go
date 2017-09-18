@@ -142,16 +142,16 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 				{
-					BlueprintID: "4",
-					PublicIP:    "8.8.8.8",
-					PrivateIP:   "9.9.9.9",
-					Role:        db.Master,
+					CloudID:   "4",
+					PublicIP:  "8.8.8.8",
+					PrivateIP: "9.9.9.9",
+					Role:      db.Master,
 				},
 			},
 			containers: []db.Container{
@@ -175,10 +175,10 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -200,10 +200,10 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -224,16 +224,16 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 				{
-					BlueprintID: "4",
-					PublicIP:    "5.6.7.8",
-					PrivateIP:   "8.7.6.5",
-					Role:        db.Worker,
+					CloudID:   "4",
+					PublicIP:  "5.6.7.8",
+					PrivateIP: "8.7.6.5",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -254,10 +254,10 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -281,10 +281,10 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -308,10 +308,10 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "409",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "409",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -331,10 +331,10 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "409",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "409",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -354,10 +354,10 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -381,16 +381,16 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 				{
-					BlueprintID: "4",
-					PublicIP:    "",
-					PrivateIP:   "",
-					Role:        db.Worker,
+					CloudID:   "4",
+					PublicIP:  "",
+					PrivateIP: "",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{
@@ -410,10 +410,10 @@ func TestDebug(t *testing.T) {
 			},
 			machines: []db.Machine{
 				{
-					BlueprintID: "1",
-					PublicIP:    "1.2.3.4",
-					PrivateIP:   "4.3.2.1",
-					Role:        db.Worker,
+					CloudID:   "1",
+					PublicIP:  "1.2.3.4",
+					PrivateIP: "4.3.2.1",
+					Role:      db.Worker,
 				},
 			},
 			containers: []db.Container{

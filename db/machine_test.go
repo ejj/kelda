@@ -112,7 +112,6 @@ func TestMachineString(t *testing.T) {
 
 	m = Machine{
 		ID:          1,
-		BlueprintID: "1",
 		Role:        Worker,
 		Preemptible: true,
 		CloudID:     "CloudID1234",
@@ -126,7 +125,7 @@ func TestMachineString(t *testing.T) {
 		Status:      Connected,
 	}
 	got = m.String()
-	exp = "Machine-1{1, Worker, Amazon us-west-1 m4.large preemptible, " +
+	exp = "Machine-1{Worker, Amazon us-west-1 m4.large preemptible, " +
 		"CloudID1234, PublicIP=1.2.3.4, PrivateIP=5.6.7.8, FloatingIP=8.9.3.2," +
 		" Disk=56GB, connected}"
 	if got != exp {

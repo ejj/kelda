@@ -1,257 +1,256 @@
 package cloud
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/kelda/kelda/blueprint"
 	"github.com/kelda/kelda/cloud/acl"
 	"github.com/kelda/kelda/db"
-	"github.com/kelda/kelda/join"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSyncDB(t *testing.T) {
-	checkSyncDB := func(cloudMachines []db.Machine,
-		databaseMachines []db.Machine, expected syncDBResult) syncDBResult {
-		dbRes := syncDB(cloudMachines, databaseMachines)
+func TestJoin(t *testing.T) {
+	cld := newTestCloud(FakeAmazon, testRegion, "ns")
+	cld.provider.(*fakeProvider).listError = errors.New("listError")
+	_, err := joinImpl(*cld)
+	assert.EqualError(t, err, "listError")
+	cld.provider.(*fakeProvider).listError = nil
 
-		assert.Equal(t, expected.boot, dbRes.boot, "boot")
-		assert.Equal(t, expected.stop, dbRes.stop, "stop")
-		assert.Equal(t, expected.updateIPs, dbRes.updateIPs, "updateIPs")
+	_, err = joinImpl(*cld)
+	assert.EqualError(t, err, "no blueprints found")
 
-		return dbRes
-	}
-
-	var noMachines []db.Machine
-	dbNoSize := db.Machine{Provider: FakeAmazon, Region: testRegion}
-	cmNoSize := db.Machine{Provider: FakeAmazon, Region: testRegion}
-	dbLarge := db.Machine{Provider: FakeAmazon, Size: "m4.large", Region: testRegion}
-	cmLarge := db.Machine{
-		Provider: FakeAmazon,
-		Region:   testRegion,
-		Size:     "m4.large",
-	}
-
-	dbMaster := db.Machine{Provider: FakeAmazon, Role: db.Master}
-	cmMasterList := db.Machine{Provider: FakeAmazon, Role: db.Master}
-	dbWorker := db.Machine{Provider: FakeAmazon, Role: db.Worker}
-	cmWorkerList := db.Machine{Provider: FakeAmazon, Role: db.Worker}
-
-	cmNoIP := db.Machine{Provider: FakeAmazon, CloudID: "id"}
-	cmWithIP := db.Machine{
-		Provider:   FakeAmazon,
-		CloudID:    "id",
-		FloatingIP: "ip",
-	}
-	dbNoIP := db.Machine{Provider: FakeAmazon, CloudID: "id"}
-	dbWithIP := db.Machine{Provider: FakeAmazon, CloudID: "id", FloatingIP: "ip"}
-
-	// Test boot with no size
-	checkSyncDB(noMachines, []db.Machine{dbNoSize, dbNoSize}, syncDBResult{
-		boot: []db.Machine{dbNoSize, dbNoSize},
+	cld.conn.Txn(db.BlueprintTable).Run(func(view db.Database) error {
+		view.InsertBlueprint()
+		return nil
 	})
+	_, err = joinImpl(*cld)
+	assert.EqualError(t, err, "namespace change during a cloud run")
 
-	// Test boot with size
-	checkSyncDB(noMachines, []db.Machine{dbLarge, dbLarge}, syncDBResult{
-		boot: []db.Machine{dbLarge, dbLarge},
+	cld.conn.Txn(db.BlueprintTable).Run(func(view db.Database) error {
+		bp, _ := view.GetBlueprint()
+		bp.Blueprint.Machines = []blueprint.Machine{{
+			Provider: string(FakeAmazon),
+			Region:   testRegion,
+			Size:     "1",
+		}}
+		bp.Namespace = "ns"
+		view.Commit(bp)
+		return nil
 	})
-
-	// Test mixed boot
-	checkSyncDB(noMachines, []db.Machine{dbNoSize, dbLarge}, syncDBResult{
-		boot: []db.Machine{dbNoSize, dbLarge},
-	})
-
-	// Test partial boot
-	checkSyncDB([]db.Machine{cmNoSize}, []db.Machine{dbNoSize, dbLarge},
-		syncDBResult{
-			boot: []db.Machine{dbLarge},
-		},
-	)
-
-	// Test stop
-	checkSyncDB([]db.Machine{cmNoSize, cmNoSize}, []db.Machine{}, syncDBResult{
-		stop: []db.Machine{cmNoSize, cmNoSize},
-	})
-
-	// Test partial stop
-	checkSyncDB([]db.Machine{cmNoSize, cmLarge}, []db.Machine{}, syncDBResult{
-		stop: []db.Machine{cmNoSize, cmLarge},
-	})
-
-	// Test assign Floating IP
-	checkSyncDB([]db.Machine{cmNoIP}, []db.Machine{dbWithIP}, syncDBResult{
-		updateIPs: []db.Machine{cmWithIP},
-	})
-
-	// Test remove Floating IP
-	checkSyncDB([]db.Machine{cmWithIP}, []db.Machine{dbNoIP}, syncDBResult{
-		updateIPs: []db.Machine{cmNoIP},
-	})
-
-	// Test replace Floating IP
-	cNewIP := db.Machine{
-		Provider:   FakeAmazon,
-		CloudID:    "id",
-		FloatingIP: "ip^",
-	}
-	checkSyncDB([]db.Machine{cNewIP}, []db.Machine{dbWithIP}, syncDBResult{
-		updateIPs: []db.Machine{cmWithIP},
-	})
-
-	// Test bad disk size
-	checkSyncDB([]db.Machine{{DiskSize: 3}},
-		[]db.Machine{{DiskSize: 4}},
-		syncDBResult{
-			stop: []db.Machine{{DiskSize: 3}},
-			boot: []db.Machine{{DiskSize: 4}},
-		})
-
-	// Test different roles
-	checkSyncDB([]db.Machine{cmWorkerList}, []db.Machine{dbMaster}, syncDBResult{
-		boot: []db.Machine{dbMaster},
-		stop: []db.Machine{cmWorkerList},
-	})
-
-	checkSyncDB([]db.Machine{cmMasterList}, []db.Machine{dbWorker}, syncDBResult{
-		boot: []db.Machine{dbWorker},
-		stop: []db.Machine{cmMasterList},
-	})
-
-	// Test reserved instances.
-	checkSyncDB([]db.Machine{{Preemptible: true}},
-		[]db.Machine{{Preemptible: false}},
-		syncDBResult{
-			boot: []db.Machine{{Preemptible: false}},
-			stop: []db.Machine{{Preemptible: true}},
-		})
-
-	// Test matching role as priority over PublicIP
-	dbMaster.PublicIP = "worker"
-	cmMasterList.PublicIP = "master"
-	dbWorker.PublicIP = "master"
-	cmWorkerList.PublicIP = "worker"
-
-	checkSyncDB([]db.Machine{cmMasterList, cmWorkerList},
-		[]db.Machine{dbMaster, dbWorker},
-		syncDBResult{})
-
-	// Test shuffling roles before CloudID is assigned
-	dbw1 := db.Machine{Provider: FakeAmazon, Role: db.Worker, PublicIP: "w1"}
-	dbw2 := db.Machine{Provider: FakeAmazon, Role: db.Worker, PublicIP: "w2"}
-	dbw3 := db.Machine{Provider: FakeAmazon, Role: db.Worker, PublicIP: "w3"}
-
-	mw1 := db.Machine{Provider: FakeAmazon, Role: db.Worker,
-		CloudID: "mw1", PublicIP: "w1"}
-	mw2 := db.Machine{Provider: FakeAmazon, Role: db.Worker,
-		CloudID: "mw2", PublicIP: "w2"}
-	mw3 := db.Machine{Provider: FakeAmazon, Role: db.Worker,
-		CloudID: "mw3", PublicIP: "w3"}
-
-	pair1 := join.Pair{L: dbw1, R: mw1}
-	pair2 := join.Pair{L: dbw2, R: mw2}
-	pair3 := join.Pair{L: dbw3, R: mw3}
-
-	exp := []join.Pair{
-		pair1,
-		pair2,
-		pair3,
-	}
-
-	pairs := checkSyncDB([]db.Machine{mw1, mw2, mw3},
-		[]db.Machine{dbw1, dbw2, dbw3},
-		syncDBResult{})
-
-	assert.Equal(t, exp, pairs.pairs)
-
-	// Test FloatingIP without role
-	dbf1 := db.Machine{Provider: FakeAmazon, Role: db.Master, PublicIP: "master"}
-	dbf2 := db.Machine{Provider: FakeAmazon, Role: db.Worker, PublicIP: "worker",
-		FloatingIP: "float"}
-
-	cmf1 := db.Machine{Provider: FakeAmazon, PublicIP: "worker", CloudID: "worker"}
-	cmf2 := db.Machine{Provider: FakeAmazon, PublicIP: "master", CloudID: "master"}
-
-	// No roles, CloudIDs not assigned, so nothing should happen
-	checkSyncDB([]db.Machine{cmf1, cmf2},
-		[]db.Machine{dbf1, dbf2},
-		syncDBResult{})
-
-	cmf1.Role = db.Worker
-
-	// One role assigned, so one CloudID to be assigned after
-	checkSyncDB([]db.Machine{cmf1, cmf2},
-		[]db.Machine{dbf1, dbf2},
-		syncDBResult{})
-
-	dbf2.CloudID = cmf1.CloudID
-	cmf2.Role = db.Master
-
-	// Now that CloudID of machine with FloatingIP has been assigned,
-	// FloatingIP should also be assigned
-	checkSyncDB([]db.Machine{cmf1, cmf2},
-		[]db.Machine{dbf1, dbf2},
-		syncDBResult{
-			updateIPs: []db.Machine{
-				{
-					Provider:   FakeAmazon,
-					Role:       db.Worker,
-					PublicIP:   "worker",
-					CloudID:    "worker",
-					FloatingIP: "float",
-				},
-			},
-		})
-
-	// Test FloatingIP role shuffling
-	dbm2 := db.Machine{Provider: FakeAmazon, Role: db.Master, PublicIP: "mIP"}
-	dbm3 := db.Machine{Provider: FakeAmazon, Role: db.Worker, PublicIP: "wIP1",
-		FloatingIP: "flip1"}
-	dbm4 := db.Machine{Provider: FakeAmazon, Role: db.Worker, PublicIP: "wIP2",
-		FloatingIP: "flip2"}
-
-	m2 := db.Machine{Provider: FakeAmazon, PublicIP: "mIP", CloudID: "m2"}
-	m3 := db.Machine{Provider: FakeAmazon, PublicIP: "wIP1", CloudID: "m3"}
-	m4 := db.Machine{Provider: FakeAmazon, PublicIP: "wIP2", CloudID: "m4"}
-
-	m2.Role = db.Worker
-	m3.Role = db.Master
-	m4.Role = db.Worker
-
-	// CloudIDs not assigned to db machines yet, so shouldn't update anything.
-	checkSyncDB([]db.Machine{m2, m3, m4},
-		[]db.Machine{dbm2, dbm3, dbm4},
-		syncDBResult{})
-
-	dbm2.CloudID = m3.CloudID
-	dbm3.CloudID = m2.CloudID
-	dbm4.CloudID = m4.CloudID
-
-	// CloudIDs are now assigned, so time to update floating IPs
-	checkSyncDB([]db.Machine{m2, m3, m4},
-		[]db.Machine{dbm2, dbm3, dbm4},
-		syncDBResult{
-			updateIPs: []db.Machine{
-				{
-					Provider:   FakeAmazon,
-					Role:       db.Worker,
-					PublicIP:   "mIP",
-					CloudID:    "m2",
-					FloatingIP: "flip1",
-				},
-				{
-					Provider:   FakeAmazon,
-					Role:       db.Worker,
-					PublicIP:   "wIP2",
-					CloudID:    "m4",
-					FloatingIP: "flip2",
-				},
-			},
-		})
-
+	_, err = joinImpl(*cld)
+	assert.NoError(t, err)
 }
 
-func TestGetACLs(t *testing.T) {
+func TestUpdateDBMachines(t *testing.T) {
+	cld := newTestCloud(FakeAmazon, testRegion, "ns")
+	cld.conn.Txn(db.MachineTable).Run(func(view db.Database) error {
+		m := view.InsertMachine()
+		m.Provider = FakeAmazon
+		m.Region = testRegion
+		m.Size = "1"
+		view.Commit(m)
+
+		m = view.InsertMachine()
+		m.Provider = FakeAmazon
+		m.Region = testRegion
+		m.Size = "2"
+		m.Status = db.Reconnecting
+		view.Commit(m)
+
+		cloudMachines := []db.Machine{{
+			Provider: FakeAmazon,
+			Region:   testRegion,
+			PublicIP: "1.2.3.4",
+			Size:     "2",
+		}, {
+			Provider: FakeAmazon,
+			Region:   testRegion,
+			PublicIP: "5.6.7.8",
+			Size:     "3",
+		}}
+
+		cld.updateDBMachines(view, cloudMachines)
+
+		dbms := scrubID(db.SortMachines(view.SelectFromMachine(nil)))
+		assert.Equal(t, []db.Machine{{
+			Provider: FakeAmazon,
+			Region:   testRegion,
+			PublicIP: "1.2.3.4",
+			Status:   db.Reconnecting,
+			Size:     "2",
+		}, {
+			Provider: FakeAmazon,
+			Region:   testRegion,
+			PublicIP: "5.6.7.8",
+			Size:     "3",
+		}}, dbms)
+
+		return nil
+	})
+}
+
+func TestPlanUpdates(t *testing.T) {
+	cld := newTestCloud(FakeAmazon, testRegion, "ns")
+
+	isConnected = func(s string) bool { return true }
+
+	cld.conn.Txn(db.BlueprintTable,
+		db.MachineTable).Run(func(view db.Database) error {
+
+		bp := view.InsertBlueprint()
+		bp.Blueprint.Machines = []blueprint.Machine{{
+			Provider: string(FakeAmazon),
+			Region:   testRegion,
+			Size:     "1",
+		}, {
+			Provider:   string(FakeAmazon),
+			Region:     testRegion,
+			FloatingIP: "5.6.7.8",
+			Size:       "3",
+		}}
+		view.Commit(bp)
+
+		m := view.InsertMachine()
+		m.Provider = FakeAmazon
+		m.Region = testRegion
+		m.Size = "2"
+		view.Commit(m)
+
+		m = view.InsertMachine()
+		m.Provider = FakeAmazon
+		m.Region = testRegion
+		m.Size = "3"
+		m.PublicIP = "1.2.3.4"
+		view.Commit(m)
+
+		boot, stop, updateIPs := cld.planUpdates(view)
+		assert.Equal(t, []db.Machine{{
+			Provider: FakeAmazon,
+			Region:   testRegion,
+			DiskSize: 32,
+			Size:     "1",
+			Status:   db.Booting}}, scrubID(boot))
+		assert.Equal(t, []db.Machine{{
+			Provider: FakeAmazon,
+			Region:   testRegion,
+			Size:     "2",
+			Status:   db.Stopping}}, scrubID(stop))
+		assert.Equal(t, []db.Machine{{
+			Provider:   FakeAmazon,
+			Region:     testRegion,
+			Size:       "3",
+			PublicIP:   "1.2.3.4",
+			FloatingIP: "5.6.7.8",
+			Status:     db.Connected}}, scrubID(updateIPs))
+
+		return nil
+	})
+}
+
+func TestMachineScore(t *testing.T) {
+	m := db.Machine{
+		Provider: db.Amazon,
+		Region:   "us-west-1",
+		Size:     "m4.large",
+		Role:     db.Master,
+		CloudID:  "1",
+		DiskSize: 32,
+	}
+
+	assert.Equal(t, 0, machineScore(m, m))
+
+	// Floating IP
+	m1 := m
+	m2 := m
+	m1.FloatingIP = "5.6.7.8"
+	m2.FloatingIP = m1.FloatingIP
+	m2.CloudID = "5"
+	assert.Equal(t, 1, machineScore(m1, m2))
+
+	// Wrong ID, but an assigned role.
+	m1 = m
+	m1.CloudID = "5"
+	assert.Equal(t, 2, machineScore(m, m2))
+
+	// Wrong ID, but no Role.
+	m1 = m
+	m2 = m
+	m1.CloudID = "5"
+	m1.Role = db.None
+	m2.Role = db.None
+	assert.Equal(t, 3, machineScore(m1, m2))
+
+	// Role
+	m1 = m
+	m1.Role = db.Worker
+	assert.Equal(t, -1, machineScore(m, m1))
+	m1.Role = db.None
+	assert.Equal(t, 0, machineScore(m, m1))
+
+	// DiskSize
+	m1 = m
+	m1.DiskSize = 0
+	assert.Equal(t, 0, machineScore(m, m1))
+	m1.DiskSize = 64
+	assert.Equal(t, -1, machineScore(m, m1))
+
+	// Size
+	m1 = m
+	m1.Size = "wrong"
+	assert.Equal(t, -1, machineScore(m, m1))
+
+	// Preemptible
+	m1 = m
+	m1.Preemptible = true
+	assert.Equal(t, -1, machineScore(m, m1))
+}
+
+func TestDesiredMachines(t *testing.T) {
+	cld := newTestCloud(FakeAmazon, testRegion, "ns")
+	adminKey = "bar"
+
+	res := cld.desiredMachines([]blueprint.Machine{{
+		Provider: "Google", // Wrong Provider
+		Region:   "zone-1",
+	}, {
+		Provider: string(FakeAmazon),
+		Region:   testRegion,
+		Role:     "invalid",
+	}, {
+		Provider:    string(FakeAmazon),
+		Region:      testRegion,
+		Size:        "m4.lage",
+		Preemptible: true,
+		FloatingIP:  "1.2.3.4",
+		Role:        db.Worker,
+		SSHKeys:     []string{"foo"},
+	}})
+	assert.Equal(t, []db.Machine{{
+		Provider:    FakeAmazon,
+		Region:      testRegion,
+		Size:        "m4.lage",
+		Preemptible: true,
+		FloatingIP:  "1.2.3.4",
+		Role:        db.Worker,
+		DiskSize:    defaultDiskSize,
+		SSHKeys:     []string{"foo", "bar"}}}, res)
+}
+
+func TestConnectionStatus(t *testing.T) {
+	isConnected = func(s string) bool { return true }
+
+	assert.Equal(t, db.Connected, connectionStatus(db.Machine{PublicIP: "1.2.3.4"}))
+	assert.Equal(t, db.Reconnecting,
+		connectionStatus(db.Machine{Status: db.Connected}))
+
+	isConnected = func(s string) bool { return false }
+	assert.Equal(t, db.Connecting, connectionStatus(db.Machine{PublicIP: "1.2.3.4"}))
+	assert.Equal(t, "", connectionStatus(db.Machine{}))
+}
+
+func TestDesiredACLs(t *testing.T) {
 	cld := newTestCloud(FakeAmazon, testRegion, "ns")
 
 	exp := map[acl.ACL]struct{}{
@@ -259,17 +258,17 @@ func TestGetACLs(t *testing.T) {
 	}
 
 	// Empty blueprint should have "local" added to it.
-	acls := cld.getACLs(db.Blueprint{})
+	acls := cld.desiredACLs(db.Blueprint{})
 	assert.Equal(t, exp, acls)
 
 	// A blueprint with local, shouldn't have it added a second time.
-	acls = cld.getACLs(db.Blueprint{
+	acls = cld.desiredACLs(db.Blueprint{
 		Blueprint: blueprint.Blueprint{AdminACL: []string{"local"}},
 	})
 	assert.Equal(t, exp, acls)
 
 	// Connections that aren't to or from public, shouldn't affect the acls.
-	acls = cld.getACLs(db.Blueprint{
+	acls = cld.desiredACLs(db.Blueprint{
 		Blueprint: blueprint.Blueprint{
 			Connections: []blueprint.Connection{{
 				From:    "foo",
@@ -282,7 +281,7 @@ func TestGetACLs(t *testing.T) {
 	assert.Equal(t, exp, acls)
 
 	// Connections from public create an ACL.
-	acls = cld.getACLs(db.Blueprint{
+	acls = cld.desiredACLs(db.Blueprint{
 		Blueprint: blueprint.Blueprint{
 			Connections: []blueprint.Connection{{
 				From:    blueprint.PublicInternetLabel,
@@ -294,4 +293,27 @@ func TestGetACLs(t *testing.T) {
 	})
 	exp[acl.ACL{CidrIP: "0.0.0.0/0", MinPort: 1, MaxPort: 2}] = struct{}{}
 	assert.Equal(t, exp, acls)
+}
+
+func TestDefaultRegion(t *testing.T) {
+	assert.Equal(t, "foo", defaultRegion("Amazon", "foo"))
+	assert.Equal(t, "us-west-1", defaultRegion("Amazon", ""))
+	assert.Equal(t, "sfo1", defaultRegion("DigitalOcean", ""))
+	assert.Equal(t, "us-east1-b", defaultRegion("Google", ""))
+	assert.Equal(t, "", defaultRegion("Vagrant", ""))
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic")
+		}
+	}()
+	defaultRegion("Panic", "")
+}
+
+func scrubID(dbms []db.Machine) (res []db.Machine) {
+	for _, dbm := range dbms {
+		dbm.ID = 0
+		res = append(res, dbm)
+	}
+	return
 }

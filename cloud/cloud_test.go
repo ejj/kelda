@@ -153,176 +153,33 @@ func TestCloudRunOnce(t *testing.T) {
 		providerInst.clearLogs()
 	}
 
-	// Test initial boot
+	var jr joinResult
+	cloudJoin = func(cld cloud) (joinResult, error) { return jr, nil }
+
+	jr.boot = []db.Machine{{
+		Provider: FakeAmazon,
+		Region:   testRegion,
+		Size:     "1",
+	}}
+	jr.terminate = []db.Machine{{
+		Provider: FakeAmazon,
+		Region:   testRegion,
+		CloudID:  "a",
+		Size:     "2",
+	}}
+	jr.updateIPs = []db.Machine{{
+		Provider:   FakeAmazon,
+		Region:     testRegion,
+		Size:       "1",
+		CloudID:    "b",
+		FloatingIP: "1.2.3.4",
+	}}
+
 	cld := newTestCloud(FakeAmazon, testRegion, "ns")
-	setNamespace(cld.conn, "ns")
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		m := view.InsertMachine()
-		m.Role = db.Master
-		m.Provider = FakeAmazon
-		m.Region = testRegion
-		m.Size = "m4.large"
-		view.Commit(m)
-
-		return nil
-	})
-	checkSync(cld, assertion{boot: []db.Machine{{
-		Provider: FakeAmazon,
-		Region:   testRegion,
-		Size:     "m4.large",
-		Role:     db.Master},
-	}})
-
-	// Test adding a machine with the same provider
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		m := view.InsertMachine()
-		m.Role = db.Master
-		m.Provider = FakeAmazon
-		m.Region = testRegion
-		m.Size = "m4.xlarge"
-		view.Commit(m)
-
-		return nil
-	})
-	checkSync(cld, assertion{boot: []db.Machine{{
-		Provider: FakeAmazon,
-		Region:   testRegion,
-		Size:     "m4.xlarge",
-		Role:     db.Master},
-	}})
-
-	// Test removing a machine
-	var toRemove db.Machine
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		toRemove = view.SelectFromMachine(func(m db.Machine) bool {
-			return m.Provider == FakeAmazon && m.Size == "m4.xlarge"
-		})[0]
-		view.Remove(toRemove)
-
-		return nil
-	})
-	checkSync(cld, assertion{stop: []string{toRemove.CloudID}})
-
-	// Test booting a machine with floating IP - shouldn't update FloatingIP yet
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		m := view.InsertMachine()
-		m.Role = db.Master
-		m.Provider = FakeAmazon
-		m.Size = "m4.large"
-		m.Region = testRegion
-		m.FloatingIP = "ip"
-		view.Commit(m)
-
-		return nil
-	})
 	checkSync(cld, assertion{
-		boot: []db.Machine{{
-			Provider: FakeAmazon,
-			Region:   testRegion,
-			Size:     "m4.large",
-			Role:     db.Master}},
-	})
-
-	// The bootRequest from the previous test is done now, and a CloudID has
-	// been assigned, so we should also receive the ipRequest from before
-	checkSync(cld, assertion{updateIPs: []ipRequest{{id: "3", ip: "ip"}}})
-
-	// Test assigning a floating IP to an existing machine
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		toAssign := view.SelectFromMachine(func(m db.Machine) bool {
-			return m.Provider == FakeAmazon &&
-				m.Size == "m4.large" &&
-				m.FloatingIP == ""
-		})[0]
-		toAssign.FloatingIP = "another.ip"
-		view.Commit(toAssign)
-
-		return nil
-	})
-	checkSync(cld, assertion{updateIPs: []ipRequest{{id: "1", ip: "another.ip"}}})
-
-	// Test removing a floating IP
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		toUpdate := view.SelectFromMachine(func(m db.Machine) bool {
-			return m.Provider == FakeAmazon &&
-				m.Size == "m4.large" &&
-				m.FloatingIP == "ip"
-		})[0]
-		toUpdate.FloatingIP = ""
-		view.Commit(toUpdate)
-
-		return nil
-	})
-	checkSync(cld, assertion{updateIPs: []ipRequest{{id: "3", ip: ""}}})
-
-	// Test removing and adding a machine
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		toRemove = view.SelectFromMachine(func(m db.Machine) bool {
-			return m.Provider == FakeAmazon && m.Size == "m4.large"
-		})[0]
-		view.Remove(toRemove)
-
-		m := view.InsertMachine()
-		m.Role = db.Worker
-		m.Provider = FakeAmazon
-		m.Size = "m4.xlarge"
-		m.Region = testRegion
-		view.Commit(m)
-
-		return nil
-	})
-	checkSync(cld, assertion{
-		boot: []db.Machine{{
-			Provider: FakeAmazon,
-			Region:   testRegion,
-			Size:     "m4.xlarge",
-			Role:     db.Worker}},
-		stop: []string{toRemove.CloudID},
-	})
-
-	// Test adding machine with different role
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		m := view.InsertMachine()
-		m.Role = db.Master
-		m.Provider = FakeAmazon
-		m.Size = "m4.xlarge"
-		m.Region = testRegion
-		view.Commit(m)
-
-		return nil
-	})
-
-	checkSync(cld, assertion{
-		boot: []db.Machine{{
-			Provider: FakeAmazon,
-			Region:   testRegion,
-			Size:     "m4.xlarge",
-			Role:     db.Master}},
-	})
-
-	cld.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		toRemove = view.SelectFromMachine(func(m db.Machine) bool {
-			return m.Role == db.Master && m.Size == "m4.xlarge" &&
-				m.Provider == FakeAmazon
-		})[0]
-		view.Remove(toRemove)
-		m := view.InsertMachine()
-		m.Role = db.Worker
-		m.Provider = FakeAmazon
-		m.Size = "m4.xlarge"
-		m.Region = testRegion
-		view.Commit(m)
-
-		return nil
-	})
-
-	checkSync(cld, assertion{
-		boot: []db.Machine{{
-			Provider: FakeAmazon,
-			Region:   testRegion,
-			Size:     "m4.xlarge",
-			Role:     db.Worker}},
-		stop: []string{toRemove.CloudID},
+		boot:      jr.boot,
+		updateIPs: []ipRequest{{id: "b", ip: "1.2.3.4"}},
+		stop:      []string{"a"},
 	})
 }
 
@@ -370,19 +227,6 @@ func TestNewProviderFailure(t *testing.T) {
 		}
 	}()
 	newProviderImpl("FakeAmazon", testRegion, "namespace")
-}
-
-func setNamespace(conn db.Conn, ns string) {
-	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		bp, err := view.GetBlueprint()
-		if err != nil {
-			bp = view.InsertBlueprint()
-		}
-
-		bp.Namespace = ns
-		view.Commit(bp)
-		return nil
-	})
 }
 
 var instantiatedProviders []fakeProvider

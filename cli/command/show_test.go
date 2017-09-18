@@ -98,22 +98,22 @@ func TestMachineOutput(t *testing.T) {
 
 	machines := []db.Machine{
 		{
-			BlueprintID: "1",
-			Role:        db.Master,
-			Provider:    "Amazon",
-			Region:      "us-west-1",
-			Size:        "m4.large",
-			PublicIP:    "8.8.8.8",
-			Status:      db.Connected,
+			CloudID:  "1",
+			Role:     db.Master,
+			Provider: "Amazon",
+			Region:   "us-west-1",
+			Size:     "m4.large",
+			PublicIP: "8.8.8.8",
+			Status:   db.Connected,
 		}, {
-			BlueprintID: "2",
-			Role:        db.Worker,
-			Provider:    "DigitalOcean",
-			Region:      "sfo1",
-			Size:        "2gb",
-			PublicIP:    "9.9.9.9",
-			FloatingIP:  "10.10.10.10",
-			Status:      db.Connected,
+			CloudID:    "2",
+			Role:       db.Worker,
+			Provider:   "DigitalOcean",
+			Region:     "sfo1",
+			Size:       "2gb",
+			PublicIP:   "9.9.9.9",
+			FloatingIP: "10.10.10.10",
+			Status:     db.Connected,
 		},
 	}
 
@@ -166,9 +166,9 @@ func TestContainerOutput(t *testing.T) {
 		{ID: 5, BlueprintID: "8", Image: "image1"},
 	}
 	machines := []db.Machine{
-		{BlueprintID: "5", PublicIP: "7.7.7.7", PrivateIP: "1.1.1.1"},
-		{BlueprintID: "6", PrivateIP: "2.2.2.2"},
-		{BlueprintID: "7", PrivateIP: ""},
+		{CloudID: "5", PublicIP: "7.7.7.7", PrivateIP: "1.1.1.1"},
+		{CloudID: "6", PrivateIP: "2.2.2.2"},
+		{CloudID: "7", PrivateIP: ""},
 	}
 	connections := []db.Connection{
 		{ID: 1, From: "public", To: "frompublic1", MinPort: 80, MaxPort: 80},
@@ -270,7 +270,7 @@ ________________________________________________________________________________
 		Hostname:    "frompub",
 	}}
 	machines = []db.Machine{
-		{BlueprintID: "5", PublicIP: "7.7.7.7", PrivateIP: "1.1.1.1"},
+		{CloudID: "5", PublicIP: "7.7.7.7", PrivateIP: "1.1.1.1"},
 	}
 	connections = []db.Connection{
 		{ID: 1, From: "public", To: "frompub", MinPort: 80, MaxPort: 80},

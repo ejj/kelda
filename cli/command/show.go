@@ -133,7 +133,7 @@ func writeMachines(fd io.Writer, machines []db.Machine) {
 		}
 
 		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-			util.ShortUUID(m.BlueprintID), m.Role, m.Provider, m.Region,
+			util.ShortUUID(m.CloudID), m.Role, m.Provider, m.Region,
 			m.Size, pubIP, m.Status)
 	}
 }
@@ -150,8 +150,8 @@ func writeContainers(fd io.Writer, containers []db.Container, machines []db.Mach
 	ipIDMap := map[string]string{}
 	idMachineMap := map[string]db.Machine{}
 	for _, m := range machines {
-		ipIDMap[m.PrivateIP] = m.BlueprintID
-		idMachineMap[m.BlueprintID] = m
+		ipIDMap[m.PrivateIP] = m.CloudID
+		idMachineMap[m.CloudID] = m
 	}
 
 	machineDBC := map[string][]db.Container{}

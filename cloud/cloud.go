@@ -42,13 +42,15 @@ type cloud struct {
 
 var myIP = util.MyIP
 var sleep = time.Sleep
+var adminKey string
+
+const defaultDiskSize = 32
 
 // Run continually checks 'conn' for cloud changes and recreates the cloud as
 // needed.
-func Run(conn db.Conn, creds connection.Credentials) {
+func Run(conn db.Conn, creds connection.Credentials, adminSSHKey string) {
 	foreman.Credentials = creds
-
-	go updateMachineStatuses(conn)
+	adminKey = adminSSHKey
 
 	var ns string
 	foreman.Init(conn)
@@ -126,43 +128,35 @@ func (cld cloud) run(stop <-chan struct{}) {
 		}
 
 		cld.runOnce()
-
-		// Somewhat of a crude rate-limit of once every five seconds to
-		// avoid stressing out the cloud providers with too many calls.
-		sleep(5 * time.Second)
 	}
 }
 
+/* This function performs the following actions:
+ * - Get the current set of machines and ACLs from the cloud provider.
+ * - Get the current policy from the database.
+ * - Compute a diff.
+ * - Update the cloud provider accordingly.
+ *
+ * Updating the cloud provider may have consequences (creating machines, for example)
+ * that should be reflected in the database, but won't be until `runOnce()` is called a
+ * second time.  Luckily, these situations are nearly always associated with machine
+ * status changes that cause a database trigger which will cause the caller to invoke
+ * `runOnce()` again. */
 func (cld cloud) runOnce() {
-	/* Each iteration of this loop does the following:
-	 *
-	 * - Get the current set of machines and ACLs from the cloud provider.
-	 * - Get the current policy from the database.
-	 * - Compute a diff.
-	 * - Update the cloud provider accordingly.
-	 *
-	 * Updating the cloud provider may have consequences (creating machines, for
-	 * example) that should be reflected in the database.  Therefore, if updates
-	 * are necessary, the code loops a second time so that the database can be
-	 * updated before the next runOnce() call.
-	 */
-	for i := 0; i < 2; i++ {
-		jr, err := cld.join()
-		if err != nil {
-			return
-		}
+	jr, err := cloudJoin(cld)
+	if err != nil {
+		return
+	}
 
-		if len(jr.boot) == 0 &&
-			len(jr.terminate) == 0 &&
-			len(jr.updateIPs) == 0 {
-			// ACLs must be processed after Quilt learns about what machines
-			// are in the cloud.  If we didn't, inter-machine ACLs could get
-			// removed when the Quilt controller restarts, even if there are
-			// running cloud machines that still need to communicate.
-			cld.syncACLs(jr.acls)
-			return
-		}
-
+	if len(jr.boot) == 0 &&
+		len(jr.terminate) == 0 &&
+		len(jr.updateIPs) == 0 {
+		// ACLs must be processed after Quilt learns about what machines
+		// are in the cloud.  If we didn't, inter-machine ACLs could get
+		// removed when the Quilt controller restarts, even if there are
+		// running cloud machines that still need to communicate.
+		cld.syncACLs(jr.acls)
+	} else {
 		cld.boot(jr.boot)
 		cld.updateCloud(jr.terminate, provider.Stop, "stop")
 		cld.updateCloud(jr.updateIPs, provider.UpdateFloatingIPs,

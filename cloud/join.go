@@ -2,14 +2,22 @@ package cloud
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/kelda/kelda/blueprint"
 	"github.com/kelda/kelda/cloud/acl"
+	"github.com/kelda/kelda/cloud/amazon"
+	"github.com/kelda/kelda/cloud/digitalocean"
+	"github.com/kelda/kelda/cloud/foreman"
+	"github.com/kelda/kelda/cloud/google"
+	"github.com/kelda/kelda/cloud/machine"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
 
 	log "github.com/sirupsen/logrus"
 )
+
+var isConnected = foreman.IsConnected
 
 type joinResult struct {
 	acls []acl.ACL
@@ -19,14 +27,17 @@ type joinResult struct {
 	updateIPs []db.Machine
 }
 
-func (cld cloud) join() (joinResult, error) {
+var cloudJoin = joinImpl
+
+func joinImpl(cld cloud) (joinResult, error) {
 	res := joinResult{}
 
-	cloudMachines, err := cld.provider.List()
+	machines, err := cld.provider.List()
 	if err != nil {
 		log.WithError(err).Error("Failed to list machines")
 		return res, err
 	}
+	machines = getMachineRoles(machines)
 
 	err = cld.conn.Txn(db.BlueprintTable,
 		db.MachineTable).Run(func(view db.Database) error {
@@ -42,45 +53,12 @@ func (cld cloud) join() (joinResult, error) {
 			return err
 		}
 
-		machines := view.SelectFromMachine(func(m db.Machine) bool {
-			return m.Provider == cld.providerName && m.Region == cld.region
-		})
-
-		cloudMachines = getMachineRoles(cloudMachines)
-
-		dbResult := syncDB(cloudMachines, machines)
-		res.boot = dbResult.boot
-		res.terminate = dbResult.stop
-		res.updateIPs = dbResult.updateIPs
-
-		for _, dbm := range res.boot {
-			dbm.Status = db.Booting
-			view.Commit(dbm)
-		}
-
-		for _, pair := range dbResult.pairs {
-			dbm := pair.L.(db.Machine)
-			m := pair.R.(db.Machine)
-
-			if m.Role != db.None && m.Role == dbm.Role {
-				dbm.CloudID = m.CloudID
-			}
-
-			if dbm.PublicIP != m.PublicIP {
-				// We're changing the association between a database
-				// machine and a cloud machine, so the status is not
-				// applicable.
-				dbm.Status = ""
-			}
-			dbm.PublicIP = m.PublicIP
-			dbm.PrivateIP = m.PrivateIP
-
-			view.Commit(dbm)
-		}
+		cld.updateDBMachines(view, machines)
+		res.boot, res.terminate, res.updateIPs = cld.planUpdates(view)
 
 		// Regions with no machines in them should have their ACLs cleared.
 		if len(machines) > 0 {
-			for acl := range cld.getACLs(bp) {
+			for acl := range cld.desiredACLs(bp) {
 				res.acls = append(res.acls, acl)
 			}
 		}
@@ -90,7 +68,195 @@ func (cld cloud) join() (joinResult, error) {
 	return res, err
 }
 
-func (cld cloud) getACLs(bp db.Blueprint) map[acl.ACL]struct{} {
+func (cld cloud) updateDBMachines(view db.Database, cloudMachines []db.Machine) {
+	dbms := cld.selectMachines(view)
+
+	pairs, dbmis, cmis := join.Join(dbms, cloudMachines, machineScore)
+
+	for _, cmi := range cmis {
+		pairs = append(pairs, join.Pair{L: view.InsertMachine(), R: cmi})
+	}
+
+	for _, dbmi := range dbmis {
+		view.Remove(dbmi.(db.Machine))
+	}
+
+	for _, pair := range pairs {
+		dbm := pair.L.(db.Machine)
+		cm := pair.R.(db.Machine)
+
+		// Providers don't know about some fields, so we don't overwrite them.
+		cm.ID = dbm.ID
+		cm.Status = dbm.Status
+		cm.SSHKeys = dbm.SSHKeys
+		view.Commit(cm)
+	}
+}
+
+func (cld cloud) planUpdates(view db.Database) (boot, stop, updateIPs []db.Machine) {
+	bp, err := view.GetBlueprint()
+	if err != nil {
+		// Already got the blueprint earlier in this transaction.
+		panic(fmt.Sprintf("Unreachable error: %v", err))
+	}
+
+	bpms := cld.desiredMachines(bp.Blueprint.Machines)
+	dbms := cld.selectMachines(view)
+
+	pairs, bpmis, dbmis := join.Join(bpms, dbms, machineScore)
+
+	for _, p := range pairs {
+		bpm := p.L.(db.Machine)
+		dbm := p.R.(db.Machine)
+
+		status := connectionStatus(dbm)
+		if status != "" {
+			dbm.Status = status
+			view.Commit(dbm)
+		}
+
+		if bpm.FloatingIP != dbm.FloatingIP {
+			dbm.FloatingIP = bpm.FloatingIP
+			updateIPs = append(updateIPs, dbm)
+		}
+	}
+
+	for _, dbmi := range dbmis {
+		dbm := dbmi.(db.Machine)
+		dbm.Status = db.Stopping
+		view.Commit(dbm)
+
+		stop = append(stop, dbm)
+	}
+
+	for _, bpmi := range bpmis {
+		bpm := bpmi.(db.Machine)
+		dbm := view.InsertMachine()
+		bpm.ID = dbm.ID
+		bpm.Status = db.Booting
+		view.Commit(bpm)
+
+		boot = append(boot, bpm)
+	}
+
+	return
+}
+
+func machineScore(left, right interface{}) int {
+	l := left.(db.Machine)
+	r := right.(db.Machine)
+
+	switch {
+	case l.Provider != r.Provider || l.Region != r.Region:
+		// The caller should assure that this condition is met between all pairs.
+		panic("Invalid Provider or Region")
+	case l.Preemptible != r.Preemptible:
+		return -1
+	case l.Size != r.Size:
+		return -1
+	case l.DiskSize != 0 && r.DiskSize != 0 && l.DiskSize != r.DiskSize:
+		return -1
+	case l.Role != db.None && r.Role != db.None && l.Role != r.Role:
+		return -1
+	case l.CloudID != "" && r.CloudID != "" && l.CloudID == r.CloudID:
+		return 0
+	case l.FloatingIP != "" && r.FloatingIP != "" && l.FloatingIP == r.FloatingIP:
+		return 1
+	case l.Role != db.None && r.Role != db.None:
+		return 2 // Prefer to match pairs that have a role assigned.
+	default:
+		return 3
+	}
+}
+
+func (cld cloud) desiredMachines(bpms []blueprint.Machine) []db.Machine {
+	var dbms []db.Machine
+	for _, bpm := range bpms {
+		region := defaultRegion(db.ProviderName(bpm.Provider), bpm.Region)
+		if bpm.Provider != string(cld.providerName) || region != cld.region {
+			continue
+		}
+
+		role, err := db.ParseRole(bpm.Role)
+		if err != nil {
+			log.WithError(err).Error("Parse error: ", bpm.Role)
+			continue
+		}
+
+		dbm := db.Machine{
+			Region:      region,
+			FloatingIP:  bpm.FloatingIP,
+			Role:        role,
+			Provider:    db.ProviderName(bpm.Provider),
+			Preemptible: bpm.Preemptible,
+			Size:        bpm.Size,
+			DiskSize:    bpm.DiskSize,
+			SSHKeys:     bpm.SSHKeys,
+		}
+
+		if dbm.Size == "" {
+			dbm.Size = machine.ChooseSize(dbm.Provider, bpm.RAM, bpm.CPU)
+			if dbm.Size == "" {
+				log.Warningf("No valid size for %v.", bpm)
+				continue
+			}
+		}
+
+		if dbm.DiskSize == 0 {
+			dbm.DiskSize = defaultDiskSize
+		}
+
+		if adminKey != "" {
+			dbm.SSHKeys = append(dbm.SSHKeys, adminKey)
+		}
+
+		dbms = append(dbms, dbm)
+	}
+	return dbms
+}
+
+func defaultRegion(provider db.ProviderName, region string) string {
+	if region != "" {
+		return region
+	}
+
+	switch provider {
+	case db.Amazon:
+		return amazon.DefaultRegion
+	case db.DigitalOcean:
+		return digitalocean.DefaultRegion
+	case db.Google:
+		return google.DefaultRegion
+	case db.Vagrant:
+		return ""
+	default:
+		panic(fmt.Sprintf("Unknown Cloud Provider: %s", provider))
+	}
+}
+
+func connectionStatus(m db.Machine) string {
+	// "Connected" takes priority over other statuses.
+	connected := m.PublicIP != "" && isConnected(m.PublicIP)
+	if connected {
+		return db.Connected
+	}
+
+	// If we had previously connected, and we are not currently connected, show
+	// that we are attempting to reconnect.
+	if m.Status == db.Connected || m.Status == db.Reconnecting {
+		return db.Reconnecting
+	}
+
+	// If we've never successfully connected, but have booted enough to have a
+	// public IP, show that we are attempting to connect.
+	if m.PublicIP != "" {
+		return db.Connecting
+	}
+
+	return ""
+}
+
+func (cld cloud) desiredACLs(bp db.Blueprint) map[acl.ACL]struct{} {
 	aclSet := map[acl.ACL]struct{}{}
 
 	// Always allow traffic from the Quilt controller, so we append local.
@@ -117,79 +283,10 @@ func (cld cloud) getACLs(bp db.Blueprint) map[acl.ACL]struct{} {
 	return aclSet
 }
 
-type syncDBResult struct {
-	pairs     []join.Pair
-	boot      []db.Machine
-	stop      []db.Machine
-	updateIPs []db.Machine
-}
-
-func syncDB(cms []db.Machine, dbms []db.Machine) syncDBResult {
-	ret := syncDBResult{}
-
-	pair1, dbmis, cmis := join.Join(dbms, cms, func(l, r interface{}) int {
-		dbm := l.(db.Machine)
-		m := r.(db.Machine)
-
-		if dbm.CloudID == m.CloudID && dbm.Provider == m.Provider &&
-			dbm.Preemptible == m.Preemptible &&
-			dbm.Region == m.Region && dbm.Size == m.Size &&
-			(m.DiskSize == 0 || dbm.DiskSize == m.DiskSize) &&
-			(m.Role == db.None || dbm.Role == m.Role) {
-			return 0
-		}
-
-		return -1
+func (cld cloud) selectMachines(view db.Database) []db.Machine {
+	return view.SelectFromMachine(func(dbm db.Machine) bool {
+		return dbm.Provider == cld.providerName && dbm.Region == cld.region
 	})
-
-	pair2, dbmis, cmis := join.Join(dbmis, cmis, func(l, r interface{}) int {
-		dbm := l.(db.Machine)
-		m := r.(db.Machine)
-
-		if dbm.Provider != m.Provider ||
-			dbm.Region != m.Region ||
-			dbm.Size != m.Size ||
-			dbm.Preemptible != m.Preemptible ||
-			(m.DiskSize != 0 && dbm.DiskSize != m.DiskSize) ||
-			(m.Role != db.None && dbm.Role != m.Role) {
-			return -1
-		}
-
-		score := 10
-		if dbm.Role != db.None && m.Role != db.None && dbm.Role == m.Role {
-			score -= 4
-		}
-		if dbm.PublicIP == m.PublicIP && dbm.PrivateIP == m.PrivateIP {
-			score -= 2
-		}
-		if dbm.FloatingIP == m.FloatingIP {
-			score--
-		}
-		return score
-	})
-
-	for _, cm := range cmis {
-		ret.stop = append(ret.stop, cm.(db.Machine))
-	}
-
-	for _, dbm := range dbmis {
-		m := dbm.(db.Machine)
-		ret.boot = append(ret.boot, m)
-	}
-
-	for _, pair := range append(pair1, pair2...) {
-		dbm := pair.L.(db.Machine)
-		m := pair.R.(db.Machine)
-
-		if dbm.CloudID == m.CloudID && dbm.FloatingIP != m.FloatingIP {
-			m.FloatingIP = dbm.FloatingIP
-			ret.updateIPs = append(ret.updateIPs, m)
-		}
-
-		ret.pairs = append(ret.pairs, pair)
-	}
-
-	return ret
 }
 
 func getMachineRoles(machines []db.Machine) (withRoles []db.Machine) {

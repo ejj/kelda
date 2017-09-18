@@ -19,7 +19,6 @@ import (
 	tlsIO "github.com/kelda/kelda/connection/tls/io"
 	"github.com/kelda/kelda/connection/tls/rsa"
 	"github.com/kelda/kelda/db"
-	"github.com/kelda/kelda/engine"
 	"github.com/kelda/kelda/util"
 	"github.com/kelda/kelda/version"
 
@@ -103,7 +102,6 @@ func (dCmd *Daemon) Run() int {
 	}
 
 	conn := db.New()
-	go engine.Run(conn, getPublicKey(sshKey))
 	go server.Run(conn, dCmd.host, true, creds)
 
 	ca, err := tlsIO.ReadCA(cliPath.DefaultTLSDir)
@@ -114,7 +112,7 @@ func (dCmd *Daemon) Run() int {
 	}
 
 	go cloud.SyncCredentials(conn, sshKey, ca)
-	cloud.Run(conn, creds)
+	cloud.Run(conn, creds, getPublicKey(sshKey))
 	return 0
 }
 

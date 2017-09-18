@@ -60,7 +60,7 @@ func TestQueryMachinesDaemon(t *testing.T) {
 		return nil
 	})
 
-	exp := `[{"ID":1,"BlueprintID":"","Role":"Master","Provider":"Amazon",` +
+	exp := `[{"ID":1,"Role":"Master","Provider":"Amazon",` +
 		`"Region":"","Size":"size","DiskSize":0,"SSHKeys":null,"FloatingIP":"",` +
 		`"Preemptible":false,"CloudID":"","PublicIP":"8.8.8.8",` +
 		`"PrivateIP":"9.9.9.9","Status":"connected"}]`

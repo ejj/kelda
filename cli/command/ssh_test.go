@@ -95,7 +95,7 @@ func TestGetMachine(t *testing.T) {
 		{
 			machines: []db.Machine{
 				{
-					BlueprintID: "abc",
+					CloudID: "abc",
 				},
 			},
 			query:      "abc",
@@ -104,10 +104,10 @@ func TestGetMachine(t *testing.T) {
 		{
 			machines: []db.Machine{
 				{
-					BlueprintID: "abc",
+					CloudID: "abc",
 				},
 				{
-					BlueprintID: "acd",
+					CloudID: "acd",
 				},
 			},
 			query:      "ab",
@@ -116,26 +116,26 @@ func TestGetMachine(t *testing.T) {
 		{
 			machines: []db.Machine{
 				{
-					BlueprintID: "abc",
+					CloudID: "abc",
 				},
 				{
-					BlueprintID: "abd",
+					CloudID: "abd",
 				},
 			},
 			query:  "ab",
-			expErr: "ambiguous BlueprintIDs abc and abd",
+			expErr: "ambiguous IDs abc and abd",
 		},
 		{
 			machines: []db.Machine{
 				{
-					BlueprintID: "abc",
+					CloudID: "abc",
 				},
 				{
-					BlueprintID: "abd",
+					CloudID: "abd",
 				},
 			},
 			query:  "c",
-			expErr: `no machine with BlueprintID "c"`,
+			expErr: `no machine with ID "c"`,
 		},
 	}
 	for _, test := range tests {
@@ -150,7 +150,7 @@ func TestGetMachine(t *testing.T) {
 		}
 
 		assert.NoError(t, err)
-		assert.Equal(t, test.expMachine, m.BlueprintID)
+		assert.Equal(t, test.expMachine, m.CloudID)
 	}
 }
 
@@ -173,7 +173,7 @@ func TestSSH(t *testing.T) {
 				privateKey: "key",
 				target:     "tgt",
 			},
-			machines:    []db.Machine{{BlueprintID: "tgt", PublicIP: "host"}},
+			machines:    []db.Machine{{CloudID: "tgt", PublicIP: "host"}},
 			expHost:     "host",
 			expUseShell: true,
 		},
@@ -184,7 +184,7 @@ func TestSSH(t *testing.T) {
 				target:     "tgt",
 				args:       []string{"foo", "bar"},
 			},
-			machines:   []db.Machine{{BlueprintID: "tgt", PublicIP: "host"}},
+			machines:   []db.Machine{{CloudID: "tgt", PublicIP: "host"}},
 			expHost:    "host",
 			expRunArgs: "foo bar",
 		},
@@ -271,7 +271,7 @@ func TestSSH(t *testing.T) {
 
 func TestAmbiguousID(t *testing.T) {
 	mockClient := new(mocks.Client)
-	mockClient.On("QueryMachines").Return([]db.Machine{{BlueprintID: "foo"}}, nil)
+	mockClient.On("QueryMachines").Return([]db.Machine{{CloudID: "foo"}}, nil)
 	mockClient.On("QueryContainers").Return([]db.Container{{BlueprintID: "foo"}}, nil)
 	mockClient.On("Close").Return(nil)
 
@@ -284,7 +284,7 @@ func TestAmbiguousID(t *testing.T) {
 
 func TestNoMatch(t *testing.T) {
 	mockClient := new(mocks.Client)
-	mockClient.On("QueryMachines").Return([]db.Machine{{BlueprintID: "foo"}}, nil)
+	mockClient.On("QueryMachines").Return([]db.Machine{{CloudID: "foo"}}, nil)
 	mockClient.On("QueryContainers").Return([]db.Container{{BlueprintID: "foo"}}, nil)
 	mockClient.On("Close").Return(nil)
 
@@ -305,7 +305,7 @@ func TestSSHExitError(t *testing.T) {
 	mockSSHClient.On("Run", mock.Anything, mock.Anything).Return(mockExitError(10))
 
 	mockClient := new(mocks.Client)
-	mockClient.On("QueryMachines").Return([]db.Machine{{BlueprintID: "tgt"}}, nil)
+	mockClient.On("QueryMachines").Return([]db.Machine{{CloudID: "tgt"}}, nil)
 	mockClient.On("QueryContainers").Return(nil, nil)
 	mockClient.On("Close").Return(nil)
 

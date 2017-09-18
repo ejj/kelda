@@ -458,17 +458,6 @@ func TestRole(t *testing.T) {
 	assert.Equal(t, Role(None), r)
 }
 
-func TestProvider(t *testing.T) {
-	t.Parallel()
-
-	p, err := ParseProvider("Amazon")
-	assert.NoError(t, err)
-	assert.Equal(t, p, Amazon)
-
-	_, err = ParseProvider("error")
-	assert.Error(t, err)
-}
-
 func TestRowSlice(t *testing.T) {
 	t.Parallel()
 

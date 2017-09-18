@@ -11,8 +11,6 @@ import (
 type Machine struct {
 	ID int //Database ID
 
-	/* Populated by the policy engine. */
-	BlueprintID string
 	Role        Role
 	Provider    ProviderName
 	Region      string
@@ -32,6 +30,9 @@ type Machine struct {
 }
 
 const (
+	// Stopping represents a machine that is being stopped by a cloud provider.
+	Stopping = "stopping"
+
 	// Booting represents that the machine is being booted by a cloud provider.
 	Booting = "booting"
 
@@ -82,10 +83,6 @@ func (m Machine) getID() int {
 
 func (m Machine) String() string {
 	var tags []string
-
-	if m.BlueprintID != "" {
-		tags = append(tags, m.BlueprintID)
-	}
 
 	if m.Role != "" {
 		tags = append(tags, string(m.Role))

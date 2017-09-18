@@ -61,14 +61,8 @@ func TestSyncCredentialsSkip(t *testing.T) {
 	ca, err := rsa.NewCertificateAuthority()
 	assert.NoError(t, err)
 
-	// Test that we skip machines that have not booted yet.
-	credentialedMachines := map[string]struct{}{}
-	syncCredentialsOnce(nil, ca,
-		[]db.Machine{{Role: db.Worker}}, credentialedMachines)
-	assert.Empty(t, credentialedMachines, 0)
-
 	// Test that we skip machines that have already been setup.
-	credentialedMachines = map[string]struct{}{
+	credentialedMachines := map[string]struct{}{
 		"8.8.8.8": {},
 	}
 	syncCredentialsOnce(nil, ca, []db.Machine{

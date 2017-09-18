@@ -149,20 +149,19 @@ func getMachine(c client.Client, id string) (db.Machine, error) {
 
 	var choice *db.Machine
 	for _, m := range machines {
-		if len(id) > len(m.BlueprintID) || m.BlueprintID[:len(id)] != id {
+		if len(id) > len(m.CloudID) || m.CloudID[:len(id)] != id {
 			continue
 		}
 		if choice != nil {
-			return db.Machine{}, fmt.Errorf(
-				"ambiguous BlueprintIDs %s and %s",
-				choice.BlueprintID, m.BlueprintID)
+			return db.Machine{}, fmt.Errorf("ambiguous IDs %s and %s",
+				choice.CloudID, m.CloudID)
 		}
 		copy := m
 		choice = &copy
 	}
 
 	if choice == nil {
-		return db.Machine{}, fmt.Errorf("no machine with BlueprintID %q", id)
+		return db.Machine{}, fmt.Errorf("no machine with ID %q", id)
 	}
 
 	return *choice, nil

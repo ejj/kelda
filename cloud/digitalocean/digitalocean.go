@@ -20,8 +20,6 @@ import (
 	"github.com/kelda/kelda/util"
 
 	"golang.org/x/oauth2"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // DefaultRegion is assigned to Machines without a specified region
@@ -295,6 +293,5 @@ func (prvdr Provider) deleteAndWait(ids string) error {
 
 // SetACLs is not supported in DigitalOcean.
 func (prvdr Provider) SetACLs(acls []acl.ACL) error {
-	log.Debug("DigitalOcean does not support ACLs")
 	return nil
 }

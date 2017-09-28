@@ -27,10 +27,10 @@ func New(namespace string) (*Provider, error) {
 }
 
 // Boot creates instances in the `prvdr` configured according to the `bootSet`.
-func (prvdr Provider) Boot(bootSet []db.Machine) error {
+func (prvdr Provider) Boot(bootSet []db.Machine) ([]string, error) {
 	for _, m := range bootSet {
 		if m.Preemptible {
-			return errors.New(
+			return nil, errors.New(
 				"vagrant does not support preemptible instances")
 		}
 	}
@@ -39,18 +39,21 @@ func (prvdr Provider) Boot(bootSet []db.Machine) error {
 	// error for this function to return.
 	errChan := make(chan error, 1)
 
+	var ids []string
 	var wg sync.WaitGroup
 	for _, m := range bootSet {
 		wg.Add(1)
-		go func(m db.Machine) {
+		id := uuid.NewV4().String()
+		go func(id string, m db.Machine) {
 			defer wg.Done()
-			if err := bootMachine(m); err != nil {
+			if err := bootMachine(id, m); err != nil {
 				select {
 				case errChan <- err:
 				default:
 				}
 			}
-		}(m)
+		}(id, m)
+		ids = append(ids, id)
 	}
 	wg.Wait()
 
@@ -60,12 +63,10 @@ func (prvdr Provider) Boot(bootSet []db.Machine) error {
 	default:
 	}
 
-	return err
+	return ids, err
 }
 
-func bootMachine(m db.Machine) error {
-	id := uuid.NewV4().String()
-
+func bootMachine(id string, m db.Machine) error {
 	err := initMachine(cfg.Ubuntu(m, inboundPublicInterface), m.Size, id)
 	if err == nil {
 		err = up(id)

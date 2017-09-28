@@ -12,7 +12,6 @@ import (
 	"github.com/kelda/kelda/cloud/acl"
 	"github.com/kelda/kelda/cloud/cfg"
 	"github.com/kelda/kelda/cloud/google/client"
-	"github.com/kelda/kelda/cloud/wait"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
 	"github.com/kelda/kelda/util"
@@ -138,12 +137,12 @@ func (prvdr *Provider) List() ([]db.Machine, error) {
 }
 
 // Boot blocks while creating instances.
-func (prvdr *Provider) Boot(bootSet []db.Machine) error {
+func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
 	// XXX: should probably have a better clean up routine if an error is encountered
 	var names []string
 	for _, m := range bootSet {
 		if m.Preemptible {
-			return errors.New("preemptible instances are not yet implemented")
+			return nil, errors.New("preemptible vms are not implemented")
 		}
 
 		name := "kelda-" + uuid.NewV4().String()
@@ -158,7 +157,7 @@ func (prvdr *Provider) Boot(bootSet []db.Machine) error {
 		names = append(names, name)
 	}
 
-	return prvdr.wait(names, true)
+	return names, nil
 }
 
 // Stop blocks while deleting the instances.
@@ -179,30 +178,7 @@ func (prvdr *Provider) Stop(machines []db.Machine) error {
 		}
 		names = append(names, m.CloudID)
 	}
-	return prvdr.wait(names, false)
-}
-
-// Get() and operationWait() don't always present the same results, so
-// Boot() and Stop() must have a special wait to stay in sync with Get().
-func (prvdr *Provider) wait(ids []string, shouldLive bool) error {
-	return wait.Wait(func() bool {
-		machines, err := prvdr.List()
-		if err != nil {
-			return false
-		}
-
-		liveMachines := map[string]struct{}{}
-		for _, m := range machines {
-			liveMachines[m.CloudID] = struct{}{}
-		}
-
-		for _, id := range ids {
-			if _, live := liveMachines[id]; live != shouldLive {
-				return false
-			}
-		}
-		return true
-	})
+	return nil
 }
 
 // Blocking wait with a hardcoded timeout.

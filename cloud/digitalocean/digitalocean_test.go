@@ -194,8 +194,9 @@ func TestBoot(t *testing.T) {
 	util.Sleep = func(t time.Duration) {}
 
 	bootSet := []db.Machine{}
-	err = doPrvdr.Boot(bootSet)
+	ids, err := doPrvdr.Boot(bootSet)
 	assert.Nil(t, err)
+	assert.Nil(t, ids)
 
 	// Create a list of machines to boot.
 	bootSet = []db.Machine{
@@ -223,10 +224,11 @@ func TestBoot(t *testing.T) {
 
 	mc.On("AttachVolume", mock.Anything, mock.Anything).Return(nil, nil, nil).Once()
 
-	err = doPrvdr.Boot(bootSet)
+	ids, err = doPrvdr.Boot(bootSet)
 	// Make sure machines are booted.
 	mc.AssertNumberOfCalls(t, "CreateDroplet", 1)
 	assert.Nil(t, err)
+	assert.Equal(t, []string{"123"}, ids)
 
 	// Error CreateDroplet.
 	doubleBootSet := append(bootSet, db.Machine{
@@ -237,15 +239,17 @@ func TestBoot(t *testing.T) {
 		DiskSize:  0,
 	})
 	mc.On("CreateDroplet", mock.Anything).Return(nil, nil, errMock).Twice()
-	err = doPrvdr.Boot(doubleBootSet)
+	ids, err = doPrvdr.Boot(doubleBootSet)
 	assert.EqualError(t, err, errMsg)
+	assert.Nil(t, ids)
 }
 
 func TestBootPreemptible(t *testing.T) {
 	t.Parallel()
 
-	err := Provider{}.Boot([]db.Machine{{Preemptible: true}})
-	assert.EqualError(t, err, "preemptible instances are not yet implemented")
+	ids, err := Provider{}.Boot([]db.Machine{{Preemptible: true}})
+	assert.EqualError(t, err, "preemptible instances are not implemented")
+	assert.Nil(t, ids)
 }
 
 func TestStop(t *testing.T) {
@@ -272,21 +276,11 @@ func TestStop(t *testing.T) {
 		},
 	}
 
-	mc.On("GetDroplet", 123).Return(&godo.Droplet{
-		Status:    "active",
-		VolumeIDs: []string{"abc"},
-	}, nil, nil).Once()
-
-	mc.On("GetDroplet", 123).Return(nil, nil, nil).Once()
-
 	mc.On("DeleteDroplet", 123).Return(nil, nil).Once()
 
 	mc.On("DeleteVolume", "abc").Return(nil, nil).Once()
 
 	err = doPrvdr.Stop(stopSet)
-
-	// Make sure machines are stopped.
-	mc.AssertNumberOfCalls(t, "GetDroplet", 2)
 	assert.Nil(t, err)
 
 	// Error strconv.
@@ -310,11 +304,6 @@ func TestStop(t *testing.T) {
 	assert.Error(t, err)
 
 	// Error DeleteDroplet.
-	mc.On("GetDroplet", 123).Return(&godo.Droplet{
-		Status:    "active",
-		VolumeIDs: []string{"abc"},
-	}, nil, nil).Once()
-
 	mc.On("DeleteDroplet", 123).Return(nil, errMock).Once()
 	err = doPrvdr.Stop(stopSet)
 	assert.EqualError(t, err, errMsg)

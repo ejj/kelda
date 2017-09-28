@@ -13,6 +13,7 @@ func TestSetACLs(t *testing.T) {
 }
 
 func TestPreemptibleError(t *testing.T) {
-	err := Provider{}.Boot([]db.Machine{{Preemptible: true}})
+	ids, err := Provider{}.Boot([]db.Machine{{Preemptible: true}})
 	assert.EqualError(t, err, "vagrant does not support preemptible instances")
+	assert.Nil(t, ids)
 }

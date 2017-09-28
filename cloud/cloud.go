@@ -20,7 +20,9 @@ import (
 type provider interface {
 	List() ([]db.Machine, error)
 
-	Boot([]db.Machine) error
+	// Takes a set of db.Machines, and returns the CloudIDs the machines will have
+	// once they boot.
+	Boot([]db.Machine) ([]string, error)
 
 	Stop([]db.Machine) error
 
@@ -157,20 +159,18 @@ func (cld cloud) runOnce() {
 		// running cloud machines that still need to communicate.
 		cld.syncACLs(jr.acls)
 	} else {
-		cld.boot(jr.boot)
-		cld.updateCloud(jr.terminate, provider.Stop, "stop")
-		cld.updateCloud(jr.updateIPs, provider.UpdateFloatingIPs,
-			"update floating IPs")
+		cld.updateCloud(jr)
 	}
 }
 
-func (cld cloud) boot(machines []db.Machine) {
+func sanitizeMachines(machines []db.Machine) []db.Machine {
 	// As a defensive measure, we only copy over the fields that the underlying
 	// provider should care about instead of passing `machines` to updateCloud
 	// directly.
 	var cloudMachines []db.Machine
 	for _, m := range machines {
 		cloudMachines = append(cloudMachines, db.Machine{
+			CloudID:     m.CloudID,
 			Size:        m.Size,
 			DiskSize:    m.DiskSize,
 			Preemptible: m.Preemptible,
@@ -178,31 +178,89 @@ func (cld cloud) boot(machines []db.Machine) {
 			Role:        m.Role,
 			Provider:    m.Provider,
 			Region:      m.Region,
+			FloatingIP:  m.FloatingIP,
 		})
 	}
-	cld.updateCloud(cloudMachines, provider.Boot, "boot")
+	return cloudMachines
 }
 
-type machineAction func(provider, []db.Machine) error
-
-func (cld cloud) updateCloud(machines []db.Machine, fn machineAction, action string) {
-	if len(machines) == 0 {
-		return
+func (cld cloud) updateCloud(jr joinResult) {
+	logAttempt := func(count int, action string, err error) {
+		c.Inc(action)
+		logFields := log.Fields{
+			"count":  count,
+			"action": action,
+			"region": cld.String()}
+		if err != nil {
+			logFields["error"] = err
+			log.WithFields(logFields).Error(
+				"Failed to update cloud provider.")
+		} else {
+			log.WithFields(logFields).Infof("Cloud provider update.")
+		}
 	}
 
-	logFields := log.Fields{
-		"count":  len(machines),
-		"action": action,
-		"region": cld.String(),
+	var bootIDs []string
+	if len(jr.boot) > 0 {
+		var err error
+		bootIDs, err = cld.provider.Boot(sanitizeMachines(jr.boot))
+		logAttempt(len(jr.boot), "boot", err)
 	}
 
-	c.Inc(action)
-	if err := fn(cld.provider, machines); err != nil {
-		logFields["error"] = err
-		log.WithFields(logFields).Errorf("Failed to update machines.")
-	} else {
-		log.WithFields(logFields).Infof("Updated machines.")
+	if len(jr.terminate) > 0 {
+		err := cld.provider.Stop(sanitizeMachines(jr.terminate))
+		logAttempt(len(jr.terminate), "stop", err)
+		if err != nil {
+			jr.terminate = nil // Don't wait if we errored.
+		}
 	}
+
+	if len(jr.updateIPs) > 0 {
+		err := cld.provider.UpdateFloatingIPs(sanitizeMachines(jr.updateIPs))
+		logAttempt(len(jr.updateIPs), "update floating IPs", err)
+		if err != nil {
+			jr.updateIPs = nil // Don't wait if we errored.
+		}
+	}
+
+	pred := func() bool {
+		machines, err := cld.provider.List()
+		if err != nil {
+			log.WithError(err).Warn("Failed to list machines.")
+			return true
+		}
+
+		ids := map[string]db.Machine{}
+		for _, m := range machines {
+			ids[m.CloudID] = m
+		}
+
+		for _, id := range bootIDs {
+			if _, ok := ids[id]; !ok {
+				return false
+			}
+		}
+
+		for _, m := range jr.terminate {
+			if _, ok := ids[m.CloudID]; ok {
+				return false
+			}
+		}
+
+		for _, jrm := range jr.updateIPs {
+			m, ok := ids[jrm.CloudID]
+			if ok && m.FloatingIP != jrm.FloatingIP {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	if err := util.BackoffWaitFor(pred, 30*time.Second, 5*time.Minute); err != nil {
+		log.WithError(err).Warn("Failed to wait for cloud provider updates.")
+	}
+	log.Debug("Finished waiting for updates.")
 }
 
 func (cld cloud) syncACLs(unresolvedACLs []acl.ACL) {

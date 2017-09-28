@@ -10,7 +10,6 @@ import (
 	"github.com/kelda/kelda/cloud/acl"
 	"github.com/kelda/kelda/cloud/amazon/client"
 	"github.com/kelda/kelda/cloud/cfg"
-	"github.com/kelda/kelda/cloud/wait"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
 
@@ -53,8 +52,6 @@ var amis = map[string]string{
 	"us-west-1":      "ami-79df8219",
 	"us-west-2":      "ami-d206bdb2",
 }
-
-var sleep = time.Sleep
 
 var timeout = 5 * time.Minute
 
@@ -104,14 +101,14 @@ type bootReq struct {
 }
 
 // Boot creates instances in the `prvdr` configured according to the `bootSet`.
-func (prvdr *Provider) Boot(bootSet []db.Machine) error {
+func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
 	if len(bootSet) <= 0 {
-		return nil
+		return nil, nil
 	}
 
 	groupID, _, err := prvdr.getCreateSecurityGroup()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	bootReqMap := make(map[bootReq]int64) // From boot request to an instance count.
@@ -126,22 +123,26 @@ func (prvdr *Provider) Boot(bootSet []db.Machine) error {
 		bootReqMap[br] = bootReqMap[br] + 1
 	}
 
+	var ids []string
 	for br, count := range bootReqMap {
+		var newIDs []string
 		if br.preemptible {
-			err = prvdr.bootSpot(br, count)
+			newIDs, err = prvdr.bootSpot(br, count)
 		} else {
-			err = prvdr.bootReserved(br, count)
+			newIDs, err = prvdr.bootReserved(br, count)
 		}
 
 		if err != nil {
-			return err
+			return ids, err
 		}
+
+		ids = append(ids, newIDs...)
 	}
 
-	return nil
+	return ids, nil
 }
 
-func (prvdr *Provider) bootReserved(br bootReq, count int64) error {
+func (prvdr *Provider) bootReserved(br bootReq, count int64) ([]string, error) {
 	cloudConfig64 := base64.StdEncoding.EncodeToString([]byte(br.cfg))
 	resp, err := prvdr.RunInstances(&ec2.RunInstancesInput{
 		ImageId:          aws.String(amis[prvdr.region]),
@@ -154,26 +155,17 @@ func (prvdr *Provider) bootReserved(br bootReq, count int64) error {
 		MinCount: &count,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var ids []string
 	for _, inst := range resp.Instances {
 		ids = append(ids, *inst.InstanceId)
 	}
-
-	err = prvdr.wait(ids, true)
-	if err != nil {
-		if stopErr := prvdr.stopInstances(ids); stopErr != nil {
-			log.WithError(stopErr).WithField("ids", ids).
-				Error("Failed to cleanup failed boots")
-		}
-	}
-
-	return err
+	return ids, nil
 }
 
-func (prvdr *Provider) bootSpot(br bootReq, count int64) error {
+func (prvdr *Provider) bootSpot(br bootReq, count int64) ([]string, error) {
 	cloudConfig64 := base64.StdEncoding.EncodeToString([]byte(br.cfg))
 	spots, err := prvdr.RequestSpotInstances(spotPrice, count,
 		&ec2.RequestSpotLaunchSpecification{
@@ -184,22 +176,14 @@ func (prvdr *Provider) bootSpot(br bootReq, count int64) error {
 			BlockDeviceMappings: []*ec2.BlockDeviceMapping{
 				blockDevice(br.diskSize)}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var ids []string
 	for _, request := range spots {
 		ids = append(ids, *request.SpotInstanceRequestId)
 	}
-
-	err = prvdr.wait(ids, true)
-	if err != nil {
-		if stopErr := prvdr.stopSpots(ids); stopErr != nil {
-			log.WithError(stopErr).WithField("ids", ids).
-				Error("Failed to cleanup failed boots")
-		}
-	}
-	return err
+	return ids, nil
 }
 
 // Stop shuts down `machines` in `prvdr`.
@@ -219,7 +203,7 @@ func (prvdr *Provider) Stop(machines []db.Machine) error {
 	}
 
 	if len(instIDs) > 0 {
-		instErr = prvdr.stopInstances(instIDs)
+		instErr = prvdr.TerminateInstances(instIDs)
 	}
 
 	switch {
@@ -247,13 +231,13 @@ func (prvdr *Provider) stopSpots(ids []string) error {
 
 	var stopInstsErr, cancelSpotsErr error
 	if len(instIDs) != 0 {
-		stopInstsErr = prvdr.stopInstances(instIDs)
+		stopInstsErr = prvdr.TerminateInstances(instIDs)
 	}
 
 	cancelSpotsErr = prvdr.CancelSpotInstanceRequests(ids)
 	switch {
 	case stopInstsErr == nil && cancelSpotsErr == nil:
-		return prvdr.wait(ids, false)
+		return nil
 	case stopInstsErr == nil:
 		return cancelSpotsErr
 	case cancelSpotsErr == nil:
@@ -261,14 +245,6 @@ func (prvdr *Provider) stopSpots(ids []string) error {
 	default:
 		return fmt.Errorf("stop: %v, cancel: %v", stopInstsErr, cancelSpotsErr)
 	}
-}
-
-func (prvdr *Provider) stopInstances(ids []string) error {
-	err := prvdr.TerminateInstances(ids)
-	if err != nil {
-		return err
-	}
-	return prvdr.wait(ids, false)
 }
 
 var trackedSpotStates = aws.StringSlice(
@@ -480,40 +456,6 @@ func (prvdr Provider) getInstanceID(spotID string) (string, error) {
 	}
 
 	return *spots[0].InstanceId, nil
-}
-
-/* Wait for the 'ids' to have booted or terminated depending on the value
- * of 'boot' */
-func (prvdr *Provider) wait(ids []string, boot bool) error {
-	return wait.Wait(func() bool {
-		machines, err := prvdr.List()
-		if err != nil {
-			log.WithError(err).Warn("Failed to list machines in the cluster.")
-			return false
-		}
-
-		exists := make(map[string]struct{})
-		for _, inst := range machines {
-			// When booting, if the machine isn't configured completely
-			// when the List() call was made, the cluster will fail to join
-			// and boot them twice. When halting, we don't consider this as
-			// the opposite will happen and we'll try to halt multiple times.
-			// To halt, we need the machines to be completely gone.
-			if boot && inst.Size == "" {
-				continue
-			}
-
-			exists[inst.CloudID] = struct{}{}
-		}
-
-		for _, id := range ids {
-			if _, ok := exists[id]; ok != boot {
-				return false
-			}
-		}
-
-		return true
-	})
 }
 
 // SetACLs adds and removes acls in `prvdr` so that it conforms to `acls`.

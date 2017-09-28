@@ -13,14 +13,12 @@ import (
 	"github.com/kelda/kelda/cloud/acl"
 	"github.com/kelda/kelda/cloud/cfg"
 	"github.com/kelda/kelda/cloud/digitalocean/client"
-	"github.com/kelda/kelda/cloud/wait"
 	"github.com/kelda/kelda/counter"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
 	"github.com/kelda/kelda/util"
 
 	"golang.org/x/oauth2"
-	"golang.org/x/sync/errgroup"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -188,47 +186,37 @@ func (prvdr Provider) getFloatingIPs() (map[int]string, error) {
 }
 
 // Boot will boot every machine in a goroutine, and wait for the machines to come up.
-func (prvdr Provider) Boot(bootSet []db.Machine) error {
-	var eg errgroup.Group
+func (prvdr Provider) Boot(bootSet []db.Machine) ([]string, error) {
+	var ids []string
 	for _, m := range bootSet {
 		if m.Preemptible {
-			return errors.New("preemptible instances are not yet implemented")
+			return ids, errors.New(
+				"preemptible instances are not implemented")
 		}
 
-		eg.Go(machineAction(m, prvdr.createAndAttach))
+		createReq := &godo.DropletCreateRequest{
+			Name:              prvdr.namespace,
+			Region:            prvdr.region,
+			Size:              m.Size,
+			Image:             godo.DropletCreateImage{ID: imageID},
+			PrivateNetworking: true,
+			UserData:          cfg.Ubuntu(m, ""),
+			Tags:              []string{prvdr.getTag()},
+		}
+		d, _, err := prvdr.CreateDroplet(createReq)
+		if err != nil {
+			return ids, err
+		}
+
+		ids = append(ids, strconv.Itoa(d.ID))
 	}
 
-	return eg.Wait()
+	return ids, nil
 }
 
 // Returns a unique tag to use for all entities in this namespace and region.
 func (prvdr Provider) getTag() string {
 	return fmt.Sprintf("%s-%s", prvdr.namespace, prvdr.region)
-}
-
-// Creates a new machine, and waits for the machine to become active.
-func (prvdr Provider) createAndAttach(m db.Machine) error {
-	cloudConfig := cfg.Ubuntu(m, "")
-	createReq := &godo.DropletCreateRequest{
-		Name:              prvdr.namespace,
-		Region:            prvdr.region,
-		Size:              m.Size,
-		Image:             godo.DropletCreateImage{ID: imageID},
-		PrivateNetworking: true,
-		UserData:          cloudConfig,
-		Tags:              []string{prvdr.getTag()},
-	}
-
-	d, _, err := prvdr.CreateDroplet(createReq)
-	if err != nil {
-		return err
-	}
-
-	pred := func() bool {
-		d, _, err := prvdr.GetDroplet(d.ID)
-		return err == nil && d.Status == "active"
-	}
-	return wait.Wait(pred)
 }
 
 // UpdateFloatingIPs updates Droplet to Floating IP associations.
@@ -292,30 +280,19 @@ func (prvdr Provider) syncFloatingIPs(curr, targets []db.Machine) error {
 
 // Stop stops each machine and deletes their attached volumes.
 func (prvdr Provider) Stop(machines []db.Machine) error {
-	var eg errgroup.Group
 	for _, m := range machines {
-		eg.Go(machineAction(m, prvdr.deleteAndWait))
+		id, err := strconv.Atoi(m.CloudID)
+		if err != nil {
+			return err
+		}
+
+		_, err = prvdr.DeleteDroplet(id)
+		if err != nil {
+			return err
+		}
 	}
 
-	return eg.Wait()
-}
-
-func (prvdr Provider) deleteAndWait(m db.Machine) error {
-	id, err := strconv.Atoi(m.CloudID)
-	if err != nil {
-		return err
-	}
-
-	_, err = prvdr.DeleteDroplet(id)
-	if err != nil {
-		return err
-	}
-
-	pred := func() bool {
-		d, _, err := prvdr.GetDroplet(id)
-		return err != nil || d == nil
-	}
-	return wait.Wait(pred)
+	return nil
 }
 
 // SetACLs adds and removes acls in `prvdr` so that it conforms to `acls`.

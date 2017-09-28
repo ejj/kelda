@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -16,7 +15,6 @@ import (
 	"github.com/kelda/kelda/cloud/amazon/client/mocks"
 	"github.com/kelda/kelda/cloud/cfg"
 	"github.com/kelda/kelda/db"
-	"github.com/kelda/kelda/util"
 )
 
 const testNamespace = "namespace"
@@ -278,39 +276,6 @@ func TestNewACLs(t *testing.T) {
 func TestBoot(t *testing.T) {
 	t.Parallel()
 
-	sleep = func(t time.Duration) {}
-	instances := []*ec2.Instance{
-		{
-			InstanceId:            aws.String("inst1"),
-			SpotInstanceRequestId: aws.String("spot1"),
-			InstanceType:          aws.String("m4.large"),
-			State: &ec2.InstanceState{
-				Name: aws.String(ec2.InstanceStateNameRunning),
-			},
-		},
-		{
-			InstanceId:            aws.String("inst2"),
-			SpotInstanceRequestId: aws.String("spot2"),
-			InstanceType:          aws.String("m4.large"),
-			State: &ec2.InstanceState{
-				Name: aws.String(ec2.InstanceStateNameRunning),
-			},
-		},
-		{
-			InstanceId:   aws.String("reserved1"),
-			InstanceType: aws.String("m4.large"),
-			State: &ec2.InstanceState{
-				Name: aws.String(ec2.InstanceStateNameRunning),
-			},
-		},
-		{
-			InstanceId:   aws.String("reserved2"),
-			InstanceType: aws.String("m4.large"),
-			State: &ec2.InstanceState{
-				Name: aws.String(ec2.InstanceStateNameRunning),
-			},
-		},
-	}
 	mc := new(mocks.Client)
 	mc.On("DescribeSecurityGroup", mock.Anything).Return([]*ec2.SecurityGroup{{
 		GroupId: aws.String("groupId")}}, nil)
@@ -333,32 +298,11 @@ func TestBoot(t *testing.T) {
 			},
 		}, nil,
 	)
-	mc.On("DescribeInstances", mock.Anything).Return(
-		&ec2.DescribeInstancesOutput{
-			Reservations: []*ec2.Reservation{
-				{
-					Instances: instances,
-				},
-			},
-		}, nil,
-	)
-	mc.On("DescribeAddresses").Return(nil, nil)
-	mc.On("DescribeVolumes").Return(nil, nil)
-
-	mc.On("DescribeSpotInstanceRequests", mock.Anything, mock.Anything).Return(
-		[]*ec2.SpotInstanceRequest{{
-			InstanceId:            aws.String("inst1"),
-			SpotInstanceRequestId: aws.String("spot1"),
-			State: aws.String(ec2.SpotInstanceStateActive),
-		}, {
-			InstanceId:            aws.String("inst2"),
-			SpotInstanceRequestId: aws.String("spot2"),
-			State: aws.String(ec2.SpotInstanceStateActive)}}, nil)
 
 	amazonProvider := newAmazon(testNamespace, DefaultRegion)
 	amazonProvider.Client = mc
 
-	err := amazonProvider.Boot([]db.Machine{
+	ids, err := amazonProvider.Boot([]db.Machine{
 		{
 			Role:        db.Master,
 			Size:        "m4.large",
@@ -386,6 +330,10 @@ func TestBoot(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
+	// Subset ignores order.
+	assert.Subset(t, []string{"spot1", "spot2", "reserved1", "reserved2"}, ids)
+	assert.Len(t, ids, 4)
+
 	cfg := cfg.Ubuntu(db.Machine{Role: db.Master}, "")
 	mc.AssertCalled(t, "RequestSpotInstances", spotPrice, int64(2),
 		&ec2.RequestSpotLaunchSpecification{
@@ -410,62 +358,9 @@ func TestBoot(t *testing.T) {
 	mc.AssertExpectations(t)
 }
 
-// This test attempts to boot a preemptible and non-preemptible instance,
-// but simulates a boot error where the machines never show up in `List`.
-// We should consider this a boot failure, and try to clean up by stopping
-// the pending instances.
-func TestBootUnsuccessful(t *testing.T) {
-	util.After = func(t time.Time) bool { return true }
-
-	mc := new(mocks.Client)
-	mc.On("DescribeSecurityGroup", mock.Anything).Return([]*ec2.SecurityGroup{{
-		GroupId: aws.String("groupId")}}, nil)
-
-	mc.On("RequestSpotInstances", mock.Anything, mock.Anything,
-		mock.Anything).Return([]*ec2.SpotInstanceRequest{{
-		SpotInstanceRequestId: aws.String("spot1")}}, nil)
-
-	mc.On("RunInstances", mock.Anything).Return(
-		&ec2.Reservation{
-			Instances: []*ec2.Instance{
-				{
-					InstanceId: aws.String("reserved1"),
-				},
-			},
-		}, nil,
-	)
-	mc.On("DescribeInstances", mock.Anything).Return(
-		&ec2.DescribeInstancesOutput{
-			Reservations: []*ec2.Reservation{
-				{
-					Instances: nil,
-				},
-			},
-		}, nil,
-	)
-	mc.On("DescribeAddresses").Return(nil, nil)
-	mc.On("DescribeVolumes").Return(nil, nil)
-
-	mc.On("DescribeSpotInstanceRequests", mock.Anything,
-		mock.Anything).Return(nil, nil)
-	mc.On("TerminateInstances", []string{"reserved1"}).Return(nil)
-	mc.On("CancelSpotInstanceRequests", []string{"spot1"}).Return(nil)
-
-	amazonProvider := newAmazon(testNamespace, DefaultRegion)
-	amazonProvider.Client = mc
-	err := amazonProvider.Boot([]db.Machine{{Preemptible: false}})
-	assert.Error(t, err)
-
-	err = amazonProvider.Boot([]db.Machine{{Preemptible: true}})
-	assert.Error(t, err)
-
-	mc.AssertExpectations(t)
-}
-
 func TestStop(t *testing.T) {
 	t.Parallel()
 
-	sleep = func(t time.Duration) {}
 	mc := new(mocks.Client)
 	spotIDs := []string{"spot1", "spot2"}
 	reservedIDs := []string{"reserved1"}
@@ -516,166 +411,6 @@ func TestStop(t *testing.T) {
 	mc.AssertCalled(t, "TerminateInstances", []string{reservedIDs[0]})
 
 	mc.AssertCalled(t, "CancelSpotInstanceRequests", spotIDs)
-}
-
-func TestWaitBoot(t *testing.T) {
-	t.Parallel()
-	util.Sleep = func(time.Duration) {}
-	i := 0
-	util.After = func(t time.Time) bool {
-		i++
-		return i > 5
-	}
-
-	timeout = 10 * time.Second
-
-	instances := []*ec2.Instance{
-		{
-			InstanceId:            aws.String("inst1"),
-			SpotInstanceRequestId: aws.String("spot1"),
-			InstanceType:          aws.String("m4.large"),
-			State: &ec2.InstanceState{
-				Name: aws.String(ec2.InstanceStateNameRunning),
-			},
-		},
-		{
-			InstanceId:            aws.String("inst2"),
-			SpotInstanceRequestId: aws.String("spot2"),
-			InstanceType:          aws.String("m4.large"),
-			State: &ec2.InstanceState{
-				Name: aws.String(ec2.InstanceStateNameRunning),
-			},
-		},
-	}
-	mc := new(mocks.Client)
-	mc.On("DescribeAddresses").Return(nil, nil)
-	mc.On("DescribeVolumes").Return(nil, nil)
-	mc.On("DescribeSecurityGroup", mock.Anything).Return([]*ec2.SecurityGroup{{
-		GroupId: aws.String("groupId")}}, nil)
-
-	mc.On("RequestSpotInstances", mock.Anything, mock.Anything,
-		mock.Anything).Return([]*ec2.SpotInstanceRequest{{
-		SpotInstanceRequestId: aws.String("spot1"),
-	}, {
-		SpotInstanceRequestId: aws.String("spot2"),
-	}}, nil)
-	describeInstances := mc.On("DescribeInstances", mock.Anything)
-	describeInstances.Return(
-		&ec2.DescribeInstancesOutput{}, nil,
-	)
-	mc.On("DescribeSpotInstanceRequests", mock.Anything, mock.Anything).Return(
-		[]*ec2.SpotInstanceRequest{{
-			InstanceId:            aws.String("inst1"),
-			SpotInstanceRequestId: aws.String("spot1"),
-			State: aws.String(ec2.SpotInstanceStateActive),
-		}, {
-			InstanceId:            aws.String("inst2"),
-			SpotInstanceRequestId: aws.String("spot2"),
-			State: aws.String(ec2.SpotInstanceStateActive)}}, nil)
-
-	amazonProvider := newAmazon(testNamespace, DefaultRegion)
-	amazonProvider.Client = mc
-
-	exp := []string{"spot1", "spot2"}
-	err := amazonProvider.wait(exp, true)
-	assert.Error(t, err, "timed out")
-
-	describeInstances.Return(
-		&ec2.DescribeInstancesOutput{
-			Reservations: []*ec2.Reservation{
-				{
-					Instances: instances,
-				},
-			},
-		}, nil,
-	)
-
-	err = amazonProvider.wait(exp, true)
-	assert.NoError(t, err)
-}
-
-func TestWaitStop(t *testing.T) {
-	t.Parallel()
-
-	util.Sleep = func(t time.Duration) {}
-	i := 0
-	util.After = func(t time.Time) bool {
-		i++
-		return i > 5
-	}
-
-	timeout = 10 * time.Second
-	instances := []*ec2.Instance{
-		{
-			InstanceId:            aws.String("inst1"),
-			SpotInstanceRequestId: aws.String("spot1"),
-			State: &ec2.InstanceState{
-				Name: aws.String(ec2.InstanceStateNameRunning),
-			},
-		},
-		{
-			InstanceId:            aws.String("inst2"),
-			SpotInstanceRequestId: aws.String("spot2"),
-			State: &ec2.InstanceState{
-				Name: aws.String(ec2.InstanceStateNameRunning),
-			},
-		},
-	}
-	mc := new(mocks.Client)
-	mc.On("DescribeSecurityGroup", mock.Anything).Return([]*ec2.SecurityGroup{{
-		GroupId: aws.String("groupId")}}, nil)
-
-	mc.On("RequestSpotInstances", mock.Anything, mock.Anything,
-		mock.Anything).Return([]*ec2.SpotInstanceRequest{{
-		SpotInstanceRequestId: aws.String("spot1"),
-	}, {
-		SpotInstanceRequestId: aws.String("spot2"),
-	}}, nil)
-	describeInstances := mc.On("DescribeInstances", mock.Anything)
-	describeInstances.Return(
-		&ec2.DescribeInstancesOutput{
-			Reservations: []*ec2.Reservation{
-				{
-					Instances: instances,
-				},
-			},
-		}, nil,
-	)
-
-	mc.On("DescribeAddresses").Return(nil, nil)
-	mc.On("DescribeVolumes").Return(nil, nil)
-
-	describeRequests := mc.On("DescribeSpotInstanceRequests", mock.Anything,
-		mock.Anything)
-	describeRequests.Return([]*ec2.SpotInstanceRequest{{
-		InstanceId:            aws.String("inst1"),
-		SpotInstanceRequestId: aws.String("spot1"),
-		State: aws.String(ec2.SpotInstanceStateActive),
-	}, {
-		InstanceId:            aws.String("inst2"),
-		SpotInstanceRequestId: aws.String("spot2"),
-		State: aws.String(ec2.SpotInstanceStateActive)}}, nil)
-
-	amazonProvider := newAmazon(testNamespace, DefaultRegion)
-	amazonProvider.Client = mc
-
-	exp := []string{"spot1", "spot2"}
-	err := amazonProvider.wait(exp, false)
-	assert.Error(t, err, "timed out")
-
-	describeInstances.Return(
-		&ec2.DescribeInstancesOutput{
-			Reservations: []*ec2.Reservation{
-				{
-					Instances: []*ec2.Instance{},
-				},
-			},
-		}, nil,
-	)
-	describeRequests.Return([]*ec2.SpotInstanceRequest{}, nil)
-
-	err = amazonProvider.wait(exp, false)
-	assert.NoError(t, err)
 }
 
 func TestUpdateFloatingIPs(t *testing.T) {

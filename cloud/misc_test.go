@@ -55,12 +55,3 @@ func TestDefaultRegion(t *testing.T) {
 
 	m = DefaultRegion(m)
 }
-
-func TestNewProviderFailure(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("provider.New did not panic on invalid provider")
-		}
-	}()
-	newProviderImpl("FakeAmazon", testRegion, "namespace")
-}

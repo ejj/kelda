@@ -659,6 +659,15 @@ func TestGetError(t *testing.T) {
 	assert.EqualError(t, err, "list FakeAmazon-Fake region-ns: err")
 }
 
+func TestNewProviderFailure(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("provider.New did not panic on invalid provider")
+		}
+	}()
+	newProviderImpl("FakeAmazon", testRegion, "namespace")
+}
+
 func setNamespace(conn db.Conn, ns string) {
 	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
 		bp, err := view.GetBlueprint()

@@ -1,7 +1,6 @@
 package cloud
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"testing"
@@ -362,15 +361,6 @@ func TestMakeClouds(t *testing.T) {
 		"FakeAmazon-Fake region-ns",
 		"FakeVagrant-Fake region-ns"}, locations)
 	close(stop)
-}
-
-func TestGetError(t *testing.T) {
-	t.Parallel()
-
-	cld := newTestCloud(FakeAmazon, testRegion, "ns")
-	cld.provider.(*fakeProvider).listError = errors.New("err")
-	_, err := cld.get()
-	assert.EqualError(t, err, "list FakeAmazon-Fake region-ns: err")
 }
 
 func TestNewProviderFailure(t *testing.T) {

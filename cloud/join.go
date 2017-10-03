@@ -2,7 +2,6 @@ package cloud
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/kelda/kelda/blueprint"
 	"github.com/kelda/kelda/cloud/acl"
@@ -23,7 +22,7 @@ type joinResult struct {
 func (cld cloud) join() (joinResult, error) {
 	res := joinResult{}
 
-	cloudMachines, err := cld.get()
+	cloudMachines, err := cld.provider.List()
 	if err != nil {
 		log.WithError(err).Error("Failed to list machines")
 		return res, err
@@ -191,17 +190,6 @@ func syncDB(cms []db.Machine, dbms []db.Machine) syncDBResult {
 	}
 
 	return ret
-}
-
-func (cld cloud) get() ([]db.Machine, error) {
-	c.Inc("List")
-
-	machines, err := cld.provider.List()
-	if err != nil {
-		return nil, fmt.Errorf("list %s: %s", cld, err)
-	}
-
-	return machines, nil
 }
 
 func getMachineRoles(machines []db.Machine) (withRoles []db.Machine) {

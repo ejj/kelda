@@ -134,6 +134,8 @@ func TestList(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, machines, []db.Machine{
 		{
+			Provider:    "DigitalOcean",
+			Region:      "sfo1",
 			CloudID:     "123",
 			PublicIP:    "publicIP",
 			PrivateIP:   "privateIP",
@@ -141,6 +143,8 @@ func TestList(t *testing.T) {
 			Preemptible: false,
 		},
 		{
+			Provider:    "DigitalOcean",
+			Region:      "sfo1",
 			CloudID:     "125",
 			PublicIP:    "publicIP",
 			PrivateIP:   "privateIP",

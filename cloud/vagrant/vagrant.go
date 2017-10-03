@@ -97,6 +97,7 @@ func (prvdr Provider) List() ([]db.Machine, error) {
 				instanceID)
 		}
 		instance := db.Machine{
+			Provider:  db.Vagrant,
 			CloudID:   instanceID,
 			PublicIP:  ip,
 			PrivateIP: ip,

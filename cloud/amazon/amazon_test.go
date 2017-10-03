@@ -107,6 +107,8 @@ func TestList(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []db.Machine{
 		{
+			Provider:    "Amazon",
+			Region:      "us-west-1",
 			CloudID:     "inst3",
 			Size:        "size2",
 			DiskSize:    32,
@@ -114,6 +116,8 @@ func TestList(t *testing.T) {
 			Preemptible: false,
 		},
 		{
+			Provider:    "Amazon",
+			Region:      "us-west-1",
 			CloudID:     "spot1",
 			PublicIP:    "publicIP",
 			PrivateIP:   "privateIP",
@@ -121,12 +125,16 @@ func TestList(t *testing.T) {
 			Preemptible: true,
 		},
 		{
+			Provider:    "Amazon",
+			Region:      "us-west-1",
 			CloudID:     "spot2",
 			Size:        "size2",
 			FloatingIP:  "xx.xxx.xxx.xxx",
 			Preemptible: true,
 		},
 		{
+			Provider:    "Amazon",
+			Region:      "us-west-1",
 			CloudID:     "spot3",
 			Preemptible: true,
 		},

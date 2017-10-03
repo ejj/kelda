@@ -201,13 +201,7 @@ func (cld cloud) get() ([]db.Machine, error) {
 		return nil, fmt.Errorf("list %s: %s", cld, err)
 	}
 
-	var cloudMachines []db.Machine
-	for _, m := range machines {
-		m.Provider = cld.providerName
-		m.Region = cld.region
-		cloudMachines = append(cloudMachines, m)
-	}
-	return cloudMachines, nil
+	return machines, nil
 }
 
 func getMachineRoles(machines []db.Machine) (withRoles []db.Machine) {

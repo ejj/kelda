@@ -392,6 +392,8 @@ func (prvdr *Provider) List() (machines []db.Machine, err error) {
 
 	for _, awsm := range awsMachines {
 		cm := awsm.machine
+		cm.Provider = db.Amazon
+		cm.Region = prvdr.region
 		cm.Preemptible = awsm.spotID != ""
 		cm.CloudID = awsm.spotID
 		if !cm.Preemptible {

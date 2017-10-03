@@ -53,6 +53,8 @@ func (s *GoogleTestSuite) TestList() {
 	s.NoError(err)
 	s.Len(machines, 1)
 	s.Equal(machines[0], db.Machine{
+		Provider:  "Google",
+		Region:    "zone-1",
 		CloudID:   "name-1",
 		PublicIP:  "x.x.x.x",
 		PrivateIP: "y.y.y.y",

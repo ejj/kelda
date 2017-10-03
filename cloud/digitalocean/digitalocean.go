@@ -106,6 +106,8 @@ func (prvdr Provider) List() (machines []db.Machine, err error) {
 			}
 
 			machine := db.Machine{
+				Provider:    db.DigitalOcean,
+				Region:      prvdr.region,
 				CloudID:     strconv.Itoa(d.ID),
 				PublicIP:    pubIP,
 				PrivateIP:   privIP,

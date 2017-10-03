@@ -125,6 +125,8 @@ func (prvdr *Provider) List() ([]db.Machine, error) {
 		}
 
 		machines = append(machines, db.Machine{
+			Provider:   db.Google,
+			Region:     prvdr.zone,
 			CloudID:    instance.Name,
 			PublicIP:   accessConfig.NatIP,
 			FloatingIP: floatingIP,

@@ -5,8 +5,9 @@ package join
 import (
 	"reflect"
 
-	"github.com/kelda/kelda/counter"
 	"sort"
+
+	"github.com/kelda/kelda/counter"
 )
 
 var c = counter.New("Join")

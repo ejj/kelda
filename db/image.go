@@ -1,6 +1,6 @@
 package db
 
-// An Image row represents a Docker image that should be built by the Quilt
+// An Image row represents a Docker image that should be built by the Kelda
 // masters.
 type Image struct {
 	ID int

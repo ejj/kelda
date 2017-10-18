@@ -151,9 +151,9 @@ func (cld cloud) runOnce() {
 	if len(jr.boot) == 0 &&
 		len(jr.terminate) == 0 &&
 		len(jr.updateIPs) == 0 {
-		// ACLs must be processed after Quilt learns about what machines
+		// ACLs must be processed after Kelda learns about what machines
 		// are in the cloud.  If we didn't, inter-machine ACLs could get
-		// removed when the Quilt controller restarts, even if there are
+		// removed when the Kelda controller restarts, even if there are
 		// running cloud machines that still need to communicate.
 		cld.syncACLs(jr.acls)
 	} else {

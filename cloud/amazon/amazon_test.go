@@ -680,39 +680,39 @@ func TestUpdateFloatingIPs(t *testing.T) {
 	amazonProvider.Client = mockClient
 
 	mockMachines := []db.Machine{
-		// Quilt should assign "x.x.x.x" to sir-1.
+		// Kelda should assign "x.x.x.x" to sir-1.
 		{
 			CloudID:     "sir-1",
 			FloatingIP:  "x.x.x.x",
 			Preemptible: true,
 		},
-		// Quilt should disassociate all floating IPs from spot instance sir-2.
+		// Kelda should disassociate all floating IPs from spot instance sir-2.
 		{
 			CloudID:     "sir-2",
 			FloatingIP:  "",
 			Preemptible: true,
 		},
-		// Quilt is asked to disassociate floating IPs from sir-3. sir-3 no longer
-		// has IP associations, but Quilt should not error.
+		// Kelda is asked to disassociate floating IPs from sir-3. sir-3 no longer
+		// has IP associations, but Kelda should not error.
 		{
 			CloudID:     "sir-3",
 			FloatingIP:  "",
 			Preemptible: true,
 		},
-		// Quilt should assign "x.x.x.x" to reserved-1.
+		// Kelda should assign "x.x.x.x" to reserved-1.
 		{
 			CloudID:     "reserved-1",
 			FloatingIP:  "reservedAdd",
 			Preemptible: false,
 		},
-		// Quilt should disassociate all floating IPs from reserved-2.
+		// Kelda should disassociate all floating IPs from reserved-2.
 		{
 			CloudID:     "reserved-2",
 			FloatingIP:  "",
 			Preemptible: false,
 		},
-		// Quilt is asked to disassociate floating IPs from reserved-3.
-		// reserved-3 no longer has IP associations, but Quilt should not
+		// Kelda is asked to disassociate floating IPs from reserved-3.
+		// reserved-3 no longer has IP associations, but Kelda should not
 		// error.
 		{
 			CloudID:     "reserved-3",
@@ -722,10 +722,10 @@ func TestUpdateFloatingIPs(t *testing.T) {
 	}
 
 	mockClient.On("DescribeAddresses").Return([]*ec2.Address{{
-		// Quilt should assign x.x.x.x to sir-1.
+		// Kelda should assign x.x.x.x to sir-1.
 		AllocationId: aws.String("alloc-1"),
 		PublicIp:     aws.String("x.x.x.x"),
-	}, { // Quilt should disassociate y.y.y.y from sir-2.
+	}, { // Kelda should disassociate y.y.y.y from sir-2.
 		AllocationId:  aws.String("alloc-2"),
 		PublicIp:      aws.String("y.y.y.y"),
 		AssociationId: aws.String("assoc-2"),
@@ -738,7 +738,7 @@ func TestUpdateFloatingIPs(t *testing.T) {
 		PublicIp:      aws.String("reservedRemove"),
 		AssociationId: aws.String("assoc-reservedRemove"),
 		InstanceId:    aws.String("reserved-2"),
-	}, { // Quilt should ignore z.z.z.z.
+	}, { // Kelda should ignore z.z.z.z.
 		PublicIp:   aws.String("z.z.z.z"),
 		InstanceId: aws.String("i-4")}}, nil)
 

@@ -96,7 +96,7 @@ func canBeColocated(constraint db.Placement, toPlace db.Container,
 		// make placement decisions without considering all the
 		// containers on all of the minions.
 		log.WithField("constraint", constraint).Warning(
-			"Quilt currently does not support inclusive" +
+			"Kelda currently does not support inclusive" +
 				" container placement constraints")
 		return true
 	}
@@ -194,7 +194,7 @@ func makeContext(minions []db.Minion, constraints []db.Placement,
 			ctx.changed = append(ctx.changed, dbc)
 		}
 
-		// If the container is built by Quilt, only schedule it if the image
+		// If the container is built by Kelda, only schedule it if the image
 		// has been built.
 		if dbc.Dockerfile != "" {
 			img, ok := builtImages[db.Image{

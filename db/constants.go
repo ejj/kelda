@@ -67,7 +67,7 @@ const (
 	Vagrant ProviderName = "Vagrant"
 )
 
-// AllProviders lists all of the providers that Quilt supports.
+// AllProviders lists all of the providers that Kelda supports.
 var AllProviders = []ProviderName{
 	Amazon,
 	Google,

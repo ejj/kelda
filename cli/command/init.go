@@ -59,7 +59,7 @@ func (iCmd *Init) Run() int {
 		log.Errorf("%s: Make sure that "+
 			"js/initializer/intializer.js is installed in your $PATH as "+
 			"%s. This is done automatically with "+
-			"`npm install -g @quilt/install`, but if you're running Kelda "+
+			"`npm install -g @kelda/install`, but if you're running Kelda "+
 			"from source, you must set up the symlink manually. You can "+
 			"do this by executing `ln -s <ABS_PATH_TO_KELDA_SOURCE>/"+
 			"js/initializer/initializer.js /usr/local/bin/%s`",

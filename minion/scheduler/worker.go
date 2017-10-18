@@ -18,7 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const labelKey = "quilt"
+const labelKey = "kelda"
 const labelValue = "scheduler"
 const labelPair = labelKey + "=" + labelValue
 const filesKey = "files"
@@ -240,11 +240,11 @@ func openflowContainers(dbcs []db.Container,
 
 	var ofcs []openflow.Container
 	for _, dbc := range dbcs {
-		_, peerQuilt := ipdef.PatchPorts(dbc.EndpointID)
+		_, peerKelda := ipdef.PatchPorts(dbc.EndpointID)
 
 		ofc := openflow.Container{
 			Veth:  ipdef.IFName(dbc.EndpointID),
-			Patch: peerQuilt,
+			Patch: peerKelda,
 			Mac:   ipdef.IPStrToMac(dbc.IP),
 			IP:    dbc.IP,
 

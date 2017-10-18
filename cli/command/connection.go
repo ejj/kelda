@@ -26,7 +26,7 @@ type connectionHelper struct {
 }
 
 func (ch *connectionHelper) BeforeRun() (err error) {
-	// Load the credentials that will be used by Quilt clients and servers.
+	// Load the credentials that will be used by Kelda clients and servers.
 	ch.creds, err = tlsIO.ReadCredentials(cliPath.DefaultTLSDir)
 	if err != nil {
 		return err

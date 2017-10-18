@@ -7,7 +7,7 @@ import (
 	"github.com/kelda/kelda/blueprint"
 )
 
-// A Blueprint that Quilt is attempting to implement.
+// A Blueprint that Kelda is attempting to implement.
 type Blueprint struct {
 	ID int
 

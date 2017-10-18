@@ -305,7 +305,7 @@ func (prvdr Provider) listFirewalls() ([]compute.Firewall, error) {
 
 // parseACLs parses the firewall rules contained in the given firewall into
 // `acl.ACL`s.
-// parseACLs only handles rules specified in the format that Quilt generates: it
+// parseACLs only handles rules specified in the format that Kelda generates: it
 // does not handle all the possible rule strings supported by the Google API.
 func (prvdr *Provider) parseACLs(fws []compute.Firewall) (acls []acl.ACL, err error) {
 	for _, fw := range fws {

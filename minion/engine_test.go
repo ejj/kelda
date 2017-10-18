@@ -465,7 +465,7 @@ func checkImage(t *testing.T, conn db.Conn, bp blueprint.Blueprint, exp ...db.Im
 func TestImageTxn(t *testing.T) {
 	t.Parallel()
 
-	// Regular image that isn't built by Quilt.
+	// Regular image that isn't built by Kelda.
 	checkImage(t, db.New(), blueprint.Blueprint{
 		Containers: []blueprint.Container{
 			{

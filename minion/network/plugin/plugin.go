@@ -98,14 +98,14 @@ func (d driver) CreateEndpoint(req *dnet.CreateEndpointRequest) (
 	}
 
 	mac := ipdef.IPToMac(addr)
-	peerBr, peerQuilt := ipdef.PatchPorts(req.EndpointID)
+	peerBr, peerKelda := ipdef.PatchPorts(req.EndpointID)
 
 	err = vsctl([][]string{
 		{"add-port", ipdef.KeldaBridge, ipdef.IFName(req.EndpointID)},
-		{"add-port", ipdef.KeldaBridge, peerQuilt},
-		{"set", "Interface", peerQuilt, "type=patch", "options:peer=" + peerBr},
+		{"add-port", ipdef.KeldaBridge, peerKelda},
+		{"set", "Interface", peerKelda, "type=patch", "options:peer=" + peerBr},
 		{"add-port", ipdef.OvnBridge, peerBr},
-		{"set", "Interface", peerBr, "type=patch", "options:peer=" + peerQuilt,
+		{"set", "Interface", peerBr, "type=patch", "options:peer=" + peerKelda,
 			"external-ids:attached-mac=" + mac,
 			"external-ids:iface-id=" + addr.String()}})
 	if err != nil {
@@ -114,7 +114,7 @@ func (d driver) CreateEndpoint(req *dnet.CreateEndpointRequest) (
 
 	err = ofctl(openflow.Container{
 		Veth:  outer,
-		Patch: peerQuilt,
+		Patch: peerKelda,
 		Mac:   mac,
 		IP:    addr.String()})
 	if err != nil {
@@ -142,10 +142,10 @@ func (d driver) EndpointInfo(req *dnet.InfoRequest) (*dnet.InfoResponse, error) 
 // DeleteEndpoint cleans up state associated with a docker endpoint.
 func (d driver) DeleteEndpoint(req *dnet.DeleteEndpointRequest) error {
 	c.Inc("Delete Endpoint")
-	peerBr, peerQuilt := ipdef.PatchPorts(req.EndpointID)
+	peerBr, peerKelda := ipdef.PatchPorts(req.EndpointID)
 	err := vsctl([][]string{
 		{"del-port", ipdef.KeldaBridge, ipdef.IFName(req.EndpointID)},
-		{"del-port", ipdef.KeldaBridge, peerQuilt},
+		{"del-port", ipdef.KeldaBridge, peerKelda},
 		{"del-port", ipdef.OvnBridge, peerBr}})
 	if err != nil {
 		return fmt.Errorf("ovs-vsctl: %v", err)

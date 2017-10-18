@@ -555,7 +555,7 @@ func (prvdr *Provider) getCreateSecurityGroup() (
 		return *groups[0].GroupId, groups[0].IpPermissions, nil
 	}
 
-	id, err := prvdr.CreateSecurityGroup(prvdr.namespace, "Quilt Group")
+	id, err := prvdr.CreateSecurityGroup(prvdr.namespace, "Kelda Group")
 	return id, nil, err
 }
 

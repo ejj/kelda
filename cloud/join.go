@@ -228,7 +228,7 @@ func connectionStatus(m db.Machine) string {
 func (cld cloud) desiredACLs(bp db.Blueprint) map[acl.ACL]struct{} {
 	aclSet := map[acl.ACL]struct{}{}
 
-	// Always allow traffic from the Quilt controller, so we append local.
+	// Always allow traffic from the Kelda controller, so we append local.
 	for _, cidr := range append(bp.AdminACL, "local") {
 		acl := acl.ACL{
 			CidrIP:  cidr,

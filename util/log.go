@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Formatter implements the log formatter for Quilt.
+// Formatter implements the log formatter for Kelda.
 type Formatter struct{}
 
 // Format converts a logrus entry into a string for logging.

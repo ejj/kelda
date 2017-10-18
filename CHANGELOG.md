@@ -1,18 +1,19 @@
-Quilt Change Log
+Kelda Change Log
 ================
 
 Up Next
 -------------
+- Kelda, formerly Quilt, has a brand new name!
 - Fix a bug where `quilt setup-tls` would fail when writing to a directory whose
 parent does not exist.
 - Auto-generate TLS credentials when starting the daemon if the credentials in
 `~/.quilt/tls` don't already exist.
 - Always encrypt communication with the daemon.
-- Try using the Quilt-managed SSH key when connecting to machines. The
-Quilt-managed SSH key should work most of the time because the
+- Try using the Kelda-managed SSH key when connecting to machines. The
+Kelda-managed SSH key should work most of the time because the
 daemon automatically grants it access to the cluster.
 - Fix a bug where floating IPs would not get properly assigned in GCE.
-- Add Infrastructure class for deploying Quilt machines. createDeployment()
+- Add Infrastructure class for deploying Kelda machines. createDeployment()
 and the Deployment class are now deprecated, and users should transition
 to using Infrastructure instead.
 

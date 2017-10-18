@@ -1,7 +1,7 @@
 # Open vSwitch
 Containerized versions of Open vSwitch built originally for use by
-[Quilt](http://kelda.io).  Despite their original intent, there is nothing Quilt
-specific about them, thus they should be generally useful.
+[Kelda](http://kelda.io).  Despite their original intent, there is nothing
+Kelda specific about them, thus they should be generally useful.
 
 ## Using
 The keldaio/ovs container can run `ovs-vswitchd`, `ovsdb-server`, `ovn-northd`,

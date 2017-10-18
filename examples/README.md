@@ -1,3 +1,3 @@
-# Quilt Examples
+# Kelda Examples
 
-This directory contains examples of Quilt blueprints.
+This directory contains examples of Kelda blueprints.

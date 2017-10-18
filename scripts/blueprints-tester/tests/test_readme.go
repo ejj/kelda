@@ -22,7 +22,7 @@ const (
 	hiddenCodePattern = "<!--\\s*(.*)\\s*-->\\W*$"
 
 	// workDir is the directory blueprints are placed during testing.
-	workDir = "/tmp/quilt-blueprint-test"
+	workDir = "/tmp/kelda-blueprint-test"
 )
 
 var errUnbalanced = errors.New("unbalanced code blocks")

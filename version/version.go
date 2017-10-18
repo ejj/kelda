@@ -1,4 +1,4 @@
 package version
 
-// Version is the Quilt version number.
+// Version is the Kelda version number.
 const Version = "dev"

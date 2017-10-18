@@ -1,14 +1,14 @@
 # Frequently Asked Questions
 
-This section includes answers to common questions about Quilt, and solutions
+This section includes answers to common questions about Kelda, and solutions
 to various issues.  If you run into an issue and can't find the answer here,
 don't hesitate to email us at [discuss@kelda.io](mailto:discuss@kelda.io).
 
-### What does Quilt use SSH keys for?
-Quilt `Machine`s optionally take one or more public SSH keys. It is strongly
+### What does Kelda use SSH keys for?
+Kelda `Machine`s optionally take one or more public SSH keys. It is strongly
 recommended to always provide at least one SSH key, as this will allow you
-to SSH into VMs and containers, and enables useful Quilt CLI commands like
-`quilt ssh` and `quilt logs` from any computer that holds a private SSH key
+to SSH into VMs and containers, and enables useful Kelda CLI commands like
+`kelda ssh` and `kelda logs` from any computer that holds a private SSH key
 matching the public key set on the `Machine`.
 
 ### Why can't I access my website?
@@ -28,16 +28,16 @@ There are a few possible reasons:
   IP address _and_ the port number into the browser as `<IP>:<PORT>`.
 
 ### How do I get persistent storage?
-Quilt currently doesn't support persistent storage, so we recommend using
+Kelda currently doesn't support persistent storage, so we recommend using
 a hosted database like [Firebase](https://firebase.google.com/).
-If you still choose to run storage applications like [MongoDB](https://github.com/quilt/mongo)
-or [Elasticsearch](https://github.com/quilt/elasticsearch) on Quilt, be aware
+If you still choose to run storage applications like [MongoDB](https://github.com/kelda/mongo)
+or [Elasticsearch](https://github.com/kelda/elasticsearch) on Kelda, be aware
 that the data will be lost if the containers or the VMs hosting them die.
 
-### I tried to `quilt run` a blueprint on Amazon and nothing seems to be working.
+### I tried to `kelda run` a blueprint on Amazon and nothing seems to be working.
 If you're running a blueprint on AWS and the containers are not getting properly
 created, you may have an issue with your VPC (Virtual Private Cloud) settings
-on Amazon.  When this issue occurs, if you run `quilt show`, the machines will
+on Amazon.  When this issue occurs, if you run `kelda show`, the machines will
 all have status `connected`, but the containers will never progress to the
 `scheduled` state (either the status will be empty, or for Dockerfiles that are
 built in the cluster, the status will say `built`).  This issue only occurs
@@ -46,12 +46,12 @@ or you haven't used one before on Amazon, this is probably not the issue you're
 experiencing.
 
 If you previously changed your default VPC on Amazon, it may be configured in a
-way that prevents Quilt containers from properly communicating with each other.
+way that prevents Kelda containers from properly communicating with each other.
 This happens if the subnet configured for your VPC overlaps with 10.0.0.0/8,
-which is the subnet that Quilt uses. This problem can manifest in many ways;
+which is the subnet that Kelda uses. This problem can manifest in many ways;
 typically it looks like nothing seems to be working correctly.  For example, a
 recent user who experienced this problem saw the following logs on the etcd
-container on a Quilt worker:
+container on a Kelda worker:
 
 ```console
 2017-06-05 21:14:40.823760 W | etcdserver: could not get cluster response from http://10.201.160.199:2380: Get http://10.201.160.199:2380/members: dial tcp 10.201.160.199:2380: getsockopt: no route to host

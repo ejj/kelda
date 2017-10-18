@@ -1,4 +1,4 @@
-# Developing Quilt
+# Developing Kelda
 
 ## Setup
 
@@ -23,24 +23,24 @@ export PATH="$GOPATH/bin:$PATH"
 Add these commands to your `.bashrc` so that they'll be run automatically each
 time you open a new shell.
 
-### Download Quilt
+### Download Kelda
 
-Clone the Quilt repository into your Go workspace using `go get`:
+Clone the Kelda repository into your Go workspace using `go get`:
 
 ```console
-$ go get github.com/quilt/quilt
+$ go get github.com/kelda/kelda
 ```
 
-This will install Quilt in your Go workspace at
-`$GOPATH/src/github.com/quilt/quilt`, and compile Quilt. After running
-installing Quilt, the `quilt` command should execute successfully in your shell.
+This will install Kelda in your Go workspace at
+`$GOPATH/src/github.com/kelda/kelda`, and compile Kelda. After running
+installing Kelda, the `kelda` command should execute successfully in your shell.
 
-<aside class="notice">If you use git to clone the Quilt repository, make sure
+<aside class="notice">If you use git to clone the Kelda repository, make sure
 that you clone it to the directory
-<code class="prettyprint">$GOPATH/src/github.com/quilt/quilt</code>.
+<code class="prettyprint">$GOPATH/src/github.com/kelda/kelda</code>.
 The Go language is opinionated about the directory structure of code, and if
-you don't put Quilt in the expected location, you'll run into errors when you
-use Go to compile Quilt.</aside>
+you don't put Kelda in the expected location, you'll run into errors when you
+use Go to compile Kelda.</aside>
 
 ### Protobufs
 If you change any of the proto files, you'll need to regenerate the protobuf
@@ -80,25 +80,25 @@ $ govendor update +vendor
 
 ### Building and Testing the Go Code
 
-To build Quilt, run `go install` in the Quilt directory.  To do things beyond
+To build Kelda, run `go install` in the Kelda directory.  To do things beyond
 basic build and install, several additional build tools are required.  These
 can be installed with the `make go-get` target.
 
-Note that if you've previously installed Quilt with npm, there will be
-another Quilt binary installed on your machine (that was downloaded during the
-npm installation).  If you want to develop Quilt,
-you probably want to make sure that when you run `quilt`, the version you're
-developing (that was compiled from the Go code) gets run, and not the Quilt
+Note that if you've previously installed Kelda with npm, there will be
+another Kelda binary installed on your machine (that was downloaded during the
+npm installation).  If you want to develop Kelda,
+you probably want to make sure that when you run `kelda`, the version you're
+developing (that was compiled from the Go code) gets run, and not the Kelda
 release that was downloaded from npm. Check that this is the case:
 
 ```console
-$ which quilt
-/Users/kay/gowork/bin/quilt
+$ which kelda
+/Users/kay/gowork/bin/kelda
 ```
 
-If running `which quilt` results in a path that includes your `$GOPATH$`, like
+If running `which kelda` results in a path that includes your `$GOPATH$`, like
 the one above, you're all set.  If it instead returns someplace else, e.g.,
-`/usr/local/bin/quilt`, you'll need to fix your `$PATH` variable so that
+`/usr/local/bin/kelda`, you'll need to fix your `$PATH` variable so that
 `$GOPATH/bin` comes first.
 
 To run the `go` tests, use the `gocheck` Make target in the root directory:
@@ -111,31 +111,31 @@ If you'd like to run the tests in just one package, e.g., the tests in the
 `engine` package, use `go test` with the package name:
 
 ```console
-$ go test github.com/quilt/quilt/engine
+$ go test github.com/kelda/kelda/engine
 ```
 
 ### Building and Testing the JavaScript Code
 
-To run the JavaScript code, you'll need to use `npm` to install Quilt's
+To run the JavaScript code, you'll need to use `npm` to install Kelda's
 dependencies:
 
 ```console
 $ npm install .
 ```
 
-If you're developing the @quilt/quilt package, you must also tell Node.js
-to use your local development copy of the Quilt JavaScript bindings (when you
-use Quilt to run blueprints) by running:
+If you're developing the kelda package, you must also tell Node.js
+to use your local development copy of the Kelda JavaScript bindings (when you
+use Kelda to run blueprints) by running:
 
 ```console
 $ npm link .
 ```
 
-in the directory that contains your local Quilt source files. For each blueprint
-that uses the Quilt JavaScript bindings, you must also run:
+in the directory that contains your local Kelda source files. For each blueprint
+that uses the Kelda JavaScript bindings, you must also run:
 
 ```console
-$ npm link @quilt/quilt
+$ npm link kelda
 ```
 
 in the directory that contains the blueprint JavaScript files.
@@ -148,7 +148,7 @@ $ make jscheck
 
 ## Contributing Code
 
-We highly encourage contributions to Quilt from the Open Source community!
+We highly encourage contributions to Kelda from the Open Source community!
 Everything from fixing spelling errors to major contributions to the
 architecture is welcome.  If you'd like to contribute but don't know
 where to get started, feel free to reach out to
@@ -162,7 +162,7 @@ See [Submitting Patches](#submitting-patches) for details.
 ### Go Coding Style
 The coding style is as defined by the `gofmt` tool: whatever transformations it
 makes on a piece of code are considered, by definition, the correct style.
-Unlike official go style, in Quilt lines should be wrapped to 89 characters. To
+Unlike official go style, in Kelda lines should be wrapped to 89 characters. To
 make sure that your code is properly formatted, run:
 
 ```console
@@ -173,7 +173,7 @@ Running `make format` will fix many (but not all) formatting errors.
 
 ### JavaScript Coding Style
 
-Quilt uses the AirBnb JavaScript style guide. To make sure that your JavaScript
+Kelda uses the AirBnb JavaScript style guide. To make sure that your JavaScript
 code is properly formatted, run:
 
 ```console
@@ -182,7 +182,7 @@ $ make jslint
 
 ### Git Commits
 
-The fundamental unit of work in the Quilt project is the git commit.  Each
+The fundamental unit of work in the Kelda project is the git commit.  Each
 commit should be a coherent whole that implements one idea completely and
 correctly. No commits should break the code, even if they "fix it" later.
 Commit messages should be wrapped to 80 characters and begin with a title of
@@ -202,7 +202,7 @@ Commits authored by more than one person should have a `Co-Authored-By:` tag at
 the end of the commit message.
 
 ### Submitting Patches
-Patches are submitted for inclusion in Quilt using a Github Pull Request.
+Patches are submitted for inclusion in Kelda using a Github Pull Request.
 
 A pull request is a collection of well formed commits that tie together
 in some theme, usually the larger goal they're trying to achieve.  Completely
@@ -210,7 +210,7 @@ unrelated patches should be included in separate pull requests.
 
 Pull requests are reviewed by one person: either by a committer, if the code was
 submitted by a non-committer, or by a non-committer otherwise. You do not
-need to choose a reviewer yourself; [quilt-bot](https://github.com/quilt-bot)
+need to choose a reviewer yourself; [kelda-bot](https://github.com/kelda/bot)
 will randomly select a reviewer from the appropriate group. Once the reviewer
 has approved the pull request, a committer will merge it. If the reviewer
 requests changes, leave a comment in the PR once you've implemented the changes,
@@ -234,13 +234,13 @@ of the series as tweaks to be squashed in later -- at all stages the PRs should
 be ready to merge without reorganizing commits.
 
 ## Code Structure
-Quilt is structured around a central database (`db`) that stores information about
+Kelda is structured around a central database (`db`) that stores information about
 the current state of the system. This information is used both by the global
-controller (Quilt Global) that runs locally on your machine, and by the `minion`
+controller (Kelda Global) that runs locally on your machine, and by the `minion`
 containers on the remote machines.
 
 ### Database
-Quilt uses the basic `db` database implemented in `db.go`. This database supports
+Kelda uses the basic `db` database implemented in `db.go`. This database supports
 insertions, deletions, transactions, triggers and querying.
 
 The `db` holds the tables defined in `table.go`, and each table is simply a
@@ -259,10 +259,10 @@ on the `db`. There is a `SelectFromX` function for each type `X` that is stored
 in the database. For instance, to query for `Connection`s in the
 `ConnectionTable`, one should use `SelectFromConnection`.
 
-### Quilt Global
+### Kelda Global
 
-The first thing that happens when Quilt starts is that your blueprint is parsed
-by Quilt's JavaScript library, `quilt.js`. `quilt.js` then puts the connection
+The first thing that happens when Kelda starts is that your blueprint is parsed
+by Kelda's JavaScript library, `kelda.js`. `kelda.js` then puts the connection
 and container specifications into a sensible format and forwards them to the
 `engine`.
 
@@ -281,14 +281,14 @@ reflect the changes in the `db`.
 
 Now that VMs are running, the `minion` container will take care of starting the
 necessary system containers on its host VM. The `foreman` acts like the middle
-man between your locally run Quilt Global, and the `minion` on the VMs. Namely,
+man between your locally run Kelda Global, and the `minion` on the VMs. Namely,
 the `foreman` configures the `minion`, notifies it of its (the `minion`'s)
-role, and passes it the policies from Quilt Global.
+role, and passes it the policies from Kelda Global.
 
 All of these steps are done continuously so the blueprint, database and
 remote system always agree on the state of the system.
 
-### Quilt Remote
+### Kelda Remote
 
 As described above, `cloud` is responsible for booting VMs. On boot, each VM
 runs docker and a `minion`. The VM is furthermore assigned a role - either
@@ -307,12 +307,12 @@ backups in case the leading `master` fails.
 ## Developing the Minion
 
 If you're developing code in `minion`, you'll need to do some extra setup to
-test your new code.  To make Quilt run your local version of the minion image,
-and not the default Quilt minion image, follow these steps:
+test your new code.  To make Kelda run your local version of the minion image,
+and not the default Kelda minion image, follow these steps:
 
 1. Create a new empty repository on your favorite registry -
 [docker hub](https://hub.docker.com/) for example.
-2. Modify `quiltImage` in [cfg.go](../cloud/cfg/cfg.go) to
+2. Modify `keldaImage` in [cfg.go](../cloud/cfg/cfg.go) to
 point to your repo.
 3. Modify `Version` in [version.go](../version/version.go) to be "latest".
 This ensures that you will be using the most recent version of the minion
@@ -320,11 +320,11 @@ image that you are pushing up to your registry.
 4. Create a `.mk` file (for example: `local.mk`) to override variables
 defined in [Makefile](../Makefile). Set `REPO` to your own repository
 (for example: `REPO = sample_repo`) inside the `.mk` file you created.
-5. Create the docker image: `make docker-build-quilt`
+5. Create the docker image: `make docker-build-kelda`
    * Docker for Mac and Windows is in beta. See the
    [docs](https://docs.docker.com/) for install instructions.
 6. Sign in to your image registry using `docker login`.
-7. Push your image: `make docker-push-quilt`.
+7. Push your image: `make docker-push-kelda`.
 
 After the above setup, you're good to go - just remember to build and push your
 image first, whenever you want to run the `minion` with your latest changes.

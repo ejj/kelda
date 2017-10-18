@@ -1,21 +1,21 @@
 ---
-title: Quilt Documentation
+title: Kelda Documentation
 
 toc_footers:
-  - <a href="https://github.com/quilt/quilt">
+  - <a href="https://github.com/kelda/kelda">
       <i class="fa fa-github" aria-hidden="true"></i>
-      Quilt Source Code
+      Kelda Source Code
     </a>
   - Documentation Powered by <a href='https://github.com/tripit/slate'>Slate</a>
 
 includes:
   - Introduction
   - GettingStarted
-  - HowQuiltWorks
+  - HowKeldaWorks
   - BlueprintWritersGuide
   - BlueprintAPI
   - jsdoc
-  - QuiltCLI
+  - KeldaCLI
   - CloudProviders
   - Dev
   - Security

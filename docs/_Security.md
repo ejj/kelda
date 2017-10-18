@@ -1,7 +1,7 @@
 # Security
 
 ## TLS
-Quilt uses [grpc](http://www.grpc.io/) for communication with the daemon and
+Kelda uses [grpc](http://www.grpc.io/) for communication with the daemon and
 deployed clusters. Functionality exposed through `grpc` includes deploying new
 blueprints and querying deployment information. All communication is
 automatically encrypted and verified using TLS.
@@ -11,14 +11,14 @@ Start the daemon. If credentials don't already exist, they will be
 automatically generated.
 
 ```console
-$ quilt daemon
+$ kelda daemon
 ```
 
-Use the other Quilt commands as normal.
+Use the other Kelda commands as normal.
 
 ```console
-$ quilt run ./example.js
-$ quilt show
+$ kelda run ./example.js
+$ kelda show
 MACHINE         ROLE      PROVIDER    REGION       SIZE         PUBLIC IP         STATUS
 8a0d2198229c    Master    Amazon      us-west-1    m3.medium    54.153.11.92      connected
 b92d625c6847    Worker    Amazon      us-west-1    m3.medium    52.53.170.129     connected
@@ -32,33 +32,33 @@ As an example of this, if you delete your credentials, restart the daemon, and
 run the same blueprint, you won't be able to connect to the machines:
 
 ```console
-$ rm -rf ~/.quilt/tls
-$ quilt daemon
-$ quilt run ./example.js
-$ quilt show
+$ rm -rf ~/.kelda/tls
+$ kelda daemon
+$ kelda run ./example.js
+$ kelda show
 MACHINE         ROLE      PROVIDER    REGION       SIZE         PUBLIC IP        STATUS
 8a0d2198229c    Master    Amazon      us-west-1    m3.medium    54.153.11.92     connecting
 b92d625c6847    Worker    Amazon      us-west-1    m3.medium    52.53.170.129    connecting
 ```
 
 ### TLS credentials
-`quilt daemon` autogenerates TLS credentials if necessary. They are stored in
-`~/.quilt/tls`. The directory structure is as follows:
+`kelda daemon` autogenerates TLS credentials if necessary. They are stored in
+`~/.kelda/tls`. The directory structure is as follows:
 
 ```console
-$ tree ~/.quilt/tls
+$ tree ~/.kelda/tls
 ├── certificate_authority.crt
 ├── certificate_authority.key
-├── quilt.crt
-├── quilt.key
+├── kelda.crt
+├── kelda.key
 ```
 
 - `certificate_authority.crt`: The certificate authority certificate.
 - `certificate_authority.key`: The private key of the certificate authority.
 Used by the daemon to generate minion certificates.
-- `quilt.crt`: A certificate signed by the certificate authority.
+- `kelda.crt`: A certificate signed by the certificate authority.
 Used for connecting to the cluster.
-- `quilt.key`: The private key associated with the signed certificate.
+- `kelda.key`: The private key associated with the signed certificate.
 Used for connecting to the cluster.
 
-Other files in the directory are ignored by Quilt.
+Other files in the directory are ignored by Kelda.

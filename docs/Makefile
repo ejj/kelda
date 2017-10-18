@@ -14,7 +14,7 @@ clean:
 	rm _jsdoc.erb
 	rm -rf build
 
-# Generate the JavaScript documentation by using jsdoc and Quilt's template.
+# Generate the JavaScript documentation by using jsdoc and Kelda's template.
 _jsdoc.erb: build/jsdoc_template ../blueprint/
 	build/jsdoc_template/node_modules/.bin/jsdoc \
 		-t build/jsdoc_template/ \
@@ -23,13 +23,13 @@ _jsdoc.erb: build/jsdoc_template ../blueprint/
 build/jsdoc_template:
 	mkdir -p build && \
 	cd build && \
-	git clone https://github.com/quilt/jsdoc_template.git && \
+	git clone https://github.com/kelda/jsdoc_template.git && \
 	cd jsdoc_template && \
 	npm install .
 
 build/slate:
 	mkdir -p build && \
 	cd build && \
-	git clone https://github.com/quilt/slate.git && \
+	git clone https://github.com/kelda/slate.git && \
 	cd slate && \
 	bundle install

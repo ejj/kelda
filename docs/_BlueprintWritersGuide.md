@@ -1,7 +1,7 @@
 # Blueprint Writers Guide
 
-The previous section described how to use Quilt to run an application that
-already had a blueprint. This guide describes how to write the Quilt
+The previous section described how to use Kelda to run an application that
+already had a blueprint. This guide describes how to write the Kelda
 blueprint for a new application, using the lobste.rs application as an example.
 lobste.rs is an open source project that implements a reddit-like web page,
 where users can post content and vote up or down other content.
@@ -9,8 +9,8 @@ where users can post content and vote up or down other content.
 ## Decomposing the application into containers
 
 The first question you should ask yourself is "how should this application be
-decomposed into different containers?"  Be sure you've read the [How Quilt
-Works](#how-quilt-works) section, which gives a brief overview of containers.
+decomposed into different containers?"  Be sure you've read the [How Kelda
+Works](#how-kelda-works) section, which gives a brief overview of containers.
 If you've already figured out the containers that are needed for your
 application (e.g., if you're already using Docker), you can skip the rest of
 this section.
@@ -101,29 +101,29 @@ This can be helpful for making sure everything was installed and is running as
 expected (although in this case, lobste.rs won't work when you start it with
 Docker, because it's not yet connected to a mysql container).
 
-## Deploying the containers with Quilt
+## Deploying the containers with Kelda
 
 So far we have a mysql container image (we're using an existing one hosted on
 Dockerhub) and a lobste.rs container image that we just made.  You should
 similarly have the containers ready for your application.  Up until now, we
-haven't done anything Quilt-specific: if you were using another container
+haven't done anything Kelda-specific: if you were using another container
 management service like Kubernetes, you would have had to create the container
 images like we did above.  These containers aren't yet configured to communicate
-with each other, which is what we'll set up with Quilt.  We'll also use Quilt to
+with each other, which is what we'll set up with Kelda.  We'll also use Kelda to
 descrbie the machines to launch for the containers to run on.
 
-To run the containers for your application with Quilt, you'll need to write a
-Quilt blueprint.  Quilt blueprints are written in Javascript, and the Quilt
+To run the containers for your application with Kelda, you'll need to write a
+Kelda blueprint.  Kelda blueprints are written in Javascript, and the Kelda
 Javascript API
-is described [here](http://docs.kelda.io/#quilt-js-api-documentation).  In this
-guide, we'll walk through how to write a Quilt blueprint for lobste.rs, but the
-Quilt API has more functionality than we could describe here.  See the [API
-guide](http://docs.kelda.io/#quilt-js-api-documentation) for more usage
+is described [here](http://docs.kelda.io/#kelda-js-api-documentation).  In this
+guide, we'll walk through how to write a Kelda blueprint for lobste.rs, but the
+Kelda API has more functionality than we could describe here.  See the [API
+guide](http://docs.kelda.io/#kelda-js-api-documentation) for more usage
 information.
 
-### Writing the Quilt blueprint for MySQL
+### Writing the Kelda blueprint for MySQL
 
-First, let's write the Quilt blueprint to get the MySQL container up and running.  We
+First, let's write the Kelda blueprint to get the MySQL container up and running.  We
 need to create a container based on the mysql image:
 
 ```javascript
@@ -133,7 +133,7 @@ let sql = new Container('sql', 'mysql:5.6.32');
 Here, the argument to `Container` is the hostname for the container, and the
 name of an image.  You can also pass in a Dockerfile to use to create a new
 image, as described in the [Javascript API
-documentation](http://docs.kelda.io/#quilt-js-api-documentation).
+documentation](http://docs.kelda.io/#kelda-js-api-documentation).
 
 Next, the SQL container requires some environment variables to be set.  In
 particular, we need to specify a root password for SQL.  We can set the root
@@ -143,11 +143,11 @@ password to `foo` with the `setEnv` function:
 sql.setEnv('MYSQL_ROOT_PASSWORD', 'foo');
 ```
 
-### Writing the Quilt blueprint for lobste.rs
+### Writing the Kelda blueprint for lobste.rs
 
 Next, we can similarly initialize the lobsters container.  The lobsters container is
 a little trickier to initialize because it requires an environment variable
-(`DATABASE_URL`) to be set to the URL of the SQL container.  Quilt containers
+(`DATABASE_URL`) to be set to the URL of the SQL container.  Kelda containers
 are each assigned unique hostnames when they're initialized, so we can create
 the lobsters container and initialize the URL as follows:
 
@@ -160,7 +160,7 @@ lobsters.setEnv('DATABASE_URL', sqlDatabaseUrl);
 ### Allowing network connections
     
 At this point, we've written code to create a mysql container and a lobsters
-container.  With Quilt, by default, all network connections are blocked.  To allow
+container.  With Kelda, by default, all network connections are blocked.  To allow
 lobsters to talk to mysql, we need to explicitly open the mysql port (3306):
 
 ```javascript
@@ -168,7 +168,7 @@ sql.allowFrom(lobsters, 3306);
 ```
     
 Because lobsters is a web application, the relevant port should also be open to
-the public internet on the lobsters container.  Quilt has a `publicInternet`
+the public internet on the lobsters container.  Kelda has a `publicInternet`
 variable that can be used to connect containers to any IP address:
 
 ```javascript
@@ -177,7 +177,7 @@ lobsters.allowFrom(publicInternet, 3000);
     
 ### Deploying the application on infrastructure
 
-Finally, we'll use Quilt to launch some machines, and then start our containers on
+Finally, we'll use Kelda to launch some machines, and then start our containers on
 those machines.  First, we'll define a "base machine."  We'll deploy a few
 machines, and creating the base machine is a useful way to create one machine
 that all of the machines in our deployment will be based off of.  In this case,
@@ -189,7 +189,7 @@ let baseMachine = new Machine({provider: 'Amazon', sshKeys: ['ssh-rsa bar']});
 ```
     
 Now, using that base machine, we can deploy a master and a worker machine using
-Quilt's `Infrastructure` constructor.  All infrastructures must have at least
+Kelda's `Infrastructure` constructor.  All infrastructures must have at least
 one master, which keeps track of state for all of the machines in the cluster,
 and at least one worker. The `Infrastructure` constructor accepts the master(s)
 and worker(s) as parameters:
@@ -206,13 +206,13 @@ sql.deploy(infra);
 lobsters.deploy(infra);
 ```
     
-We're done!  Running the blueprint is now trivial.  With a quilt daemon running, run
+We're done!  Running the blueprint is now trivial.  With a kelda daemon running, run
 your new blueprint (which, in this case, is called lobsters.js):
 
 ```console
-$ quilt run ./lobsters.js
+$ kelda run ./lobsters.js
 ```
     
 Now users of lobsters, for example, can deploy it without needing to worry about
 the details of how different containers are connected with each other.  All they
-need to do is to `quilt run` the existing blueprint.
+need to do is to `kelda run` the existing blueprint.

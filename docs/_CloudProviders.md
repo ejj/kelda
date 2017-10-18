@@ -1,11 +1,11 @@
 # Cloud Provider Configuration
 
 This section describes the basic configuration of the cloud providers supported
-by Quilt, and gives some details about how to enable extra features (e.g.,
+by Kelda, and gives some details about how to enable extra features (e.g.,
 floating IP addresses) on each cloud provider.
 
-Quilt needs access to your cloud provider credentials in order to make the API
-calls needed to boot your deployment. Don't worry, Quilt will never store
+Kelda needs access to your cloud provider credentials in order to make the API
+calls needed to boot your deployment. Don't worry, Kelda will never store
 your credentials or use them for anything else than deploying your application.
 
 ## Amazon EC2
@@ -18,12 +18,12 @@ your credentials or use them for anything else than deploying your application.
    page in the AWS Management Console. Choose "Access Keys" and then
    "Create New Access Key."
 
-3. Run `quilt init` on the machine that will be running the daemon, and pass
+3. Run `kelda init` on the machine that will be running the daemon, and pass
   it your AWS credentials. The formatted credentials will be placed in
   `~/.aws/credentials`.
 
 ### Formatting Credentials
-While it is recommended to use `quilt init` to format the provider credentials,
+While it is recommended to use `kelda init` to format the provider credentials,
 it is possible to manually create the credentials file in `~/.aws/credentials`
 on the machine that will be running the daemon:
 
@@ -45,14 +45,14 @@ top), except with `<YOUR_ID>` and `<YOUR_SECRET_KEY>` filled in appropriately.
 2. Create a new token [here](https://cloud.digitalocean.com/settings/api/tokens).
    The token must have both read and write permissions.
 
-3. Run `quilt init` on the machine that will be running the Quilt daemon, and
+3. Run `kelda init` on the machine that will be running the Kelda daemon, and
    pass it your token. The token will be placed in `~/.digitalocean/key`.
 
 ### Floating IPs
 Unless there are already droplets running, DigitalOcean doesn't allow users to
 create floating IPs under the "Networking" tab on their website. Instead, [this
 link](https://cloud.digitalocean.com/networking/floating_ips/datacenter) can be
-used to reserve IPs that Quilt can then assign to droplets.
+used to reserve IPs that Kelda can then assign to droplets.
 
 ## Google Compute Engine
 
@@ -61,7 +61,7 @@ used to reserve IPs that Quilt can then assign to droplets.
    [create one](https://cloud.google.com/compute/).
 
 2. Create a Google Cloud Platform Project: All instances are booted under a
-   Cloud Platform project. To setup a project for use with Quilt, go to the
+   Cloud Platform project. To setup a project for use with Kelda, go to the
    [console page](http://console.cloud.google.com), then click the project
    dropdown at the top of page, and hit the plus icon. Pick a name, and create
    your project.
@@ -76,6 +76,6 @@ used to reserve IPs that Quilt can then assign to droplets.
    service account with the `Project -> Editor` role, and select the JSON output
    option.
 
-5. Run `quilt init` on the machine from which you will be running the Quilt
+5. Run `kelda init` on the machine from which you will be running the Kelda
   daemon, and give it the path to the downloaded JSON from step 3.
   The credentials will be placed in `~/.gce/kelda.json`.

@@ -1,5 +1,6 @@
 # Compiles all of the docs in docs/build.
 all: build/slate _jsdoc.erb
+	bundle --version && \
 	cd build/slate && \
 	cp -r ${CURDIR}/source/* source/ && \
 	cp -r ${CURDIR}/*md source/ && \
@@ -28,6 +29,7 @@ build/jsdoc_template:
 	npm install .
 
 build/slate:
+	bundle --version && \
 	mkdir -p build && \
 	cd build && \
 	git clone https://github.com/quilt/slate.git && \

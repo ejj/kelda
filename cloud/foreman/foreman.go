@@ -26,15 +26,6 @@ var minions map[string]*minion
 // Credentials that the foreman should use to connect to its minions.
 var Credentials connection.Credentials
 
-// ConnectionTrigger sends messages when a change to the connection status of a
-// minion occurs.
-// The sends are non-blocking, so if there is already a notification in the
-// queue, another one isn't sent. This is reasonable because the purpose of
-// this trigger is just to notify the cluster that a change to the connection
-// status of some machines have changed -- the cluster checks all machines when
-// updating the status.
-var ConnectionTrigger = make(chan struct{}, 1)
-
 type client interface {
 	setMinion(pb.MinionConfig) error
 	getMinion() (pb.MinionConfig, error)
@@ -214,19 +205,11 @@ func updateConfig(m *minion) {
 	}
 
 	m.connected = connected
-	notifyConnectionChange()
 	if m.connected {
 		c.Inc("Minion Connected")
 		log.WithField("machine", m.machine).Debug("New connection")
 	} else {
 		c.Inc("Minion Disconnected")
-	}
-}
-
-func notifyConnectionChange() {
-	select {
-	case ConnectionTrigger <- struct{}{}:
-	default:
 	}
 }
 

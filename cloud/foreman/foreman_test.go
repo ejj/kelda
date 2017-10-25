@@ -187,44 +187,6 @@ func TestGetMachineRole(t *testing.T) {
 	minions = map[string]*minion{}
 }
 
-func TestConnectionTrigger(t *testing.T) {
-	t.Parallel()
-
-	fc := &fakeClient{getMinionError: false}
-	min := &minion{client: fc}
-
-	updateConfig(min)
-	assert.True(t, fired(ConnectionTrigger),
-		"first successful connect should fire ConnectionTrigger")
-
-	for i := 0; i < 5; i++ {
-		updateConfig(min)
-		assert.False(t, fired(ConnectionTrigger),
-			"subsequent successful connects should not fire "+
-				"ConnectionTrigger")
-	}
-
-	fc.getMinionError = true
-	updateConfig(min)
-	assert.True(t, fired(ConnectionTrigger),
-		"first disconnect should fire ConnectionTrigger")
-
-	for i := 0; i < 5; i++ {
-		updateConfig(min)
-		assert.False(t, fired(ConnectionTrigger),
-			"subsequent disconnects should not fire ConnectionTrigger")
-	}
-}
-
-func fired(c chan struct{}) bool {
-	select {
-	case <-c:
-		return true
-	default:
-		return false
-	}
-}
-
 func TestIsConnected(t *testing.T) {
 	minions = map[string]*minion{}
 	assert.False(t, IsConnected("host"))

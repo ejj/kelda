@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/kelda/kelda/api/client"
@@ -49,65 +50,31 @@ func newDNSTester(clnt client.Client) (dnsTester, error) {
 	return dnsTester{hostnameIPMap}, nil
 }
 
-type lookupResult struct {
-	hostname string
-	ip       string
-	err      error
-	cmdTime  commandTime
-}
-
-// Resolve all hostnames on the container with the given BlueprintID. Parallelize
-// over the hostnames.
-func (tester dnsTester) lookupAll(container db.Container) []lookupResult {
-	lookupResultsChan := make(chan lookupResult, len(tester.hostnameIPMap))
-
-	// Create worker threads.
-	lookupRequests := make(chan string, execConcurrencyLimit)
+func (tester dnsTester) test(t *testing.T, container db.Container) {
 	var wg sync.WaitGroup
-	for i := 0; i < execConcurrencyLimit; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for hostname := range lookupRequests {
-				startTime := time.Now()
-				ip, err := lookup(container.BlueprintID, hostname)
-				lookupResultsChan <- lookupResult{hostname, ip, err,
-					commandTime{startTime, time.Now()}}
-			}
-		}()
-	}
 
-	// Feed worker threads.
-	for hostname := range tester.hostnameIPMap {
-		lookupRequests <- hostname
-	}
-	close(lookupRequests)
-	wg.Wait()
-	close(lookupResultsChan)
+	test := func(hostname string) {
+		defer wg.Done()
+		startTime := time.Now()
+		ip, err := lookup(container.BlueprintID, hostname)
 
-	// Collect results.
-	var results []lookupResult
-	for res := range lookupResultsChan {
-		results = append(results, res)
-	}
+		expIP := tester.hostnameIPMap[hostname]
+		if err == nil && expIP != anyIPAllowed && ip != expIP {
+			err = fmt.Errorf("wrong IP. expected %s, actual %s", expIP, ip)
+		}
 
-	return results
-}
-
-func (tester dnsTester) test(container db.Container) (failures []error) {
-	for _, l := range tester.lookupAll(container) {
-		expIP := tester.hostnameIPMap[l.hostname]
-		if l.err != nil {
-			failures = append(failures,
-				fmt.Errorf("(%s) lookup errored: %s", l.cmdTime, l.err))
-		} else if expIP != anyIPAllowed && l.ip != expIP {
-			failures = append(failures,
-				fmt.Errorf("(%s) expected %s, got %s",
-					l.cmdTime, expIP, l.ip))
+		if err != nil {
+			t.Errorf("DNS: %s %s -> %s: %s", startTime,
+				container.BlueprintID, hostname, err)
 		}
 	}
 
-	return failures
+	for h := range tester.hostnameIPMap {
+		wg.Add(1)
+		go test(h)
+	}
+
+	wg.Wait()
 }
 
 func lookup(id string, hostname string) (string, error) {

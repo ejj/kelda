@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -59,7 +61,7 @@ func TestConnectivity(t *testing.T) {
 }
 
 type testerIntf interface {
-	test(c db.Container) []error
+	test(t *testing.T, c db.Container)
 }
 
 type commandTime struct {
@@ -75,47 +77,27 @@ func (ct commandTime) String() string {
 // Gather test results for each container. For each minion machine, run one test
 // at a time.
 func testContainers(t *testing.T, tester testerIntf, containers []db.Container) {
-	// Create a separate test executor go routine for each minion machine.
-	testChannels := make(map[string]chan db.Container)
-	for _, c := range containers {
-		testChannels[c.Minion] = make(chan db.Container)
-	}
-
 	var wg sync.WaitGroup
-	for _, testChan := range testChannels {
+	for _, c := range containers {
 		wg.Add(1)
-		go func(testChan chan db.Container) {
-			defer wg.Done()
-			for c := range testChan {
-				for _, err := range tester.test(c) {
-					if err != nil {
-						t.Errorf("%s: %s", c.BlueprintID, err)
-					}
-				}
-			}
-		}(testChan)
-	}
-
-	// Feed the worker threads until we've run all the tests.
-	for len(containers) != 0 {
-		var remainingContainers []db.Container
-		for _, c := range containers {
-			select {
-			case testChannels[c.Minion] <- c:
-			default:
-				remainingContainers = append(remainingContainers, c)
-			}
-		}
-		containers = remainingContainers
-		time.Sleep(1 * time.Second)
-	}
-	for _, testChan := range testChannels {
-		close(testChan)
+		go func(c db.Container) {
+			tester.test(t, c)
+			wg.Done()
+		}(c)
 	}
 	wg.Wait()
 }
 
+// We have to limit our parallelization because each `kelda ssh` creates a new SSH login
+// session. Doing this quickly in parallel breaks system-logind on the remote machine:
+// https://github.com/systemd/systemd/issues/2925.  Furthermore, the concurrency limit
+// cannot exceed the sshd MaxStartups setting, or else the SSH connections may be
+// randomly rejected.
+var sshRateLimit = time.Tick(100 * time.Millisecond)
+
 func keldaSSH(id string, cmd ...string) (string, error) {
+	<-sshRateLimit
+	fmt.Printf("kelda ssh %s %s\n", id, strings.Join(cmd, " "))
 	execCmd := exec.Command("kelda", append([]string{"ssh", id}, cmd...)...)
 	stderrBytes := bytes.NewBuffer(nil)
 	execCmd.Stderr = stderrBytes

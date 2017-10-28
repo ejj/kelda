@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/kelda/kelda/api/client"
 	"github.com/kelda/kelda/db"
-	"github.com/kelda/kelda/join"
 )
 
 type connectionTester struct {
@@ -52,61 +52,7 @@ func newConnectionTester(clnt client.Client) (connectionTester, error) {
 	}, nil
 }
 
-type pingResult struct {
-	target    string
-	reachable bool
-	err       error
-	cmdTime   commandTime
-}
-
-// We have to limit our parallelization because each `kelda exec` creates a new SSH login
-// session. Doing this quickly in parallel breaks system-logind
-// on the remote machine: https://github.com/systemd/systemd/issues/2925.
-// Furthermore, the concurrency limit cannot exceed the sshd MaxStartups setting,
-// or else the SSH connections may be randomly rejected.
-const execConcurrencyLimit = 5
-
-func (tester connectionTester) pingAll(container db.Container) []pingResult {
-	pingResultsChan := make(chan pingResult, len(tester.allHostnames))
-
-	// Create worker threads.
-	pingRequests := make(chan string, execConcurrencyLimit)
-	var wg sync.WaitGroup
-	for i := 0; i < execConcurrencyLimit; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for hostname := range pingRequests {
-				startTime := time.Now()
-				_, err := ping(container.BlueprintID, hostname)
-				pingResultsChan <- pingResult{
-					target:    hostname,
-					reachable: err == nil,
-					err:       err,
-					cmdTime:   commandTime{startTime, time.Now()},
-				}
-			}
-		}()
-	}
-
-	// Feed worker threads.
-	for _, hostname := range tester.allHostnames {
-		pingRequests <- hostname
-	}
-	close(pingRequests)
-	wg.Wait()
-	close(pingResultsChan)
-
-	// Collect results.
-	var pingResults []pingResult
-	for res := range pingResultsChan {
-		pingResults = append(pingResults, res)
-	}
-
-	return pingResults
-}
-
-func (tester connectionTester) test(container db.Container) (failures []error) {
+func (tester connectionTester) test(t *testing.T, container db.Container) {
 	// We should be able to ping ourselves.
 	expReachable := map[string]struct{}{
 		container.Hostname + ".q": {},
@@ -115,53 +61,34 @@ func (tester connectionTester) test(container db.Container) (failures []error) {
 		expReachable[dst+".q"] = struct{}{}
 	}
 
-	var expPings []pingResult
-	for _, ip := range tester.allHostnames {
-		_, reachable := expReachable[ip]
-		expPings = append(expPings, pingResult{
-			target:    ip,
-			reachable: reachable,
-		})
-	}
-	pingResults := tester.pingAll(container)
-	_, _, failuresIntf := join.HashJoin(pingSlice(expPings), pingSlice(pingResults),
-		ignoreErrorField, ignoreErrorField)
+	var wg sync.WaitGroup
 
-	for _, badIntf := range failuresIntf {
-		bad := badIntf.(pingResult)
-		var failure error
-		if bad.reachable {
-			failure = fmt.Errorf("(%s) could ping unauthorized container %s",
-				bad.cmdTime, bad.target)
-		} else {
-			failure = fmt.Errorf("(%s) couldn't ping authorized container "+
-				"%s: %s", bad.cmdTime, bad.target, bad.err)
+	test := func(hostname string) {
+		defer wg.Done()
+		_, err := keldaSSH(container, "ping", "-c", "3", "-W", "1", hostname)
+
+		var errStr string
+		reached := err == nil
+		if _, ok := expReachable[hostname]; ok {
+			if !reached {
+				errStr = fmt.Sprintf("Failed to ping: %s %s -> %s. %s",
+					time.Now(), container.BlueprintID, hostname, err)
+			}
+		} else if reached {
+			errStr = fmt.Sprintf("Unexpected ping success: %s %s -> %s",
+				time.Now(), container.BlueprintID, hostname)
 		}
-		failures = append(failures, failure)
+
+		if errStr != "" {
+			fmt.Println(errStr)
+			t.Error(errStr)
+		}
 	}
 
-	return failures
-}
-
-func ignoreErrorField(pingResultIntf interface{}) interface{} {
-	return pingResult{
-		target:    pingResultIntf.(pingResult).target,
-		reachable: pingResultIntf.(pingResult).reachable,
+	for _, h := range tester.allHostnames {
+		wg.Add(1)
+		go test(h)
 	}
-}
 
-// ping `target` from within container `id` with 3 packets, with a timeout of
-// 1 second for each packet.
-func ping(id string, target string) (string, error) {
-	return keldaSSH(id, "ping", "-c", "3", "-W", "1", target)
-}
-
-type pingSlice []pingResult
-
-func (ps pingSlice) Get(ii int) interface{} {
-	return ps[ii]
-}
-
-func (ps pingSlice) Len() int {
-	return len(ps)
+	wg.Wait()
 }

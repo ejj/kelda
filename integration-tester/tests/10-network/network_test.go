@@ -1,129 +1,115 @@
 package main
 
 import (
-	"bytes"
 	"errors"
-	"os/exec"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
-	"time"
 
+	"github.com/kelda/kelda/cli/ssh"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/integration-tester/util"
 )
 
-func TestDNS(t *testing.T) {
+// The maximum number of SSH Sessions spread across all minions.
+const MaxSSHSessions = 512
+
+// Map from minion private IP address to a channel storing SSH clients to that minion.
+// The channel is intended to act as a sempahore.  When needed a client can be popped off
+// the front, and then pushed on the back when finished.
+var clients = map[string]chan ssh.Client{}
+
+func TestNetwork(t *testing.T) {
 	clnt, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err.Error())
 	}
 	defer clnt.Close()
 
-	dnsTester, err := newDNSTester(clnt)
-	if err != nil {
-		t.Fatalf("couldn't initialize dns tester: %s", err.Error())
-	}
-
 	containers, err := clnt.QueryContainers()
 	if err != nil {
 		t.Fatalf("couldn't query containers: %s", err.Error())
 	}
 
-	// Run the test twice to see if failed tests persist.
-	for i := 0; i < 2; i++ {
-		testContainers(t, dnsTester, containers)
-	}
-}
-
-func TestConnectivity(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	machines, err := clnt.QueryMachines()
 	if err != nil {
-		t.Fatalf("couldn't get api client: %s", err.Error())
-	}
-	defer clnt.Close()
-
-	connTester, err := newConnectionTester(clnt)
-	if err != nil {
-		t.Fatalf("couldn't initialize connection tester: %s", err.Error())
+		t.Fatalf("failed to query machines: %s", err)
 	}
 
-	containers, err := clnt.QueryContainers()
-	if err != nil {
-		t.Fatalf("couldn't query containers: %s", err.Error())
+	// Map writes aren't thread safe, so we create the channels before go routines
+	// have a chance to launch.
+	for _, m := range machines {
+		clients[m.PrivateIP] = make(chan ssh.Client, MaxSSHSessions)
 	}
 
-	// Run the test twice to see if failed tests persist.
-	for i := 0; i < 2; i++ {
+	// We have to limit parallelization setting up SSH sessions.  Doing so too
+	// quickly in parallel breaks system-logind on the remote machine:
+	// https://github.com/systemd/systemd/issues/2925.  Furthermore, the concurrency
+	// limit cannot exceed the sshd MaxStartups setting, or else the SSH connections
+	// may be randomly rejected.
+	//
+	// Also note, we intentionally don't wait for this go routine to finish.  As new
+	// SSH connections are created, the tests can gradually take advantage of them.
+	go func() {
+		for i := 0; i < MaxSSHSessions; i++ {
+			m := machines[i%len(machines)]
+			client, err := ssh.New(m.PublicIP, "")
+			if err != nil {
+				t.Fatalf("failed to ssh to %s: %s", m.PublicIP, err)
+			}
+			clients[m.PrivateIP] <- client
+		}
+	}()
+
+	t.Run("Ping", func(t *testing.T) {
+		connTester, err := newConnectionTester(clnt)
+		if err != nil {
+			t.Fatalf("couldn't initialize connection tester: %s",
+				err.Error())
+		}
+
 		testContainers(t, connTester, containers)
-	}
+	})
+
+	t.Run("DNS", func(t *testing.T) {
+		dnsTester, err := newDNSTester(clnt)
+		if err != nil {
+			t.Fatalf("couldn't initialize dns tester: %s", err.Error())
+		}
+
+		testContainers(t, dnsTester, containers)
+	})
 }
 
 type testerIntf interface {
-	test(c db.Container) []error
-}
-
-type commandTime struct {
-	start, end time.Time
-}
-
-func (ct commandTime) String() string {
-	// Just show the hour, minute, and second.
-	timeFmt := "15:04:05"
-	return ct.start.Format(timeFmt) + " - " + ct.end.Format(timeFmt)
+	test(t *testing.T, c db.Container)
 }
 
 // Gather test results for each container. For each minion machine, run one test
 // at a time.
 func testContainers(t *testing.T, tester testerIntf, containers []db.Container) {
-	// Create a separate test executor go routine for each minion machine.
-	testChannels := make(map[string]chan db.Container)
-	for _, c := range containers {
-		testChannels[c.Minion] = make(chan db.Container)
-	}
-
 	var wg sync.WaitGroup
-	for _, testChan := range testChannels {
-		wg.Add(1)
-		go func(testChan chan db.Container) {
-			defer wg.Done()
-			for c := range testChan {
-				for _, err := range tester.test(c) {
-					if err != nil {
-						t.Errorf("%s: %s", c.BlueprintID, err)
-					}
-				}
-			}
-		}(testChan)
-	}
-
-	// Feed the worker threads until we've run all the tests.
-	for len(containers) != 0 {
-		var remainingContainers []db.Container
-		for _, c := range containers {
-			select {
-			case testChannels[c.Minion] <- c:
-			default:
-				remainingContainers = append(remainingContainers, c)
-			}
-		}
-		containers = remainingContainers
-		time.Sleep(1 * time.Second)
-	}
-	for _, testChan := range testChannels {
-		close(testChan)
+	wg.Add(len(containers))
+	for _, c := range containers {
+		go func(c db.Container) {
+			tester.test(t, c)
+			wg.Done()
+		}(c)
 	}
 	wg.Wait()
 }
 
-func keldaSSH(id string, cmd ...string) (string, error) {
-	execCmd := exec.Command("kelda", append([]string{"ssh", id}, cmd...)...)
-	stderrBytes := bytes.NewBuffer(nil)
-	execCmd.Stderr = stderrBytes
-
-	stdoutBytes, err := execCmd.Output()
-	if err != nil {
-		err = errors.New(stderrBytes.String())
+func keldaSSH(dbc db.Container, cmd ...string) (string, error) {
+	if dbc.Minion == "" || dbc.DockerID == "" {
+		return "", errors.New("container not yet booted")
 	}
 
-	return string(stdoutBytes), err
+	ssh := <-clients[dbc.Minion]
+	defer func() { clients[dbc.Minion] <- ssh }()
+
+	fmt.Println(dbc.BlueprintID, strings.Join(cmd, " "))
+	ret, err := ssh.CombinedOutput(fmt.Sprintf("docker exec %s %s", dbc.DockerID,
+		strings.Join(cmd, " ")))
+	return string(ret), err
 }

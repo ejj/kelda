@@ -67,10 +67,10 @@ func TestUpdateLoadBalancerARP(t *testing.T) {
 
 	// Test properly replaces wrong ARP mapping.
 	client.On("ListSwitchPort", mock.Anything).Return(ovsdb.SwitchPort{
-		Addresses: []string{ipdef.LoadBalancerMac + " 10.0.0.2"},
+		Addresses: []string{"10.0.0.2 " + ipdef.LoadBalancerMac},
 	}, nil).Once()
 	client.On("UpdateSwitchPortAddresses", loadBalancerSwitchPort,
-		[]string{ipdef.LoadBalancerMac + " 10.0.0.2 10.0.0.3"}).Return(nil).Once()
+		[]string{"10.0.0.2 10.0.0.3 " + ipdef.LoadBalancerMac}).Return(nil).Once()
 	updateLoadBalancerARP(client, []db.LoadBalancer{
 		{IP: "10.0.0.2"}, {IP: "10.0.0.3"},
 	})
@@ -79,7 +79,7 @@ func TestUpdateLoadBalancerARP(t *testing.T) {
 	// Test ignores order IP ordering.
 	client.Calls = nil
 	client.On("ListSwitchPort", mock.Anything).Return(ovsdb.SwitchPort{
-		Addresses: []string{ipdef.LoadBalancerMac + " 10.0.0.2 10.0.0.3"},
+		Addresses: []string{"10.0.0.2 10.0.0.3 " + ipdef.LoadBalancerMac},
 	}, nil).Once()
 	updateLoadBalancerARP(client, []db.LoadBalancer{
 		{IP: "10.0.0.3"}, {IP: "10.0.0.2"},

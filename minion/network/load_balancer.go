@@ -125,7 +125,7 @@ func updateLoadBalancerARP(client ovsdb.Client, loadBalancers []db.LoadBalancer)
 	}
 	// Ignore the order of `loadBalancers`.
 	sort.Strings(loadBalancedIPs)
-	expAddresses := ipdef.LoadBalancerMac + " " + strings.Join(loadBalancedIPs, " ")
+	expAddresses := strings.Join(append(loadBalancedIPs, ipdef.LoadBalancerMac), " ")
 
 	if len(curr.Addresses) != 1 || curr.Addresses[0] != expAddresses {
 		err := client.UpdateSwitchPortAddresses(

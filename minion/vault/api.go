@@ -62,12 +62,12 @@ type vaultAPIClientImpl struct {
 }
 
 func (c vaultAPIClientImpl) PutPolicy(name string, rules string) error {
-	vaultCounter.Inc(fmt.Sprintf("Put Policy %q", name))
+	vaultCounter.Inc("Put Policy")
 	return c.client.Sys().PutPolicy(name, rules)
 }
 
 func (c vaultAPIClientImpl) DeletePolicy(name string) error {
-	vaultCounter.Inc(fmt.Sprintf("Delete Policy %q", name))
+	vaultCounter.Inc("Delete Policy")
 	return c.client.Sys().DeletePolicy(name)
 }
 
@@ -77,7 +77,7 @@ func (c vaultAPIClientImpl) ListPolicies() ([]string, error) {
 }
 
 func (c vaultAPIClientImpl) GetPolicy(name string) (string, error) {
-	vaultCounter.Inc(fmt.Sprintf("Get Policy %q", name))
+	vaultCounter.Inc("Get Policy")
 	return c.client.Sys().GetPolicy(name)
 }
 
@@ -87,23 +87,23 @@ func (c vaultAPIClientImpl) SetToken(token string) {
 }
 
 func (c vaultAPIClientImpl) List(path string) (*vaultAPI.Secret, error) {
-	vaultCounter.Inc(fmt.Sprintf("List Path %q", path))
+	vaultCounter.Inc("List")
 	return c.client.Logical().List(path)
 }
 
 func (c vaultAPIClientImpl) Read(path string) (*vaultAPI.Secret, error) {
-	vaultCounter.Inc(fmt.Sprintf("Read Path %q", path))
+	vaultCounter.Inc("Read")
 	return c.client.Logical().Read(path)
 }
 
 func (c vaultAPIClientImpl) Write(path string, data map[string]interface{}) (
 	*vaultAPI.Secret, error) {
-	vaultCounter.Inc(fmt.Sprintf("Write Path %q", path))
+	vaultCounter.Inc("Write")
 	return c.client.Logical().Write(path, data)
 }
 
 func (c vaultAPIClientImpl) Delete(path string) (*vaultAPI.Secret, error) {
-	vaultCounter.Inc(fmt.Sprintf("Delete Path %q", path))
+	vaultCounter.Inc("Delete")
 	return c.client.Logical().Delete(path)
 }
 

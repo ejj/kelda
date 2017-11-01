@@ -47,6 +47,7 @@ func updateACLs(ovsdbClient ovsdb.Client, connections []db.Connection,
 		},
 	})
 
+	icmpMatches := map[string]struct{}{}
 	for _, conn := range connections {
 		if conn.From == blueprint.PublicInternetLabel ||
 			conn.To == blueprint.PublicInternetLabel {
@@ -70,6 +71,19 @@ func updateACLs(ovsdbClient ovsdb.Client, connections []db.Connection,
 					Priority: 1,
 				},
 			})...)
+
+		icmpMatch := and(from(src), to(dst), "icmp")
+		if _, ok := icmpMatches[icmpMatch]; !ok {
+			icmpMatches[icmpMatch] = struct{}{}
+			expACLs = append(expACLs, directedACLs(
+				ovsdb.ACL{
+					Core: ovsdb.ACLCore{
+						Action:   "allow",
+						Match:    icmpMatch,
+						Priority: 1,
+					},
+				})...)
+		}
 	}
 
 	ovsdbKey := func(ovsdbIntf interface{}) interface{} {
@@ -104,7 +118,7 @@ func getMatchString(srcIP, dstIP string, minPort, maxPort int) string {
 }
 
 func portConstraint(minPort, maxPort int, direction string) string {
-	return fmt.Sprintf("(icmp || %[1]d <= udp.%[2]s <= %[3]d || "+
+	return fmt.Sprintf("(%[1]d <= udp.%[2]s <= %[3]d || "+
 		"%[1]d <= tcp.%[2]s <= %[3]d)", minPort, direction, maxPort)
 }
 

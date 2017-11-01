@@ -41,26 +41,25 @@ func syncCredentialsOnce(conn db.Conn, sshKey ssh.Signer, ca rsa.KeyPair) {
 	machines := conn.SelectFromMachine(func(m db.Machine) bool {
 		return m.Status != db.Stopping && m.PublicIP != "" && m.PublicKey == ""
 	})
+
+	ipCertMap := map[string]string{}
 	for _, m := range machines {
 		credentialsCounter.Inc("Install " + m.PublicIP)
 		publicKey, ok := generateAndInstallCerts(m, sshKey, ca)
-		if !ok {
-			continue
+		if ok {
+			ipCertMap[m.PublicIP] = publicKey
 		}
-
-		// Find the machine in the database that we just installed certs on,
-		// and update its row to reflect the installed certificate.
-		conn.Txn(db.MachineTable).Run(func(view db.Database) error {
-			for _, dbm := range view.SelectFromMachine(nil) {
-				if dbm.PrivateIP == m.PrivateIP {
-					dbm.PublicKey = publicKey
-					view.Commit(dbm)
-					break
-				}
-			}
-			return nil
-		})
 	}
+
+	conn.Txn(db.MachineTable).Run(func(view db.Database) error {
+		for _, dbm := range view.SelectFromMachine(nil) {
+			if cert, ok := ipCertMap[dbm.PublicIP]; ok {
+				dbm.PublicKey = cert
+				view.Commit(dbm)
+			}
+		}
+		return nil
+	})
 }
 
 // generateAndInstallCerts attempts to generate a certificate key pair and install

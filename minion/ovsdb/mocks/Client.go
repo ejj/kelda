@@ -10,13 +10,13 @@ type Client struct {
 	mock.Mock
 }
 
-// CreateACL provides a mock function with given fields: lswitch, direction, priority, match, action
-func (_m *Client) CreateACL(lswitch string, direction string, priority int, match string, action string) error {
-	ret := _m.Called(lswitch, direction, priority, match, action)
+// CreateACLs provides a mock function with given fields: lswitch, acls
+func (_m *Client) CreateACLs(lswitch string, acls []ovsdb.ACLCore) error {
+	ret := _m.Called(lswitch, acls)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string, int, string, string) error); ok {
-		r0 = rf(lswitch, direction, priority, match, action)
+	if rf, ok := ret.Get(0).(func(string, []ovsdb.ACLCore) error); ok {
+		r0 = rf(lswitch, acls)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -94,12 +94,12 @@ func (_m *Client) CreateSwitchPort(lswitch string, lport ovsdb.SwitchPort) error
 	return r0
 }
 
-// DeleteACL provides a mock function with given fields: lswitch, ovsdbACL
-func (_m *Client) DeleteACL(lswitch string, ovsdbACL ovsdb.ACL) error {
+// DeleteACLs provides a mock function with given fields: lswitch, ovsdbACL
+func (_m *Client) DeleteACLs(lswitch string, ovsdbACL []ovsdb.ACL) error {
 	ret := _m.Called(lswitch, ovsdbACL)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, ovsdb.ACL) error); ok {
+	if rf, ok := ret.Get(0).(func(string, []ovsdb.ACL) error); ok {
 		r0 = rf(lswitch, ovsdbACL)
 	} else {
 		r0 = ret.Error(0)

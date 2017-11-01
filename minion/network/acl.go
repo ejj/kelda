@@ -89,21 +89,25 @@ func updateACLs(ovsdbClient ovsdb.Client, connections []db.Connection,
 	ovsdbKey := func(ovsdbIntf interface{}) interface{} {
 		return ovsdbIntf.(ovsdb.ACL).Core
 	}
-	_, toCreate, toDelete := join.HashJoin(ovsdbACLSlice(expACLs),
+	_, toCreateI, toDeleteI := join.HashJoin(ovsdbACLSlice(expACLs),
 		ovsdbACLSlice(ovsdbACLs), ovsdbKey, ovsdbKey)
 
-	for _, acl := range toDelete {
-		if err := ovsdbClient.DeleteACL(lSwitch, acl.(ovsdb.ACL)); err != nil {
-			log.WithError(err).Warn("Error deleting ACL")
-		}
+	var toDelete []ovsdb.ACL
+	for _, acl := range toDeleteI {
+		toDelete = append(toDelete, acl.(ovsdb.ACL))
 	}
 
-	for _, intf := range toCreate {
-		acl := intf.(ovsdb.ACL).Core
-		if err := ovsdbClient.CreateACL(lSwitch, acl.Direction,
-			acl.Priority, acl.Match, acl.Action); err != nil {
-			log.WithError(err).Warn("Error adding ACL")
-		}
+	var toCreate []ovsdb.ACLCore
+	for _, acl := range toCreateI {
+		toCreate = append(toCreate, acl.(ovsdb.ACL).Core)
+	}
+
+	if err := ovsdbClient.DeleteACLs(lSwitch, toDelete); err != nil {
+		log.WithError(err).Warn("Error deleting ACL")
+	}
+
+	if err := ovsdbClient.CreateACLs(lSwitch, toCreate); err != nil {
+		log.WithError(err).Warn("Error adding ACLs")
 	}
 }
 

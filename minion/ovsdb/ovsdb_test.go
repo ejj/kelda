@@ -464,7 +464,7 @@ func TestListACLs(t *testing.T) {
 		Action:    "action"}}, acls[0])
 }
 
-func TestCreateACL(t *testing.T) {
+func TestCreateACLs(t *testing.T) {
 	t.Parallel()
 
 	api := new(mockTransact)
@@ -480,53 +480,79 @@ func TestCreateACL(t *testing.T) {
 		Op:       "insert",
 		Table:    "ACL",
 		Row:      aclRow,
-		UUIDName: "qacladd",
+		UUIDName: "qacladd0",
 	}, {
 		Op:    "mutate",
 		Table: "Logical_Switch",
 		Mutations: []interface{}{
-			newMutation("acls", "insert", ovs.UUID{GoUUID: "qacladd"}),
+			newMutation("acls", "insert", ovs.UUID{GoUUID: "qacladd0"}),
 		},
 		Where: newCondition("name", "==", "lswitch"),
 	}}
 
 	api.On("Transact", "OVN_Northbound", ops[0], ops[1]).Return(
 		nil, errors.New("err")).Once()
-	err := odb.CreateACL("lswitch", "direction", 1, "match", "action")
+	err := odb.CreateACLs("lswitch", []ACLCore{{
+		Priority:  1,
+		Direction: "direction",
+		Match:     "match",
+		Action:    "action"}})
 	assert.EqualError(t, err, "transaction error: creating ACL on lswitch: err")
 
 	api.On("Transact", "OVN_Northbound", ops[0], ops[1]).Return(
 		[]ovs.OperationResult{{}, {}}, nil)
-	err = odb.CreateACL("lswitch", "direction", 1, "match", "action")
+	err = odb.CreateACLs("lswitch", []ACLCore{{
+		Priority:  1,
+		Direction: "direction",
+		Match:     "match",
+		Action:    "action"}})
 	assert.NoError(t, err)
 }
 
-func TestDeleteACL(t *testing.T) {
+func TestDeleteACLs(t *testing.T) {
 	t.Parallel()
 
 	api := new(mockTransact)
 	odb := Client(client{api})
 
-	acl := ACL{uuid: ovs.UUID{GoUUID: "uuid"}}
-	deleteOp := ovs.Operation{
+	acls := []ACL{{
+		uuid: ovs.UUID{GoUUID: "uuid1"},
+	}, {
+		uuid: ovs.UUID{GoUUID: "uuid2"},
+	}}
+
+	ops := []ovs.Operation{{
 		Op:    "delete",
 		Table: "ACL",
-		Where: newCondition("_uuid", "==", acl.uuid)}
-	mutateOp := ovs.Operation{
+		Where: newCondition("_uuid", "==", acls[0].uuid),
+	}, {
 		Op:    "mutate",
 		Table: "Logical_Switch",
 		Mutations: []interface{}{
-			newMutation("acls", "delete", acl.uuid),
+			newMutation("acls", "delete", acls[0].uuid),
 		},
-		Where: newCondition("name", "==", "lswitch")}
-	api.On("Transact", "OVN_Northbound", deleteOp,
-		mutateOp).Return(nil, errors.New("err")).Once()
-	err := odb.DeleteACL("lswitch", acl)
+		Where: newCondition("name", "==", "lswitch"),
+	}, {
+		Op:    "delete",
+		Table: "ACL",
+		Where: newCondition("_uuid", "==", acls[1].uuid),
+	}, {
+		Op:    "mutate",
+		Table: "Logical_Switch",
+		Mutations: []interface{}{
+			newMutation("acls", "delete", acls[1].uuid),
+		},
+		Where: newCondition("name", "==", "lswitch"),
+	}}
+
+	api.On("Transact", "OVN_Northbound", ops[0], ops[1], ops[2], ops[3]).Return(
+		nil, errors.New("err")).Once()
+	err := odb.DeleteACLs("lswitch", acls)
 	assert.EqualError(t, err, "transaction error: deleting ACL on lswitch: err")
 
-	api.On("Transact", "OVN_Northbound", deleteOp, mutateOp).Return(
-		[]ovs.OperationResult{{}, {}}, nil)
-	err = odb.DeleteACL("lswitch", acl)
+	api.On("Transact", "OVN_Northbound", ops[0], ops[1], ops[2], ops[3]).Return(
+		[]ovs.OperationResult{{}, {}, {}, {}}, nil)
+	err = odb.DeleteACLs("lswitch", acls)
 	assert.NoError(t, err)
 }
 

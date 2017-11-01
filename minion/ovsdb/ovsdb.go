@@ -34,8 +34,8 @@ type Client interface {
 	DeleteRouterPort(lrouter string, lport RouterPort) error
 
 	ListACLs() ([]ACL, error)
-	CreateACL(lswitch, direction string, priority int, match, action string) error
-	DeleteACL(lswitch string, ovsdbACL ACL) error
+	CreateACLs(lswitch string, acls []ACLCore) error
+	DeleteACLs(lswitch string, acls []ACL) error
 
 	ListLoadBalancers() ([]LoadBalancer, error)
 	CreateLoadBalancer(lswitch string, name string, vips map[string]string) error
@@ -456,69 +456,73 @@ func (ovsdb client) ListACLs() ([]ACL, error) {
 //
 // direction and match may be wildcarded by passing the value "*". priority may also
 // be wildcarded by passing a value less than 0.
-func (ovsdb client) CreateACL(lswitch, direction string, priority int,
-	match, action string) error {
-	c.Inc("Create ACL")
-	aclRow := map[string]interface{}{
-		"priority": int(math.Max(0.0, float64(priority))),
-		"action":   action,
-		"log":      false,
-	}
-	if direction != "*" {
-		aclRow["direction"] = direction
-	}
-	if match != "*" {
-		aclRow["match"] = match
+func (ovsdb client) CreateACLs(lswitch string, acls []ACLCore) error {
+	c.Inc("Create ACLs")
+
+	var ops []ovs.Operation
+	for i, acl := range acls {
+		aclRow := map[string]interface{}{
+			"priority": int(math.Max(0.0, float64(acl.Priority))),
+			"action":   acl.Action,
+			"log":      false,
+		}
+		if acl.Direction != "*" {
+			aclRow["direction"] = acl.Direction
+		}
+		if acl.Match != "*" {
+			aclRow["match"] = acl.Match
+		}
+
+		uuid := fmt.Sprintf("qacladd%d", i)
+		ops = append(ops, ovs.Operation{
+			Op:       "insert",
+			Table:    "ACL",
+			Row:      aclRow,
+			UUIDName: uuid,
+		}, ovs.Operation{
+			Op:    "mutate",
+			Table: "Logical_Switch",
+			Mutations: []interface{}{
+				newMutation("acls", "insert", ovs.UUID{GoUUID: uuid}),
+			},
+			Where: newCondition("name", "==", lswitch),
+		})
 	}
 
-	insertOp := ovs.Operation{
-		Op:       "insert",
-		Table:    "ACL",
-		Row:      aclRow,
-		UUIDName: "qacladd",
-	}
-
-	mutateOp := ovs.Operation{
-		Op:    "mutate",
-		Table: "Logical_Switch",
-		Mutations: []interface{}{
-			newMutation("acls", "insert", ovs.UUID{GoUUID: "qacladd"}),
-		},
-		Where: newCondition("name", "==", lswitch),
-	}
-
-	results, err := ovsdb.Transact("OVN_Northbound", insertOp, mutateOp)
+	results, err := ovsdb.Transact("OVN_Northbound", ops...)
 	if err != nil {
 		return fmt.Errorf("transaction error: creating ACL on %s: %s",
 			lswitch, err)
 	}
-	return errorCheck(results, 2)
+	return errorCheck(results, len(ops))
 }
 
 // DeleteACL removes an access control rule from OVN.
-func (ovsdb client) DeleteACL(lswitch string, ovsdbACL ACL) error {
-	c.Inc("Delete ACL")
-	deleteOp := ovs.Operation{
-		Op:    "delete",
-		Table: "ACL",
-		Where: newCondition("_uuid", "==", ovsdbACL.uuid),
+func (ovsdb client) DeleteACLs(lswitch string, acls []ACL) error {
+	c.Inc("Delete ACLs")
+
+	var ops []ovs.Operation
+	for _, acl := range acls {
+		ops = append(ops, ovs.Operation{
+			Op:    "delete",
+			Table: "ACL",
+			Where: newCondition("_uuid", "==", acl.uuid),
+		}, ovs.Operation{
+			Op:    "mutate",
+			Table: "Logical_Switch",
+			Mutations: []interface{}{
+				newMutation("acls", "delete", acl.uuid),
+			},
+			Where: newCondition("name", "==", lswitch),
+		})
 	}
 
-	mutateOp := ovs.Operation{
-		Op:    "mutate",
-		Table: "Logical_Switch",
-		Mutations: []interface{}{
-			newMutation("acls", "delete", ovsdbACL.uuid),
-		},
-		Where: newCondition("name", "==", lswitch),
-	}
-
-	results, err := ovsdb.Transact("OVN_Northbound", deleteOp, mutateOp)
+	results, err := ovsdb.Transact("OVN_Northbound", ops...)
 	if err != nil {
 		return fmt.Errorf("transaction error: deleting ACL on %s: %s",
 			lswitch, err)
 	}
-	return errorCheck(results, 2)
+	return errorCheck(results, len(ops))
 }
 
 // OpenFlowPorts returns a map from interface name to OpenFlow port number for every

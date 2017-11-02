@@ -13,6 +13,7 @@ import (
 	cliPath "github.com/kelda/kelda/cli/path"
 	tlsIO "github.com/kelda/kelda/connection/tls/io"
 	"github.com/kelda/kelda/db"
+	"github.com/kelda/kelda/util/str"
 )
 
 // GetDefaultDaemonClient gets an API client connected to the daemon on the
@@ -34,9 +35,11 @@ func CheckPublicConnections(t *testing.T, machines []db.Machine,
 	// Map of hostname to its publicly exposed ports.
 	pubConns := map[string][]int{}
 	for _, conn := range connections {
-		if conn.From == "public" {
+		if str.SliceContains(conn.From, "public") {
 			for port := conn.MinPort; port <= conn.MaxPort; port++ {
-				pubConns[conn.To] = append(pubConns[conn.To], port)
+				for _, to := range conn.To {
+					pubConns[to] = append(pubConns[to], port)
+				}
 			}
 		}
 	}

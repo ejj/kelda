@@ -9,6 +9,7 @@ import (
 	"github.com/kelda/kelda/blueprint"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
+	"github.com/kelda/kelda/util/str"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -265,8 +266,16 @@ func TestConnectionTxn(t *testing.T) {
 
 	bp := blueprint.Blueprint{
 		Connections: []blueprint.Connection{
-			{From: "a", To: "a", MinPort: 80, MaxPort: 80},
-		},
+			{From: []string{"a"}, To: []string{"a"},
+				MinPort: 80, MaxPort: 80}}}
+	testConnectionTxn(t, conn, bp)
+	assert.True(t, fired(trigg))
+
+	testConnectionTxn(t, conn, bp)
+	assert.False(t, fired(trigg))
+
+	bp.Connections = []blueprint.Connection{
+		{From: []string{"a"}, To: []string{"a"}, MinPort: 90, MaxPort: 90},
 	}
 	testConnectionTxn(t, conn, bp)
 	assert.True(t, fired(trigg))
@@ -275,19 +284,10 @@ func TestConnectionTxn(t *testing.T) {
 	assert.False(t, fired(trigg))
 
 	bp.Connections = []blueprint.Connection{
-		{From: "a", To: "a", MinPort: 90, MaxPort: 90},
-	}
-	testConnectionTxn(t, conn, bp)
-	assert.True(t, fired(trigg))
-
-	testConnectionTxn(t, conn, bp)
-	assert.False(t, fired(trigg))
-
-	bp.Connections = []blueprint.Connection{
-		{From: "b", To: "a", MinPort: 90, MaxPort: 90},
-		{From: "b", To: "c", MinPort: 90, MaxPort: 90},
-		{From: "b", To: "a", MinPort: 100, MaxPort: 100},
-		{From: "c", To: "a", MinPort: 101, MaxPort: 101},
+		{From: []string{"b"}, To: []string{"a"}, MinPort: 90, MaxPort: 90},
+		{From: []string{"b"}, To: []string{"c"}, MinPort: 90, MaxPort: 90},
+		{From: []string{"b"}, To: []string{"a"}, MinPort: 100, MaxPort: 100},
+		{From: []string{"c"}, To: []string{"a"}, MinPort: 101, MaxPort: 101},
 	}
 	testConnectionTxn(t, conn, bp)
 	assert.True(t, fired(trigg))
@@ -315,8 +315,8 @@ func testConnectionTxn(t *testing.T, conn db.Conn, bp blueprint.Blueprint) {
 	for _, e := range exp {
 		found := false
 		for i, c := range connections {
-			if e.From == c.From && e.To == c.To && e.MinPort == c.MinPort &&
-				e.MaxPort == c.MaxPort {
+			if str.SliceEq(e.From, c.From) && str.SliceEq(e.To, c.To) &&
+				e.MinPort == c.MinPort && e.MaxPort == c.MaxPort {
 				connections = append(
 					connections[:i], connections[i+1:]...)
 				found = true
@@ -412,22 +412,22 @@ func TestPlacementTxn(t *testing.T) {
 	// Port placement
 	bp.Placements = nil
 	bp.Connections = []blueprint.Connection{
-		{From: blueprint.PublicInternetLabel, To: fooHostname, MinPort: 80,
-			MaxPort: 80},
-		{From: blueprint.PublicInternetLabel, To: fooHostname, MinPort: 81,
-			MaxPort: 81},
+		{From: []string{blueprint.PublicInternetLabel},
+			To: []string{fooHostname}, MinPort: 80, MaxPort: 80},
+		{From: []string{blueprint.PublicInternetLabel},
+			To: []string{fooHostname}, MinPort: 81, MaxPort: 81},
 	}
 	checkPlacement(bp)
 
 	bp.Connections = []blueprint.Connection{
-		{From: blueprint.PublicInternetLabel, To: fooHostname, MinPort: 80,
-			MaxPort: 80},
-		{From: blueprint.PublicInternetLabel, To: barHostname, MinPort: 80,
-			MaxPort: 80},
-		{From: blueprint.PublicInternetLabel, To: barHostname, MinPort: 81,
-			MaxPort: 81},
-		{From: blueprint.PublicInternetLabel, To: bazHostname, MinPort: 81,
-			MaxPort: 81},
+		{From: []string{blueprint.PublicInternetLabel},
+			To: []string{fooHostname}, MinPort: 80, MaxPort: 80},
+		{From: []string{blueprint.PublicInternetLabel},
+			To: []string{barHostname}, MinPort: 80, MaxPort: 80},
+		{From: []string{blueprint.PublicInternetLabel},
+			To: []string{barHostname}, MinPort: 81, MaxPort: 81},
+		{From: []string{blueprint.PublicInternetLabel},
+			To: []string{bazHostname}, MinPort: 81, MaxPort: 81},
 	}
 	checkPlacement(bp,
 		db.Placement{

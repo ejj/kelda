@@ -37,6 +37,10 @@ type Client interface {
 	CreateACLs(lswitch string, acls []ACLCore) error
 	DeleteACLs(lswitch string, acls []ACL) error
 
+	ListAddressSets() ([]AddressSet, error)
+	CreateAddressSets([]AddressSet) error
+	DeleteAddressSets([]AddressSet) error
+
 	ListLoadBalancers() ([]LoadBalancer, error)
 	CreateLoadBalancer(lswitch string, name string, vips map[string]string) error
 	DeleteLoadBalancer(lswitch string, lb LoadBalancer) error
@@ -521,6 +525,78 @@ func (ovsdb client) DeleteACLs(lswitch string, acls []ACL) error {
 	if err != nil {
 		return fmt.Errorf("transaction error: deleting ACL on %s: %s",
 			lswitch, err)
+	}
+	return errorCheck(results, len(ops))
+}
+
+// AddressSet is a named group of IPs in OVN.
+type AddressSet struct {
+	Name      string
+	Addresses []string
+}
+
+// ListAddressSets lists the address sets in OVN.
+func (ovsdb client) ListAddressSets() ([]AddressSet, error) {
+	c.Inc("List Address Sets")
+	result := []AddressSet{}
+
+	addressReply, err := ovsdb.Transact("OVN_Northbound", ovs.Operation{
+		Op:    "select",
+		Table: "Address_Set",
+		Where: noCondition,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("transaction error: list address sets: %s", err)
+	}
+
+	for _, addr := range addressReply[0].Rows {
+		result = append(result, AddressSet{
+			Name:      addr["name"].(string),
+			Addresses: ovsStringSetToSlice(addr["addresses"]),
+		})
+	}
+	return result, nil
+}
+
+// CreateAddressSets creates an address set in OVN.
+func (ovsdb client) CreateAddressSets(sets []AddressSet) error {
+	c.Inc("CreateAddressSets")
+
+	var ops []ovs.Operation
+	for _, set := range sets {
+		ops = append(ops, ovs.Operation{
+			Op:    "insert",
+			Table: "Address_Set",
+			Row: map[string]interface{}{
+				"name":      set.Name,
+				"addresses": newOvsSet(set.Addresses),
+			},
+		})
+	}
+
+	results, err := ovsdb.Transact("OVN_Northbound", ops...)
+	if err != nil {
+		return fmt.Errorf("transaction error: creating address set: %s", err)
+	}
+	return errorCheck(results, len(ops))
+}
+
+// DeleteAddressSets removes an address set from OVN.
+func (ovsdb client) DeleteAddressSets(sets []AddressSet) error {
+	c.Inc("DeleteAddressSets")
+
+	var ops []ovs.Operation
+	for _, set := range sets {
+		ops = append(ops, ovs.Operation{
+			Op:    "delete",
+			Table: "Address_Set",
+			Where: newCondition("name", "==", set.Name),
+		})
+	}
+
+	results, err := ovsdb.Transact("OVN_Northbound", ops...)
+	if err != nil {
+		return fmt.Errorf("transaction error: deleting address set: %s", err)
 	}
 	return errorCheck(results, len(ops))
 }

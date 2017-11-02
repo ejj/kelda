@@ -281,26 +281,30 @@ func openflowContainers(dbcs []db.Container,
 	fromPubPorts := map[string][]int{}
 	toPubPorts := map[string][]int{}
 	for _, conn := range conns {
-		if conn.From != blueprint.PublicInternetLabel &&
-			conn.To != blueprint.PublicInternetLabel {
-			continue
-		}
+		for _, from := range conn.From {
+			for _, to := range conn.To {
+				if from != blueprint.PublicInternetLabel &&
+					to != blueprint.PublicInternetLabel {
+					continue
+				}
 
-		if conn.MinPort != conn.MaxPort {
-			c.Inc("Unsupported Public Port Range")
-			log.WithField("connection", conn).Debug(
-				"Unsupported Public Port Range")
-			continue
-		}
+				if conn.MinPort != conn.MaxPort {
+					c.Inc("Unsupported Public Port Range")
+					log.WithField("connection", conn).Debug(
+						"Unsupported Public Port Range")
+					continue
+				}
 
-		if conn.From == blueprint.PublicInternetLabel {
-			fromPubPorts[conn.To] = append(fromPubPorts[conn.To],
-				conn.MinPort)
-		}
+				if from == blueprint.PublicInternetLabel {
+					fromPubPorts[to] = append(fromPubPorts[to],
+						conn.MinPort)
+				}
 
-		if conn.To == blueprint.PublicInternetLabel {
-			toPubPorts[conn.From] = append(toPubPorts[conn.From],
-				conn.MinPort)
+				if to == blueprint.PublicInternetLabel {
+					toPubPorts[from] = append(toPubPorts[from],
+						conn.MinPort)
+				}
+			}
 		}
 	}
 

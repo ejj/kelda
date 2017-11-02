@@ -304,7 +304,7 @@ function vet(infrastructure) {
   });
 
   infrastructure.connections.forEach((conn) => {
-    [conn.from, conn.to].forEach((host) => {
+    conn.from.concat(conn.to).forEach((host) => {
       if (!hostnameMap[host]) {
         throw new Error(`connection ${stringify(conn)} references ` +
                     `an undefined hostname: ${host}`);
@@ -394,10 +394,8 @@ class LoadBalancer {
             'or list of containers and not from a Load Balancer or other object.');
     }
 
-    src.forEach((c) => {
-      this.allowedInboundConnections.push(
-        new Connection(c, boxRange(portRange)));
-    });
+    this.allowedInboundConnections.push(
+      new Connection(src, boxRange(portRange)));
   }
 
   /**
@@ -407,8 +405,8 @@ class LoadBalancer {
    */
   getKeldaConnections() {
     return this.allowedInboundConnections.map(conn => ({
-      from: conn.from.hostname,
-      to: this.name,
+      from: conn.from.map(f => f.hostname),
+      to: [this.name],
       minPort: conn.minPort,
       maxPort: conn.maxPort,
     }));
@@ -1201,10 +1199,8 @@ class Container {
               'list of containers, and not from a LoadBalancer or other object.');
     }
 
-    src.forEach((c) => {
-      this.allowedInboundConnections.push(
-        new Connection(c, boxRange(portRange)));
-    });
+    this.allowedInboundConnections.push(
+      new Connection(src, boxRange(portRange)));
   }
 
   /**
@@ -1263,8 +1259,8 @@ class Container {
 
     this.allowedInboundConnections.forEach((conn) => {
       connections.push({
-        from: conn.from.hostname,
-        to: this.hostname,
+        from: conn.from.map(f => f.hostname),
+        to: [this.hostname],
         minPort: conn.minPort,
         maxPort: conn.maxPort,
       });
@@ -1272,8 +1268,8 @@ class Container {
 
     this.outgoingPublic.forEach((rng) => {
       connections.push({
-        from: this.hostname,
-        to: publicInternetLabel,
+        from: [this.hostname],
+        to: [publicInternetLabel],
         minPort: rng.min,
         maxPort: rng.max,
       });
@@ -1281,8 +1277,8 @@ class Container {
 
     this.incomingPublic.forEach((rng) => {
       connections.push({
-        from: publicInternetLabel,
-        to: this.hostname,
+        from: [publicInternetLabel],
+        to: [this.hostname],
         minPort: rng.min,
         maxPort: rng.max,
       });
@@ -1431,7 +1427,7 @@ class Connection {
    * Creates a Connection.
    * @constructor
    *
-   * @param {string} from - The host from which connections are allowed.
+   * @param {string[]} from - A list of hosts that allow connections.
    * @param {PortRange} ports - The port numbers which are allowed.
    */
   constructor(from, ports) {

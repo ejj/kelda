@@ -2,6 +2,8 @@ package db
 
 import (
 	"fmt"
+
+	"github.com/kelda/kelda/util/str"
 )
 
 // A Connection allows two hostnames to speak to each other on the port
@@ -9,8 +11,8 @@ import (
 type Connection struct {
 	ID int `json:"-"`
 
-	From    string
-	To      string
+	From    []string
+	To      []string
 	MinPort int
 	MaxPort int
 }
@@ -61,11 +63,13 @@ func (c Connection) String() string {
 func (c Connection) less(r row) bool {
 	o := r.(Connection)
 
+	if cmp := str.SliceCmp(c.From, o.From); cmp != 0 {
+		return cmp < 0
+	} else if cmp := str.SliceCmp(c.To, o.To); cmp != 0 {
+		return cmp < 0
+	}
+
 	switch {
-	case c.From != o.From:
-		return c.From < o.From
-	case c.To != o.To:
-		return c.To < o.To
 	case c.MaxPort != o.MaxPort:
 		return c.MaxPort < o.MaxPort
 	case c.MinPort != o.MinPort:

@@ -199,15 +199,17 @@ func preroutingRules(publicInterface string, containers []db.Container,
 	// from the public internet.
 	portsFromWeb := make(map[string]map[int]struct{})
 	for _, conn := range connections {
-		if conn.From != blueprint.PublicInternetLabel {
+		if !str.SliceContains(conn.From, blueprint.PublicInternetLabel) {
 			continue
 		}
 
-		if _, ok := portsFromWeb[conn.To]; !ok {
-			portsFromWeb[conn.To] = make(map[int]struct{})
-		}
+		for _, to := range conn.To {
+			if _, ok := portsFromWeb[to]; !ok {
+				portsFromWeb[to] = make(map[int]struct{})
+			}
 
-		portsFromWeb[conn.To][conn.MinPort] = struct{}{}
+			portsFromWeb[to][conn.MinPort] = struct{}{}
+		}
 	}
 
 	// Map the container's port to the same port of the host.
@@ -233,15 +235,19 @@ func postroutingRules(publicInterface string, containers []db.Container,
 	// to the public internet.
 	portsToWeb := make(map[string]map[int]struct{})
 	for _, conn := range connections {
-		if conn.To != blueprint.PublicInternetLabel {
-			continue
+		for _, to := range conn.To {
+			if to != blueprint.PublicInternetLabel {
+				continue
+			}
 		}
 
-		if _, ok := portsToWeb[conn.From]; !ok {
-			portsToWeb[conn.From] = make(map[int]struct{})
-		}
+		for _, from := range conn.From {
+			if _, ok := portsToWeb[from]; !ok {
+				portsToWeb[from] = make(map[int]struct{})
+			}
 
-		portsToWeb[conn.From][conn.MinPort] = struct{}{}
+			portsToWeb[from][conn.MinPort] = struct{}{}
+		}
 	}
 
 	for _, dbc := range containers {

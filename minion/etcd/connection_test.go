@@ -25,8 +25,8 @@ func TestRunConnectionOnce(t *testing.T) {
 		view.Commit(etcd)
 
 		conn := view.InsertConnection()
-		conn.From = "a"
-		conn.To = "b"
+		conn.From = []string{"a"}
+		conn.To = []string{"b"}
 		conn.MinPort = 80
 		conn.MaxPort = 8080
 		view.Commit(conn)
@@ -41,8 +41,12 @@ func TestRunConnectionOnce(t *testing.T) {
 
 	expStr := `[
     {
-        "From": "a",
-        "To": "b",
+        "From": [
+            "a"
+        ],
+        "To": [
+            "b"
+        ],
         "MinPort": 80,
         "MaxPort": 8080
     }
@@ -55,8 +59,8 @@ func TestRunConnectionOnce(t *testing.T) {
 		view.Commit(etcd)
 
 		conn := view.SelectFromConnection(nil)[0]
-		conn.From = "1"
-		conn.To = "2"
+		conn.From = []string{"1"}
+		conn.To = []string{"2"}
 		conn.MinPort = 3
 		conn.MaxPort = 4
 		view.Commit(conn)
@@ -69,6 +73,6 @@ func TestRunConnectionOnce(t *testing.T) {
 	conns := conn.SelectFromConnection(nil)
 	assert.Len(t, conns, 1)
 	conns[0].ID = 0
-	assert.Equal(t, db.Connection{From: "a", To: "b", MinPort: 80, MaxPort: 8080},
-		conns[0])
+	assert.Equal(t, db.Connection{From: []string{"a"}, To: []string{"b"},
+		MinPort: 80, MaxPort: 8080}, conns[0])
 }

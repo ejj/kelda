@@ -41,7 +41,9 @@ func newConnectionTester(clnt client.Client) (connectionTester, error) {
 
 	connectionMap := make(map[string][]string)
 	for _, conn := range connections {
-		connectionMap[conn.From] = append(connectionMap[conn.From], conn.To)
+		for _, from := range conn.From {
+			connectionMap[from] = append(connectionMap[from], conn.To...)
+		}
 	}
 
 	return connectionTester{

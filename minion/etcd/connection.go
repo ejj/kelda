@@ -53,8 +53,8 @@ func runConnectionOnce(conn db.Conn, store Store) error {
 func joinConnections(view db.Database, etcdConns []db.Connection) {
 	key := func(iface interface{}) interface{} {
 		conn := iface.(db.Connection)
-		conn.ID = 0
-		return conn
+		return fmt.Sprintf("%s %s %d %d",
+			conn.From, conn.To, conn.MinPort, conn.MaxPort)
 	}
 
 	_, connIfaces, etcdConnIfaces := join.HashJoin(

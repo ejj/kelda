@@ -14,6 +14,7 @@ import (
 	"github.com/kelda/kelda/blueprint"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 )
 
 // An arbitrary length to truncate container commands to.
@@ -217,15 +218,18 @@ func writeContainers(fd io.Writer, containers []db.Container, machines []db.Mach
 func connToPorts(connections []db.Connection) map[string][]string {
 	hostnamePublicPorts := map[string][]string{}
 	for _, c := range connections {
-		if c.From != blueprint.PublicInternetLabel {
+		if !str.SliceContains(c.From, blueprint.PublicInternetLabel) {
 			continue
 		}
 
-		portStr := fmt.Sprintf("%d", c.MinPort)
-		if c.MinPort != c.MaxPort {
-			portStr += fmt.Sprintf("-%d", c.MaxPort)
+		for _, to := range c.To {
+			portStr := fmt.Sprintf("%d", c.MinPort)
+			if c.MinPort != c.MaxPort {
+				portStr += fmt.Sprintf("-%d", c.MaxPort)
+			}
+			hostnamePublicPorts[to] = append(hostnamePublicPorts[to],
+				portStr)
 		}
-		hostnamePublicPorts[c.To] = append(hostnamePublicPorts[c.To], portStr)
 	}
 	return hostnamePublicPorts
 }

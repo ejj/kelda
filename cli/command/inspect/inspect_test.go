@@ -63,8 +63,10 @@ func TestViz(t *testing.T) {
 			},
 		},
 		Connections: []blueprint.Connection{
-			{From: "a", To: "b", MinPort: 22, MaxPort: 22},
-			{From: "b", To: "c", MinPort: 22, MaxPort: 22},
+			{From: []string{"a"}, To: []string{"b"},
+				MinPort: 22, MaxPort: 22},
+			{From: []string{"b"}, To: []string{"c"},
+				MinPort: 22, MaxPort: 22},
 		},
 	}
 

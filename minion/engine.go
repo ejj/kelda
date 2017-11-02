@@ -1,9 +1,12 @@
 package minion
 
 import (
+	"fmt"
+
 	"github.com/kelda/kelda/blueprint"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
+	"github.com/kelda/kelda/util/str"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -35,22 +38,26 @@ func portPlacements(connections []db.Connection, containers []db.Container) (
 
 	ports := make(map[int][]string)
 	for _, conn := range connections {
-		if conn.From != blueprint.PublicInternetLabel {
+		if !str.SliceContains(conn.From, blueprint.PublicInternetLabel) {
 			continue
 		}
 
-		toContainer, ok := hostnameToContainer[conn.To]
-		if !ok {
-			log.WithField("connection", conn).
-				WithField("hostname", conn.To).
-				Warn("Public connection in terms of unknown hostname." +
-					"Ignoring.")
-			continue
-		}
+		connTo := str.SliceFilterOut(conn.To, blueprint.PublicInternetLabel)
+		for _, to := range connTo {
+			toContainer, ok := hostnameToContainer[to]
+			if !ok {
+				log.WithField("connection", conn).
+					WithField("hostname", to).
+					Warn("Public connection in terms of unknown " +
+						"hostname. Ignoring.")
+				continue
+			}
 
-		// XXX: Public connections do not currently support ranges, so we can
-		// safely consider just the MinPort.
-		ports[conn.MinPort] = append(ports[conn.MinPort], toContainer.BlueprintID)
+			// XXX: Public connections do not currently support ranges, so we
+			// can safely consider just the MinPort.
+			ports[conn.MinPort] = append(ports[conn.MinPort],
+				toContainer.BlueprintID)
+		}
 	}
 
 	// Create placement rules for all combinations of containers that listen on
@@ -166,34 +173,31 @@ func updateConnections(view db.Database, bp blueprint.Blueprint) {
 	}
 
 	for _, c := range scs {
-		lb, ok := loadBalancers[c.To]
-		if !ok {
-			continue
-		}
-
-		for _, hostname := range lb.Hostnames {
-			scs = append(scs, blueprint.Connection{
-				From:    c.From,
-				To:      hostname,
-				MinPort: c.MinPort,
-				MaxPort: c.MaxPort,
-			})
+		for _, to := range c.To {
+			if lb, ok := loadBalancers[to]; ok {
+				scs = append(scs, blueprint.Connection{
+					From:    c.From,
+					To:      lb.Hostnames,
+					MinPort: c.MinPort,
+					MaxPort: c.MaxPort,
+				})
+			}
 		}
 	}
 
 	dbcKey := func(val interface{}) interface{} {
 		c := val.(db.Connection)
-		return blueprint.Connection{
-			From:    c.From,
-			To:      c.To,
-			MinPort: c.MinPort,
-			MaxPort: c.MaxPort,
-		}
+		return fmt.Sprintf("%s %s %d %d", c.From, c.To, c.MinPort, c.MaxPort)
+	}
+
+	bpKey := func(val interface{}) interface{} {
+		c := val.(blueprint.Connection)
+		return fmt.Sprintf("%s %s %d %d", c.From, c.To, c.MinPort, c.MaxPort)
 	}
 
 	vcs := view.SelectFromConnection(nil)
 	pairs, blueprints, dbcs := join.HashJoin(
-		scs, db.ConnectionSlice(vcs), nil, dbcKey)
+		scs, db.ConnectionSlice(vcs), bpKey, dbcKey)
 
 	for _, dbc := range dbcs {
 		view.Remove(dbc.(db.Connection))

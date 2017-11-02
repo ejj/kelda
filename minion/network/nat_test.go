@@ -66,18 +66,18 @@ func TestPreroutingRules(t *testing.T) {
 
 	connections := []db.Connection{
 		{
-			From:    blueprint.PublicInternetLabel,
-			To:      "red",
+			From:    []string{blueprint.PublicInternetLabel},
+			To:      []string{"red"},
 			MinPort: 80,
 		},
 		{
-			From:    blueprint.PublicInternetLabel,
-			To:      "purple",
+			From:    []string{blueprint.PublicInternetLabel},
+			To:      []string{"purple"},
 			MinPort: 81,
 		},
 		{
-			From:    "yellow",
-			To:      blueprint.PublicInternetLabel,
+			From:    []string{"yellow"},
+			To:      []string{blueprint.PublicInternetLabel},
 			MinPort: 80,
 		},
 	}
@@ -108,13 +108,13 @@ func TestPostroutingRules(t *testing.T) {
 
 	connections := []db.Connection{
 		{
-			From:    "red",
-			To:      blueprint.PublicInternetLabel,
+			From:    []string{"red"},
+			To:      []string{blueprint.PublicInternetLabel},
 			MinPort: 80,
 		},
 		{
-			From:    "purple",
-			To:      blueprint.PublicInternetLabel,
+			From:    []string{"purple"},
+			To:      []string{blueprint.PublicInternetLabel},
 			MinPort: 81,
 		},
 	}

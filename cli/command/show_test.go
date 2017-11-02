@@ -171,10 +171,14 @@ func TestContainerOutput(t *testing.T) {
 		{CloudID: "7", PrivateIP: ""},
 	}
 	connections := []db.Connection{
-		{ID: 1, From: "public", To: "frompublic1", MinPort: 80, MaxPort: 80},
-		{ID: 1, From: "public", To: "frompublic2", MinPort: 80, MaxPort: 80},
-		{ID: 1, From: "public", To: "frompublic3", MinPort: 80, MaxPort: 80},
-		{ID: 2, From: "notpublic", To: "frompublic1", MinPort: 100, MaxPort: 101},
+		{ID: 1, From: []string{"public"}, To: []string{"frompublic1"},
+			MinPort: 80, MaxPort: 80},
+		{ID: 1, From: []string{"public", "notpublic"},
+			To: []string{"frompublic2"}, MinPort: 80, MaxPort: 80},
+		{ID: 1, From: []string{"public"}, To: []string{"frompublic3"},
+			MinPort: 80, MaxPort: 80},
+		{ID: 2, From: []string{"notpublic", "frompublic2"},
+			To: []string{"frompublic1"}, MinPort: 100, MaxPort: 101},
 	}
 
 	expected := `CONTAINER____MACHINE____COMMAND___________HOSTNAME_______` +
@@ -273,8 +277,10 @@ ________________________________________________________________________________
 		{CloudID: "5", PublicIP: "7.7.7.7", PrivateIP: "1.1.1.1"},
 	}
 	connections = []db.Connection{
-		{ID: 1, From: "public", To: "frompub", MinPort: 80, MaxPort: 80},
-		{ID: 2, From: "public", To: "frompub", MinPort: 100, MaxPort: 101},
+		{ID: 1, From: []string{"public"}, To: []string{"frompub"},
+			MinPort: 80, MaxPort: 80},
+		{ID: 2, From: []string{"public"}, To: []string{"frompub"},
+			MinPort: 100, MaxPort: 101},
 	}
 
 	expected = `CONTAINER____MACHINE____COMMAND____HOSTNAME____STATUS_______` +

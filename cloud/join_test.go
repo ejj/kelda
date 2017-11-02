@@ -271,8 +271,8 @@ func TestDesiredACLs(t *testing.T) {
 	acls = cld.desiredACLs(db.Blueprint{
 		Blueprint: blueprint.Blueprint{
 			Connections: []blueprint.Connection{{
-				From:    "foo",
-				To:      "bar",
+				From:    []string{"foo"},
+				To:      []string{"bar"},
 				MinPort: 5,
 				MaxPort: 6,
 			}},
@@ -284,8 +284,8 @@ func TestDesiredACLs(t *testing.T) {
 	acls = cld.desiredACLs(db.Blueprint{
 		Blueprint: blueprint.Blueprint{
 			Connections: []blueprint.Connection{{
-				From:    blueprint.PublicInternetLabel,
-				To:      "bar",
+				From:    []string{blueprint.PublicInternetLabel},
+				To:      []string{"bar"},
 				MinPort: 1,
 				MaxPort: 2,
 			}},

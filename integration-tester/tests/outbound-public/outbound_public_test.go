@@ -8,6 +8,7 @@ import (
 	"github.com/kelda/kelda/blueprint"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/integration-tester/util"
+	"github.com/kelda/kelda/util/str"
 )
 
 func TestOutboundPublic(t *testing.T) {
@@ -36,9 +37,11 @@ var testHost = fmt.Sprintf("google.com:%d", testPort)
 func test(t *testing.T, containers []db.Container, connections []db.Connection) {
 	connected := map[string]struct{}{}
 	for _, conn := range connections {
-		if conn.To == blueprint.PublicInternetLabel &&
+		if str.SliceContains(conn.To, blueprint.PublicInternetLabel) &&
 			inRange(testPort, conn.MinPort, conn.MaxPort) {
-			connected[conn.From] = struct{}{}
+			for _, from := range conn.From {
+				connected[from] = struct{}{}
+			}
 		}
 	}
 

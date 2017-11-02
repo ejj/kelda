@@ -83,13 +83,13 @@ type LoadBalancer struct {
 	Hostnames []string `json:",omitempty"`
 }
 
-// A Connection allows the container with the `From` hostname to speak to the container
-// with the `To` hostname in ports in the range [MinPort, MaxPort]
+// A Connection allows any container whose hostname appears in `From` to speak with any
+// container whose hostname appears in `To` using ports in the range [MinPort, MaxPort]
 type Connection struct {
-	From    string `json:",omitempty"`
-	To      string `json:",omitempty"`
-	MinPort int    `json:",omitempty"`
-	MaxPort int    `json:",omitempty"`
+	From    []string `json:",omitempty"`
+	To      []string `json:",omitempty"`
+	MinPort int      `json:",omitempty"`
+	MaxPort int      `json:",omitempty"`
 }
 
 // A ConnectionSlice allows for slices of Collections to be used in joins

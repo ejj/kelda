@@ -24,6 +24,20 @@ func (_m *Client) CreateACLs(lswitch string, acls []ovsdb.ACLCore) error {
 	return r0
 }
 
+// CreateAddressSets provides a mock function with given fields: _a0
+func (_m *Client) CreateAddressSets(_a0 []ovsdb.AddressSet) error {
+	ret := _m.Called(_a0)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func([]ovsdb.AddressSet) error); ok {
+		r0 = rf(_a0)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // CreateLoadBalancer provides a mock function with given fields: lswitch, name, vips
 func (_m *Client) CreateLoadBalancer(lswitch string, name string, vips map[string]string) error {
 	ret := _m.Called(lswitch, name, vips)
@@ -94,13 +108,27 @@ func (_m *Client) CreateSwitchPort(lswitch string, lport ovsdb.SwitchPort) error
 	return r0
 }
 
-// DeleteACLs provides a mock function with given fields: lswitch, ovsdbACL
-func (_m *Client) DeleteACLs(lswitch string, ovsdbACL []ovsdb.ACL) error {
-	ret := _m.Called(lswitch, ovsdbACL)
+// DeleteACLs provides a mock function with given fields: lswitch, acls
+func (_m *Client) DeleteACLs(lswitch string, acls []ovsdb.ACL) error {
+	ret := _m.Called(lswitch, acls)
 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(string, []ovsdb.ACL) error); ok {
-		r0 = rf(lswitch, ovsdbACL)
+		r0 = rf(lswitch, acls)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DeleteAddressSets provides a mock function with given fields: _a0
+func (_m *Client) DeleteAddressSets(_a0 []ovsdb.AddressSet) error {
+	ret := _m.Called(_a0)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func([]ovsdb.AddressSet) error); ok {
+		r0 = rf(_a0)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -165,6 +193,29 @@ func (_m *Client) ListACLs() ([]ovsdb.ACL, error) {
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]ovsdb.ACL)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ListAddressSets provides a mock function with given fields:
+func (_m *Client) ListAddressSets() ([]ovsdb.AddressSet, error) {
+	ret := _m.Called()
+
+	var r0 []ovsdb.AddressSet
+	if rf, ok := ret.Get(0).(func() []ovsdb.AddressSet); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]ovsdb.AddressSet)
 		}
 	}
 

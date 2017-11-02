@@ -9,6 +9,7 @@ import (
 	"github.com/kelda/kelda/cloud/foreman"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
+	"github.com/kelda/kelda/util/str"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -254,7 +255,7 @@ func (cld cloud) desiredACLs(bp db.Blueprint) map[acl.ACL]struct{} {
 	}
 
 	for _, conn := range bp.Connections {
-		if conn.From == blueprint.PublicInternetLabel {
+		if str.SliceContains(conn.From, blueprint.PublicInternetLabel) {
 			acl := acl.ACL{
 				CidrIP:  "0.0.0.0/0",
 				MinPort: conn.MinPort,

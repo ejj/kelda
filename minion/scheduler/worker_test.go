@@ -339,9 +339,12 @@ func TestSyncJoinScore(t *testing.T) {
 func TestOpenFlowContainers(t *testing.T) {
 	conns := []db.Connection{
 		{MinPort: 1, MaxPort: 1000},
-		{MinPort: 2, MaxPort: 2, From: blueprint.PublicInternetLabel, To: "red"},
-		{MinPort: 3, MaxPort: 3, To: blueprint.PublicInternetLabel, From: "red"},
-		{MinPort: 4, MaxPort: 4, To: blueprint.PublicInternetLabel, From: "blue"}}
+		{MinPort: 2, MaxPort: 2, From: []string{blueprint.PublicInternetLabel},
+			To: []string{"red"}},
+		{MinPort: 3, MaxPort: 3, To: []string{blueprint.PublicInternetLabel},
+			From: []string{"red"}},
+		{MinPort: 4, MaxPort: 4, To: []string{blueprint.PublicInternetLabel},
+			From: []string{"blue"}}}
 
 	res := openflowContainers([]db.Container{
 		{EndpointID: "f", IP: "1.2.3.4", Hostname: "red"}},

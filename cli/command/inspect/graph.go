@@ -2,6 +2,7 @@ package inspect
 
 import (
 	"fmt"
+
 	"github.com/kelda/kelda/blueprint"
 )
 
@@ -59,18 +60,22 @@ func (g Graph) GetConnections() []Edge {
 	return res
 }
 
-func (g *Graph) addConnection(from string, to string) error {
-	fromNode, ok := g.Nodes[from]
-	if !ok {
-		return fmt.Errorf("no node: %s", from)
-	}
+func (g *Graph) addConnection(fromSlice, toSlice []string) error {
+	for _, from := range fromSlice {
+		for _, to := range toSlice {
+			fromNode, ok := g.Nodes[from]
+			if !ok {
+				return fmt.Errorf("no node: %s", from)
+			}
 
-	toNode, ok := g.Nodes[to]
-	if !ok {
-		return fmt.Errorf("no node: %s", to)
-	}
+			toNode, ok := g.Nodes[to]
+			if !ok {
+				return fmt.Errorf("no node: %s", to)
+			}
 
-	fromNode.Connections[to] = toNode
+			fromNode.Connections[to] = toNode
+		}
+	}
 	return nil
 }
 

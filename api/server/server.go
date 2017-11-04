@@ -288,7 +288,7 @@ func queryWorkers(machines []db.Machine, creds connection.Credentials) (
 	var wg sync.WaitGroup
 	queryResponses := make(chan queryContainersResponse, len(machines))
 	for _, m := range machines {
-		if m.PublicIP == "" || m.Role != db.Worker {
+		if m.PublicIP == "" || m.Role != db.Worker || m.Status != db.Connected {
 			continue
 		}
 

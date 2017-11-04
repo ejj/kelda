@@ -127,6 +127,7 @@ func TestQueryContainersDaemon(t *testing.T) {
 		m := view.InsertMachine()
 		m.PublicIP = "9.9.9.9"
 		m.Role = db.Worker
+		m.Status = db.Connected
 		view.Commit(m)
 
 		return nil

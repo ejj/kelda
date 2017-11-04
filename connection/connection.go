@@ -8,9 +8,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// The timeout for clients to connect to servers.
-const connectTimeout = 5 * time.Second
-
 // Credentials defines the credentials to use when creating a client or server.
 type Credentials interface {
 	// ClientOpts returns the `DialOption`s necessary to setup the credentials when
@@ -24,11 +21,17 @@ type Credentials interface {
 
 // Client creates a grpc client connected to `addr`.
 func Client(proto, addr string, opts []grpc.DialOption) (*grpc.ClientConn, error) {
+	timeout := 1 * time.Minute
+	if proto == "unix" {
+		// Unix sockets are local. Have a short timeout for quick feedback.
+		timeout = 2 * time.Second
+	}
+
 	dialer := func(dialAddr string, t time.Duration) (net.Conn, error) {
 		return net.DialTimeout(proto, dialAddr, t)
 	}
 	return grpc.Dial(addr, append(opts, grpc.WithDialer(dialer),
-		grpc.WithBlock(), grpc.WithTimeout(connectTimeout))...)
+		grpc.WithBlock(), grpc.WithTimeout(timeout))...)
 }
 
 // Server creates a socket listening on `addr` and a grpc server. If it fails

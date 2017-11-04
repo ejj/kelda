@@ -2,7 +2,9 @@ package cloud
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -208,11 +210,17 @@ func TestMakeClouds(t *testing.T) {
 	stop := make(chan struct{})
 	makeClouds(db.New(), "ns", stop)
 
+	// Give the clouds time to be created.
+	for i := 0; i < 20 && len(instantiatedProviders) < 3; i++ {
+		time.Sleep(500 * time.Millisecond)
+	}
+
 	var locations []string
 	for _, p := range instantiatedProviders {
 		loc := fmt.Sprintf("%s-%s-%s", p.providerName, p.region, p.namespace)
 		locations = append(locations, loc)
 	}
+	sort.Strings(locations)
 
 	// Verify that each cloud provider gets instantiated.
 	assert.Equal(t, []string{
@@ -235,8 +243,13 @@ var instantiatedProviders []fakeProvider
 
 func mock() {
 	instantiatedProviders = nil
+	var mutex sync.Mutex
 	newProvider = func(p db.ProviderName, namespace,
 		region string) (provider, error) {
+
+		mutex.Lock()
+		defer mutex.Unlock()
+
 		ret := fakeProvider{
 			providerName: p,
 			region:       region,

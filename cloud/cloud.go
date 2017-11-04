@@ -80,15 +80,18 @@ func Run(conn db.Conn, creds connection.Credentials, adminSSHKey string) {
 func makeClouds(conn db.Conn, ns string, stop chan struct{}) {
 	for _, p := range db.AllProviders {
 		for _, r := range validRegions(p) {
-			cld, err := newCloud(conn, p, r, ns)
-			if err != nil {
-				log.WithFields(log.Fields{
-					"error":  err,
-					"region": cld.String(),
-				}).Debug("failed to create cloud provider")
-				continue
-			}
-			go cld.run(stop)
+			go func(p db.ProviderName, r string) {
+				cld, err := newCloud(conn, p, r, ns)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"error":  err,
+						"region": cld.String(),
+					}).Debug("failed to create cloud provider")
+					return
+				}
+
+				cld.run(stop)
+			}(p, r)
 		}
 	}
 }

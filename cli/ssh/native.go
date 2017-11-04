@@ -52,7 +52,7 @@ func defaultSigners() []ssh.Signer {
 	if sa, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK")); err == nil {
 		agentSigners, err := agent.NewClient(sa).Signers()
 		if err != nil {
-			log.Warning("Error getting keys from ssh-agent")
+			log.WithError(err).Warning("Error getting keys from ssh-agent")
 		} else {
 			signers = agentSigners
 		}

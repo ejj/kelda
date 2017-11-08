@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	apiUtil "github.com/kelda/kelda/api/util"
 	"github.com/kelda/kelda/cli/ssh"
+	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/util"
 
 	log "github.com/sirupsen/logrus"
@@ -69,29 +71,9 @@ func (lCmd *Log) Parse(args []string) error {
 
 // Run finds the target container or machine minion and outputs logs.
 func (lCmd *Log) Run() int {
-	mach, machErr := getMachine(lCmd.client, lCmd.target)
-	contHost, cont, contErr := getContainer(lCmd.client, lCmd.target)
-
-	resolvedMachine := machErr == nil
-	resolvedContainer := contErr == nil
-
-	switch {
-	case !resolvedMachine && !resolvedContainer:
-		log.WithFields(log.Fields{
-			"machine error":   machErr.Error(),
-			"container error": contErr.Error(),
-		}).Error("Failed to resolve target machine or container")
-		return 1
-	case resolvedMachine && resolvedContainer:
-		log.WithFields(log.Fields{
-			"machine":   mach,
-			"container": cont,
-		}).Error("Ambiguous ID")
-		return 1
-	}
-
-	if resolvedContainer && cont.DockerID == "" {
-		log.Error("Container not yet running")
+	i, host, err := apiUtil.FuzzyLookup(lCmd.client, lCmd.target)
+	if err != nil {
+		log.WithError(err).Errorf("Failed to lookup %s", lCmd.target)
 		return 1
 	}
 
@@ -106,12 +88,17 @@ func (lCmd *Log) Run() int {
 		cmd = append(cmd, "--follow")
 	}
 
-	host := contHost
-	if resolvedMachine {
-		host = mach.PublicIP
+	switch t := i.(type) {
+	case db.Machine:
 		cmd = append(cmd, "minion")
-	} else {
-		cmd = append(cmd, cont.DockerID)
+	case db.Container:
+		if t.DockerID == "" {
+			log.Error("Container not yet running")
+			return 1
+		}
+		cmd = append(cmd, t.DockerID)
+	default:
+		panic("Not Reached")
 	}
 
 	sshClient, err := lCmd.sshGetter(host, lCmd.privateKey)

@@ -11,6 +11,8 @@ import (
 
 	"github.com/kelda/kelda/api/client"
 	"github.com/kelda/kelda/api/pb"
+	apiUtil "github.com/kelda/kelda/api/util"
+	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/util"
 )
 
@@ -71,11 +73,16 @@ func queryCounters(c client.Client, tgt string) ([]pb.Counter, error) {
 		return c.QueryCounters()
 	}
 
-	mach, err := getMachine(c, tgt)
+	i, ip, err := apiUtil.FuzzyLookup(c, tgt)
 	if err != nil {
 		return nil, fmt.Errorf("resolve machine: %s", err)
 	}
-	return c.QueryMinionCounters(mach.PublicIP)
+
+	if _, ok := i.(db.Machine); !ok {
+		return nil, fmt.Errorf("could not find machine: %s", tgt)
+	}
+
+	return c.QueryMinionCounters(ip)
 }
 
 func printCounters(out io.Writer, counters []pb.Counter) {

@@ -3,14 +3,12 @@ package command
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
 
-	"github.com/kelda/kelda/api/client"
 	"github.com/kelda/kelda/api/util"
 	"github.com/kelda/kelda/cli/ssh"
 	"github.com/kelda/kelda/db"
@@ -77,36 +75,12 @@ func (sCmd SSH) Run() int {
 		return 1
 	}
 
-	mach, machErr := getMachine(sCmd.client, sCmd.target)
-	contHost, cont, contErr := getContainer(sCmd.client, sCmd.target)
-
-	resolvedMachine := machErr == nil
-	resolvedContainer := contErr == nil
-
-	switch {
-	case !resolvedMachine && !resolvedContainer:
-		log.WithFields(log.Fields{
-			"machine error":   machErr.Error(),
-			"container error": contErr.Error(),
-		}).Error("Failed to resolve target machine or container")
-		return 1
-	case resolvedMachine && resolvedContainer:
-		log.WithFields(log.Fields{
-			"machine":   mach,
-			"container": cont,
-		}).Error("Ambiguous ID")
+	i, host, err := util.FuzzyLookup(sCmd.client, sCmd.target)
+	if err != nil {
+		log.WithError(err).Errorf("Failed to lookup %s", sCmd.target)
 		return 1
 	}
 
-	if resolvedContainer && cont.DockerID == "" {
-		log.Error("Container not yet running")
-		return 1
-	}
-
-	host := contHost
-	if resolvedMachine {
-		host = mach.PublicIP
-	}
 	sshClient, err := sCmd.sshGetter(host, sCmd.privateKey)
 	if err != nil {
 		log.WithError(err).Error("Failed to set up SSH connection")
@@ -116,15 +90,27 @@ func (sCmd SSH) Run() int {
 
 	cmd := strings.Join(sCmd.args, " ")
 	shouldLogin := cmd == ""
-	switch {
-	case shouldLogin && resolvedMachine:
-		err = sshClient.Shell()
-	case !shouldLogin && resolvedMachine:
-		err = sshClient.Run(sCmd.allocatePTY, cmd)
-	case shouldLogin && resolvedContainer:
-		err = containerExec(sshClient, cont.DockerID, true, "sh")
-	case !shouldLogin && resolvedContainer:
-		err = containerExec(sshClient, cont.DockerID, sCmd.allocatePTY, cmd)
+
+	switch t := i.(type) {
+	case db.Machine:
+		if shouldLogin {
+			err = sshClient.Shell()
+		} else {
+			err = sshClient.Run(sCmd.allocatePTY, cmd)
+		}
+	case db.Container:
+		if t.DockerID == "" {
+			log.Error("Container not yet running")
+			return 1
+		}
+
+		if shouldLogin {
+			err = containerExec(sshClient, t.DockerID, true, "sh")
+		} else {
+			err = containerExec(sshClient, t.DockerID, sCmd.allocatePTY, cmd)
+		}
+	default:
+		panic("Not Reached")
 	}
 
 	if err != nil {
@@ -139,58 +125,6 @@ func (sCmd SSH) Run() int {
 	}
 
 	return 0
-}
-
-func getMachine(c client.Client, id string) (db.Machine, error) {
-	machines, err := c.QueryMachines()
-	if err != nil {
-		return db.Machine{}, err
-	}
-
-	var choice *db.Machine
-	for _, m := range machines {
-		if len(id) > len(m.CloudID) || m.CloudID[:len(id)] != id {
-			continue
-		}
-		if choice != nil {
-			return db.Machine{}, fmt.Errorf("ambiguous IDs %s and %s",
-				choice.CloudID, m.CloudID)
-		}
-		copy := m
-		choice = &copy
-	}
-
-	if choice == nil {
-		return db.Machine{}, fmt.Errorf("no machine with ID %q", id)
-	}
-
-	return *choice, nil
-}
-
-func getContainer(c client.Client, id string) (host string, cont db.Container,
-	err error) {
-
-	containers, err := c.QueryContainers()
-	if err != nil {
-		return "", db.Container{}, err
-	}
-
-	machines, err := c.QueryMachines()
-	if err != nil {
-		return "", db.Container{}, err
-	}
-
-	container, err := util.GetContainer(containers, id)
-	if err != nil {
-		return "", db.Container{}, err
-	}
-
-	ip, err := util.GetPublicIP(machines, container.Minion)
-	if err != nil {
-		return "", db.Container{}, err
-	}
-
-	return ip, container, nil
 }
 
 func containerExec(c ssh.Client, dockerID string, allocatePTY bool, cmd string) error {

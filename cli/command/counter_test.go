@@ -56,6 +56,8 @@ func TestRunQueryMinion(t *testing.T) {
 	mock := new(mocks.Client)
 	counters.client = mock
 
+	mock.On("QueryContainers").Return(nil, nil)
+
 	// Test we error when there's no matching machine.
 	mock.On("QueryMachines").Once().Return(nil, nil)
 	assert.NotZero(t, counters.Run())

@@ -47,16 +47,18 @@ func FuzzyLookup(client client.Client, name string) (interface{}, string, error)
 	return nil, "", fmt.Errorf("no machine with private IP %s", privateIP)
 }
 
-func findContainer(containers []db.Container, blueprintID string) (db.Container, error) {
+func findContainer(containers []db.Container, id string) (db.Container, error) {
 	var choice *db.Container
+	hostnameToContainer := map[string]db.Container{}
 	for _, c := range containers {
-		if len(blueprintID) > len(c.BlueprintID) ||
-			c.BlueprintID[0:len(blueprintID)] != blueprintID {
+		hostnameToContainer[c.Hostname] = c
+
+		if len(id) > len(c.BlueprintID) || c.BlueprintID[0:len(id)] != id {
 			continue
 		}
 
 		if choice != nil {
-			err := fmt.Errorf("ambiguous blueprintIDs %s and %s",
+			err := fmt.Errorf("ambiguous choices %s and %s",
 				choice.BlueprintID, c.BlueprintID)
 			return db.Container{}, err
 		}
@@ -69,8 +71,11 @@ func findContainer(containers []db.Container, blueprintID string) (db.Container,
 		return *choice, nil
 	}
 
-	err := fmt.Errorf("no container with blueprintID %q", blueprintID)
-	return db.Container{}, err
+	if c, ok := hostnameToContainer[id]; ok {
+		return c, nil
+	}
+
+	return db.Container{}, fmt.Errorf("no container %q", id)
 }
 
 func findMachine(machines []db.Machine, id string) (db.Machine, error) {

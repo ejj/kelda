@@ -45,8 +45,8 @@ func TestFuzzyLookup(t *testing.T) {
 func TestFindContainer(t *testing.T) {
 	t.Parallel()
 
-	a := db.Container{BlueprintID: "4567"}
-	b := db.Container{BlueprintID: "432"}
+	a := db.Container{BlueprintID: "4567", Hostname: "a"}
+	b := db.Container{BlueprintID: "432", Hostname: "b"}
 
 	res, err := findContainer([]db.Container{a, b}, "4567")
 	assert.Nil(t, err)
@@ -68,9 +68,13 @@ func TestFindContainer(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, b, res)
 
+	res, err = findContainer([]db.Container{a, b}, "a")
+	assert.NoError(t, err)
+	assert.Equal(t, a, res)
+
 	_, err = findContainer([]db.Container{a, b}, "4")
-	assert.EqualError(t, err, `ambiguous blueprintIDs 4567 and 432`)
+	assert.EqualError(t, err, `ambiguous choices 4567 and 432`)
 
 	_, err = findContainer([]db.Container{a, b}, "1")
-	assert.EqualError(t, err, `no container with blueprintID "1"`)
+	assert.EqualError(t, err, `no container "1"`)
 }

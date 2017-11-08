@@ -4,6 +4,10 @@ Kelda Change Log
 Up Next
 -------------
 
+- The Kelda command line utility now accepts container names in addition to
+IDs.  For example, `kelda ssh spark-master` can be used instead of
+`kelda ssh 6cf081531346`.
+
 Release 0.5.0
 -------------
 

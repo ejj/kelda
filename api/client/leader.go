@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/kelda/kelda/api"
-	"github.com/kelda/kelda/api/util"
 	"github.com/kelda/kelda/connection"
 	"github.com/kelda/kelda/db"
 )
@@ -61,7 +60,14 @@ func getLeaderIP(machines []db.Machine, daemonIP string, creds connection.Creden
 		return "", fmt.Errorf("no leader information on host %s", daemonIP)
 	}
 
-	return util.GetPublicIP(machines, etcds[0].LeaderIP)
+	ip := etcds[0].LeaderIP
+	for _, m := range machines {
+		if m.PrivateIP == ip {
+			return m.PublicIP, nil
+		}
+	}
+
+	return "", fmt.Errorf("no machine with private IP %s", ip)
 }
 
 // New is saved in a variable to facilitate injecting test clients for

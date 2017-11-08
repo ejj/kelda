@@ -9,6 +9,7 @@ import (
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
 	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -143,5 +144,5 @@ func containerValueMapKey(x map[string]blueprint.ContainerValue) string {
 	for key, val := range x {
 		m[key] = fmt.Sprintf("%+v", val)
 	}
-	return util.MapAsString(m)
+	return str.MapAsString(m)
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/kelda/kelda/join"
 	"github.com/kelda/kelda/minion/ipdef"
 	"github.com/kelda/kelda/minion/ovsdb"
-	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 )
 
 /*
@@ -83,7 +83,7 @@ func updateLoadBalancerIPs(client ovsdb.Client, loadBalancers []db.LoadBalancer,
 		lb := intf.(ovsdb.LoadBalancer)
 		return struct{ Name, VIPs string }{
 			Name: lb.Name,
-			VIPs: util.MapAsString(lb.VIPs),
+			VIPs: str.MapAsString(lb.VIPs),
 		}
 	}
 	_, toAdd, toRemove := join.HashJoin(loadBalancerSlice(target),

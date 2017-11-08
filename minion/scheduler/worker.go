@@ -16,7 +16,7 @@ import (
 	"github.com/kelda/kelda/minion/network/openflow"
 	"github.com/kelda/kelda/minion/network/plugin"
 	"github.com/kelda/kelda/minion/vault"
-	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -243,8 +243,8 @@ func syncJoinScore(left, right interface{}) int {
 	cmd1 := dkc.Args
 	cmd2 := append([]string{dkc.Path}, dkc.Args...)
 	if len(dbc.Command) != 0 &&
-		!util.StrSliceEqual(dbc.Command, cmd1) &&
-		!util.StrSliceEqual(dbc.Command, cmd2) {
+		!str.SliceEq(dbc.Command, cmd1) &&
+		!str.SliceEq(dbc.Command, cmd2) {
 		return -1
 	}
 
@@ -252,7 +252,7 @@ func syncJoinScore(left, right interface{}) int {
 }
 
 func filesHash(filepathToContent map[string]string) string {
-	toHash := util.MapAsString(filepathToContent)
+	toHash := str.MapAsString(filepathToContent)
 	return fmt.Sprintf("%x", sha1.Sum([]byte(toHash)))
 }
 

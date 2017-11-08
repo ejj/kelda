@@ -6,6 +6,7 @@ import (
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/supervisor/images"
 	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 )
 
 func runMaster() {
@@ -35,7 +36,7 @@ func runMasterOnce() {
 	etcdIPs := etcdRow.EtcdIPs
 	leader := etcdRow.Leader
 
-	if oldIP != IP || !util.StrSliceEqual(oldEtcdIPs, etcdIPs) {
+	if oldIP != IP || !str.SliceEq(oldEtcdIPs, etcdIPs) {
 		c.Inc("Reset Etcd")
 		Remove(images.Etcd)
 	}

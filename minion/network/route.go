@@ -12,7 +12,7 @@ import (
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/ipdef"
 	"github.com/kelda/kelda/minion/nl"
-	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 )
 
 var subnetC = counter.New("Subnet Sync")
@@ -51,7 +51,7 @@ func writeSubnetsOnce(conn db.Conn) error {
 
 	conn.Txn(db.MinionTable).Run(func(view db.Database) error {
 		self := view.MinionSelf()
-		if !util.StrSliceEqual(subnets, self.HostSubnets) {
+		if !str.SliceEq(subnets, self.HostSubnets) {
 			subnetC.Inc("Update subnets")
 			self.HostSubnets = subnets
 			view.Commit(self)

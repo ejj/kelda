@@ -11,7 +11,7 @@ import (
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
 	"github.com/kelda/kelda/minion/nl"
-	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 
 	"github.com/coreos/go-iptables/iptables"
 	log "github.com/sirupsen/logrus"
@@ -138,7 +138,7 @@ func ruleKey(intf interface{}) interface{} {
 		opts[flagName] = flagVal
 	}
 
-	return util.MapAsString(opts)
+	return str.MapAsString(opts)
 }
 
 func syncChain(ipt IPTables, table, chain string, target []string) error {

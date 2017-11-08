@@ -10,6 +10,7 @@ import (
 	"github.com/kelda/kelda/minion/nl"
 	"github.com/kelda/kelda/minion/supervisor/images"
 	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -64,7 +65,7 @@ func runWorkerOnce() {
 	leaderIP := etcdRow.LeaderIP
 	IP := minion.PrivateIP
 
-	if !util.StrSliceEqual(oldEtcdIPs, etcdIPs) {
+	if !str.SliceEq(oldEtcdIPs, etcdIPs) {
 		c.Inc("Reset Etcd")
 		Remove(images.Etcd)
 	}

@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/kelda/kelda/db"
-	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/util/str"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -256,7 +256,7 @@ func (s dbcSlice) Less(i, j int) bool {
 	switch {
 	case s[i].Image != s[j].Image:
 		return s[i].Image < s[j].Image
-	case !util.StrSliceEqual(s[i].Command, s[j].Command):
+	case !str.SliceEq(s[i].Command, s[j].Command):
 		return fmt.Sprintf("%s", s[i].Command) < fmt.Sprintf("%s", s[j].Command)
 	default:
 		return s[i].BlueprintID < s[j].BlueprintID

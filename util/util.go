@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -148,44 +147,6 @@ func Walk(root string, walkFn filepath.WalkFunc) error {
 		Fs: AppFs,
 	}
 	return afero.Walk(a, root, walkFn)
-}
-
-// StrSliceEqual returns true of the string slices 'x' and 'y' are identical.
-func StrSliceEqual(x, y []string) bool {
-	if len(x) != len(y) {
-		return false
-	}
-	for i, v := range x {
-		if v != y[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// StrStrMapEqual returns true of the string->string maps 'x' and 'y' are equal.
-func StrStrMapEqual(x, y map[string]string) bool {
-	if len(x) != len(y) {
-		return false
-	}
-	for k, v := range x {
-		if yVal, ok := y[k]; !ok {
-			return false
-		} else if v != yVal {
-			return false
-		}
-	}
-	return true
-}
-
-// MapAsString creates a deterministic string representing the given map.
-func MapAsString(m map[string]string) string {
-	var strs []string
-	for k, v := range m {
-		strs = append(strs, fmt.Sprintf("%s=%s", k, v))
-	}
-	sort.Sort(sort.StringSlice(strs))
-	return fmt.Sprintf("%v", strs)
 }
 
 // After returns whether the current time is after t. It is stored in a variable so it

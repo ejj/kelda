@@ -247,7 +247,7 @@ var newClient = newClientImpl
 
 func (cl clientImpl) getMinion() (pb.MinionConfig, error) {
 	c.Inc("Get Minion")
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 60*time.Second)
 	cfg, err := cl.GetMinionConfig(ctx, &pb.Request{})
 	if err != nil {
 		c.Inc("Get Minion Error")
@@ -259,7 +259,7 @@ func (cl clientImpl) getMinion() (pb.MinionConfig, error) {
 
 func (cl clientImpl) setMinion(cfg pb.MinionConfig) error {
 	c.Inc("Set Minion")
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 60*time.Second)
 	_, err := cl.SetMinionConfig(ctx, &cfg)
 	if err != nil {
 		c.Inc("Set Minion Error")

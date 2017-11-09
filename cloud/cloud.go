@@ -109,13 +109,38 @@ func newCloud(conn db.Conn, pName db.ProviderName, region, ns string) (cloud, er
 func (cld cloud) run(stop <-chan struct{}) {
 	log.Debugf("Start Cloud %s", cld)
 
-	trigger := cld.conn.TriggerTick(60, db.BlueprintTable, db.MachineTable)
+	// Note that we need to be fairly conservative about running due to request
+	// limits enforced by the cloud providers.  On unused regions we run very rarely
+	// as a result.
+	fast := time.NewTicker(5 * time.Second)
+	slow := time.NewTicker(2 * time.Minute)
+	defer fast.Stop()
+	defer slow.Stop()
+
+	trigger := cld.conn.Trigger(db.BlueprintTable, db.MachineTable)
 	defer trigger.Stop()
 
+	// This loop executes runOnce() whenever the database triggers, or a tick fires.
+	// We choose a fast tick in those regions that have machines, and a slow tick in
+	// those regions that are empty.  In the event the stop channel is closed, the
+	// function returns.
 	for {
+		tick := slow.C
+		if cld.runOnce() {
+			tick = fast.C
+		}
+
+		// If we switched tickers, there may be a stale tick to drain.  If
+		// there's no tick, fall through immediately.
+		select {
+		case <-tick:
+		default:
+		}
+
 		select {
 		case <-stop:
 		case <-trigger.C:
+		case <-tick:
 		}
 
 		// In a race between a closed stop and a trigger, choose stop.
@@ -125,8 +150,6 @@ func (cld cloud) run(stop <-chan struct{}) {
 			return
 		default:
 		}
-
-		cld.runOnce()
 	}
 }
 
@@ -140,11 +163,19 @@ func (cld cloud) run(stop <-chan struct{}) {
  * that should be reflected in the database, but won't be until `runOnce()` is called a
  * second time.  Luckily, these situations are nearly always associated with machine
  * status changes that cause a database trigger which will cause the caller to invoke
- * `runOnce()` again. */
-func (cld cloud) runOnce() {
+ * `runOnce()` again.
+ *
+ * `runOnce()` returns a hint as to whether or not this region is `active` (i.e. it has
+ * machines).  Callers may want to call `runOnce()` more frequently on `active` regions
+ * than they would run empty ones. */
+func (cld cloud) runOnce() (active bool) {
 	jr, err := cloudJoin(cld)
 	if err != nil {
-		return
+		// Could have failed due to a misconfiguration (bad keys, network
+		// connectivity issues, insufficient permissions, etc.). In that case
+		// there's no particular advantage to checking regularly, so we consider
+		// it inactive.
+		return false
 	}
 
 	if len(jr.boot) == 0 &&
@@ -158,6 +189,8 @@ func (cld cloud) runOnce() {
 	} else {
 		cld.updateCloud(jr)
 	}
+
+	return jr.isActive
 }
 
 func sanitizeMachines(machines []db.Machine) []db.Machine {

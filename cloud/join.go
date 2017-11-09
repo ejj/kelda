@@ -21,20 +21,22 @@ type joinResult struct {
 	boot      []db.Machine
 	terminate []db.Machine
 	updateIPs []db.Machine
+
+	// True if there's things going on in this join that warrant frequent polls.
+	isActive bool
 }
 
 var cloudJoin = joinImpl
 
 func joinImpl(cld cloud) (joinResult, error) {
-	res := joinResult{}
-
 	machines, err := cld.provider.List()
 	if err != nil {
 		log.WithError(err).Error("Failed to list machines")
-		return res, err
+		return joinResult{}, err
 	}
 	machines = getMachineRoles(machines)
 
+	var res joinResult
 	err = cld.conn.Txn(db.BlueprintTable,
 		db.MachineTable).Run(func(view db.Database) error {
 		bp, err := view.GetBlueprint()
@@ -50,7 +52,7 @@ func joinImpl(cld cloud) (joinResult, error) {
 		}
 
 		cld.updateDBMachines(view, machines)
-		res.boot, res.terminate, res.updateIPs = cld.planUpdates(view)
+		res = cld.planUpdates(view)
 
 		// Regions with no machines in them should have their ACLs cleared.
 		if len(machines) > 0 {
@@ -90,15 +92,21 @@ func (cld cloud) updateDBMachines(view db.Database, cloudMachines []db.Machine) 
 	}
 }
 
-func (cld cloud) planUpdates(view db.Database) (boot, stop, updateIPs []db.Machine) {
+func (cld cloud) planUpdates(view db.Database) joinResult {
+	var res joinResult
+
 	bp, err := view.GetBlueprint()
 	if err != nil {
 		// Already got the blueprint earlier in this transaction.
 		panic(fmt.Sprintf("Unreachable error: %v", err))
 	}
 
-	bpms := cld.desiredMachines(bp.Blueprint.Machines)
 	dbms := cld.selectMachines(view)
+
+	bpms := cld.desiredMachines(bp.Blueprint.Machines)
+	if len(bpms) > 0 || len(dbms) > 0 {
+		res.isActive = true
+	}
 
 	pairs, bpmis, dbmis := join.Join(bpms, dbms, machineScore)
 
@@ -120,7 +128,7 @@ func (cld cloud) planUpdates(view db.Database) (boot, stop, updateIPs []db.Machi
 
 		if bpm.FloatingIP != dbm.FloatingIP {
 			dbm.FloatingIP = bpm.FloatingIP
-			updateIPs = append(updateIPs, dbm)
+			res.updateIPs = append(res.updateIPs, dbm)
 		}
 	}
 
@@ -129,7 +137,7 @@ func (cld cloud) planUpdates(view db.Database) (boot, stop, updateIPs []db.Machi
 		dbm.Status = db.Stopping
 		view.Commit(dbm)
 
-		stop = append(stop, dbm)
+		res.terminate = append(res.terminate, dbm)
 	}
 
 	for _, bpmi := range bpmis {
@@ -139,10 +147,10 @@ func (cld cloud) planUpdates(view db.Database) (boot, stop, updateIPs []db.Machi
 		bpm.Status = db.Booting
 		view.Commit(bpm)
 
-		boot = append(boot, bpm)
+		res.boot = append(res.boot, bpm)
 	}
 
-	return
+	return res
 }
 
 func machineScore(left, right interface{}) int {

@@ -125,25 +125,25 @@ func TestPlanUpdates(t *testing.T) {
 		m.PublicIP = "1.2.3.4"
 		view.Commit(m)
 
-		boot, stop, updateIPs := cld.planUpdates(view)
+		res := cld.planUpdates(view)
 		assert.Equal(t, []db.Machine{{
 			Provider: FakeAmazon,
 			Region:   testRegion,
 			DiskSize: 32,
 			Size:     "1",
-			Status:   db.Booting}}, scrubID(boot))
+			Status:   db.Booting}}, scrubID(res.boot))
 		assert.Equal(t, []db.Machine{{
 			Provider: FakeAmazon,
 			Region:   testRegion,
 			Size:     "2",
-			Status:   db.Stopping}}, scrubID(stop))
+			Status:   db.Stopping}}, scrubID(res.terminate))
 		assert.Equal(t, []db.Machine{{
 			Provider:   FakeAmazon,
 			Region:     testRegion,
 			Size:       "3",
 			PublicIP:   "1.2.3.4",
 			FloatingIP: "5.6.7.8",
-			Status:     db.Connected}}, scrubID(updateIPs))
+			Status:     db.Connected}}, scrubID(res.updateIPs))
 
 		return nil
 	})

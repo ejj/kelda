@@ -8,13 +8,13 @@ LINE_LENGTH_EXCLUDE=./api/pb/pb.pb.go \
 		    ./cloud/google/client/mocks/% \
 		    ./cloud/machine/amazon.go \
 		    ./cloud/machine/google.go \
+		    ./integration-tester/tests/zookeeper/vendor/% \
 		    ./minion/network/link_test.go \
 		    ./minion/ovsdb/mock_transact_test.go \
 		    ./minion/ovsdb/mocks/Client.go \
 		    ./minion/pb/pb.pb.go \
 		    ./minion/vault/mocks/% \
-		    ./node_modules/% \
-		    ./integration-tester/tests/zookeeper/vendor/%
+		    ./node_modules/%
 
 JS_LINT_COMMAND = node_modules/eslint/bin/eslint.js \
                   examples/ \
@@ -54,11 +54,14 @@ release: linux darwin
 
 COV_SKIP= /api/client/mocks \
 	  /api/pb \
+	  /cli/ssh/mocks \
+	  /cli/testutils \
 	  /cloud/amazon/client/mocks \
 	  /cloud/digitalocean/client/mocks \
 	  /cloud/google/client/mocks \
 	  /cloud/provider/mocks \
 	  /constants \
+	  /integration-tester/% \
 	  /minion/network/mocks \
 	  /minion/nl \
 	  /minion/nl/nlmock \
@@ -66,9 +69,6 @@ COV_SKIP= /api/client/mocks \
 	  /minion/pb \
 	  /minion/pprofile \
 	  /minion/supervisor/images \
-	  /integration-tester/% \
-	  /cli/ssh/mocks \
-	  /cli/testutils \
 	  /scripts \
 	  /scripts/blueprints-tester \
 	  /scripts/blueprints-tester/tests \

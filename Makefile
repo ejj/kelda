@@ -69,6 +69,7 @@ COV_SKIP= /api/client/mocks \
 	  /minion/pb \
 	  /minion/pprofile \
 	  /minion/supervisor/images \
+	  /minion/vault/mocks \
 	  /scripts \
 	  /scripts/blueprints-tester \
 	  /scripts/blueprints-tester/tests \

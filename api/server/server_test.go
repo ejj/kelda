@@ -1,7 +1,7 @@
 package server
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func checkQuery(t *testing.T, s *server, table db.TableType, exp string) {
+func checkQuery(t *testing.T, s server, table db.TableType, exp string) {
 	reply, err := s.Query(context.Background(),
 		&pb.DBQuery{Table: string(table)})
 
@@ -30,10 +30,19 @@ func checkQuery(t *testing.T, s *server, table db.TableType, exp string) {
 
 func TestQueryErrors(t *testing.T) {
 	// Invalid table type.
-	s := server{}
-	_, err := s.Query(context.Background(),
+	_, err := server{}.Query(context.Background(),
 		&pb.DBQuery{Table: string(db.HostnameTable)})
 	assert.EqualError(t, err, "unrecognized table: db.Hostname")
+
+	// Error getting the leader client.
+	newLeaderClient = func(_ []db.Machine, _ connection.Credentials) (
+		client.Client, error) {
+		return nil, errors.New("get leader error")
+	}
+	s := server{db.New(), true, nil}
+	_, err = s.Query(context.Background(),
+		&pb.DBQuery{Table: string(db.ContainerTable)})
+	assert.EqualError(t, err, "get leader error")
 }
 
 func TestQueryMachinesDaemon(t *testing.T) {
@@ -58,7 +67,7 @@ func TestQueryMachinesDaemon(t *testing.T) {
 		`"Preemptible":false,"CloudID":"","PublicIP":"8.8.8.8",` +
 		`"PrivateIP":"9.9.9.9","Status":"connected","PublicKey":""}]`
 
-	checkQuery(t, &server{conn: conn, runningOnDaemon: true}, db.MachineTable, exp)
+	checkQuery(t, server{conn, true, nil}, db.MachineTable, exp)
 }
 
 func TestQueryContainersCluster(t *testing.T) {
@@ -78,10 +87,10 @@ func TestQueryContainersCluster(t *testing.T) {
 	exp := `[{"DockerID":"docker-id","Command":["cmd","arg"],` +
 		`"Created":"0001-01-01T00:00:00Z","Image":"image"}]`
 
-	checkQuery(t, &server{conn: conn, runningOnDaemon: false}, db.ContainerTable, exp)
+	checkQuery(t, server{conn, false, nil}, db.ContainerTable, exp)
 }
 
-func TestGetClusterContainers(t *testing.T) {
+func TestQueryContainersDaemon(t *testing.T) {
 	newClient = func(host string, _ connection.Credentials) (client.Client, error) {
 		switch host {
 		case api.RemoteAddress("9.9.9.9"):
@@ -99,15 +108,19 @@ func TestGetClusterContainers(t *testing.T) {
 		panic("unreached")
 	}
 
-	mockLeaderClient := new(mocks.Client)
-	mockLeaderClient.On("QueryContainers").Return([]db.Container{{
-		BlueprintID: "notScheduled",
-		Image:       "notScheduled",
-	}, {
-		BlueprintID: "onWorker",
-		Image:       "onWorker",
-	}}, nil)
-	mockLeaderClient.On("Close").Return(nil)
+	newLeaderClient = func(_ []db.Machine, _ connection.Credentials) (
+		client.Client, error) {
+		mc := new(mocks.Client)
+		mc.On("QueryContainers").Return([]db.Container{{
+			BlueprintID: "notScheduled",
+			Image:       "notScheduled",
+		}, {
+			BlueprintID: "onWorker",
+			Image:       "onWorker",
+		}}, nil)
+		mc.On("Close").Return(nil)
+		return mc, nil
+	}
 
 	conn := db.New()
 	conn.Txn(db.MachineTable).Run(func(view db.Database) error {
@@ -120,15 +133,11 @@ func TestGetClusterContainers(t *testing.T) {
 		return nil
 	})
 
-	s := server{conn: conn}
-	actualContainers, err := s.getClusterContainers(mockLeaderClient)
-	assert.NoError(t, err)
-
-	expContainers := []db.Container{
-		{BlueprintID: "notScheduled", Image: "notScheduled"},
-		{BlueprintID: "onWorker", DockerID: "dockerID", Image: "onWorker"},
-	}
-	assert.Equal(t, expContainers, actualContainers)
+	exp := `[{"BlueprintID":"notScheduled","Created":"0001-01-01T00:00:00Z",` +
+		`"Image":"notScheduled"},{"BlueprintID":"onWorker",` +
+		`"DockerID":"dockerID","Created":"0001-01-01T00:00:00Z",` +
+		`"Image":"onWorker"}]`
+	checkQuery(t, server{conn, true, nil}, db.ContainerTable, exp)
 }
 
 func TestBadDeployment(t *testing.T) {
@@ -145,7 +154,7 @@ func TestBadDeployment(t *testing.T) {
 }
 func TestInvalidImage(t *testing.T) {
 	conn := db.New()
-	s := &server{conn: conn, runningOnDaemon: true}
+	s := server{conn: conn, runningOnDaemon: true}
 	testInvalidImage(t, s, "has:morethan:two:colons",
 		"could not parse container image has:morethan:two:colons: "+
 			"invalid reference format")
@@ -160,7 +169,7 @@ func TestInvalidImage(t *testing.T) {
 			"invalid reference format: repository name must be lowercase")
 }
 
-func testInvalidImage(t *testing.T, s *server, img, expErr string) {
+func testInvalidImage(t *testing.T, s server, img, expErr string) {
 	deployment := fmt.Sprintf(`
 	{"Containers":[
 		{"ID": "1",
@@ -301,11 +310,10 @@ func TestUpdateLeaderContainerAttrs(t *testing.T) {
 func TestDaemonOnlyEndpoints(t *testing.T) {
 	t.Parallel()
 
-	s := server{}
-	_, err := s.QueryMinionCounters(nil, nil)
+	_, err := server{runningOnDaemon: false}.QueryMinionCounters(nil, nil)
 	assert.EqualError(t, err, errDaemonOnlyRPC.Error())
 
-	_, err = s.Deploy(nil, nil)
+	_, err = server{runningOnDaemon: false}.Deploy(nil, nil)
 	assert.EqualError(t, err, errDaemonOnlyRPC.Error())
 }
 
@@ -322,7 +330,22 @@ func TestQueryImagesCluster(t *testing.T) {
 	})
 
 	exp := `[{"ID":1,"Name":"foo","Dockerfile":"","DockerID":"","Status":""}]`
-	checkQuery(t, &server{conn: conn}, db.ImageTable, exp)
+	checkQuery(t, server{conn, false, nil}, db.ImageTable, exp)
+}
+
+func TestQueryImagesDaemon(t *testing.T) {
+	newLeaderClient = func(_ []db.Machine, _ connection.Credentials) (
+		client.Client, error) {
+		mc := new(mocks.Client)
+		mc.On("QueryImages").Return([]db.Image{{
+			Name: "bar",
+		}}, nil)
+		mc.On("Close").Return(nil)
+		return mc, nil
+	}
+
+	exp := `[{"ID":0,"Name":"bar","Dockerfile":"","DockerID":"","Status":""}]`
+	checkQuery(t, server{db.New(), true, nil}, db.ImageTable, exp)
 }
 
 // The Daemon should get a connection to the leader of the cluster, and
@@ -339,8 +362,7 @@ func TestSetSecretDaemon(t *testing.T) {
 		return mc, nil
 	}
 
-	s := server{conn: db.New(), runningOnDaemon: true}
-	_, err := s.SetSecret(nil, &pb.Secret{
+	_, err := server{db.New(), true, nil}.SetSecret(nil, &pb.Secret{
 		Name: secretName, Value: secretValue,
 	})
 	assert.NoError(t, err)
@@ -369,64 +391,9 @@ func TestSetSecretCluster(t *testing.T) {
 	}
 
 	mockClient.On("Write", secretName, secretValue).Return(nil).Once()
-	s := server{conn: conn}
-	_, err := s.SetSecret(nil, &pb.Secret{
+	_, err := server{conn, false, nil}.SetSecret(nil, &pb.Secret{
 		Name: secretName, Value: secretValue,
 	})
 	assert.NoError(t, err)
 	mockClient.AssertExpectations(t)
-}
-
-func TestSyncClusterInfo(t *testing.T) {
-	expImages := []db.Image{
-		{Name: "test1"},
-		{Name: "test2"},
-	}
-	expImagesJSON, err := json.Marshal(expImages)
-	assert.NoError(t, err)
-
-	expLoadBalancers := []db.LoadBalancer{
-		{Name: "test", IP: "ip", Hostnames: []string{"h1", "h2"}},
-	}
-	expLoadBalancersJSON, err := json.Marshal(expLoadBalancers)
-	assert.NoError(t, err)
-
-	mc := new(mocks.Client)
-	mc.On("QueryImages").Return(expImages, nil)
-	mc.On("QueryLoadBalancers").Return(expLoadBalancers, nil)
-	mc.On("Close").Return(nil)
-
-	// Test that a failure to retrieve one table doesn't affect the others.
-	mc.On("QueryConnections").Return(nil, assert.AnError)
-
-	// Don't test querying containers because the mocking required for querying
-	// containers is more complicated, and is covered by TestGetClusterContainers.
-	mc.On("QueryContainers").Return(nil, nil)
-
-	newLeaderClient = func(_ []db.Machine, _ connection.Credentials) (
-		client.Client, error) {
-		return mc, nil
-	}
-
-	// There must be at least one connected machine in the database or else
-	// the code won't attempt to connect to the cluster.
-	conn := db.New()
-	conn.Txn(db.MachineTable).Run(func(view db.Database) error {
-		m := view.InsertMachine()
-		m.Status = db.Connected
-		view.Commit(m)
-		return nil
-	})
-
-	apiServer := &server{
-		conn:            conn,
-		clusterInfo:     map[db.TableType]interface{}{},
-		runningOnDaemon: true,
-	}
-	apiServer.syncClusterInfoOnce()
-
-	checkQuery(t, apiServer, db.ImageTable, string(expImagesJSON))
-	checkQuery(t, apiServer, db.LoadBalancerTable, string(expLoadBalancersJSON))
-	checkQuery(t, apiServer, db.ConnectionTable, "null")
-	checkQuery(t, apiServer, db.ContainerTable, "null")
 }

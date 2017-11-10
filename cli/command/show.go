@@ -67,6 +67,21 @@ func (pCmd *Show) run() (err error) {
 	writeMachines(os.Stdout, machines)
 	fmt.Println()
 
+	clusterUp := false
+	for _, m := range machines {
+		if m.Status == db.Connected || m.Status == db.Reconnecting {
+			clusterUp = true
+		}
+	}
+
+	// Only attempt to query container information if the foreman has connected
+	// to a machine. If the foreman hasn't connected to any machines, then there's
+	// no way any containers could be running because the deployment hasn't been
+	// sent to the cluster yet.
+	if !clusterUp {
+		return nil
+	}
+
 	var connections []db.Connection
 	var containers []db.Container
 	var images []db.Image

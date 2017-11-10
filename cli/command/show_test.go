@@ -57,6 +57,30 @@ func TestShowErrors(t *testing.T) {
 	assert.EqualError(t, cmd.run(), "unable to query connections: error")
 }
 
+// Test that we don't query the cluster if it's not up.
+func TestMachineOnly(t *testing.T) {
+	t.Parallel()
+
+	mockClient := new(mocks.Client)
+	cmd := &Show{false, connectionHelper{client: mockClient}}
+
+	// Test failing to query machines.
+	mockClient.On("QueryMachines").Once().Return(nil, assert.AnError)
+	cmd.run()
+	mockClient.AssertNotCalled(t, "QueryContainers")
+
+	// Test no machines in database.
+	mockClient.On("QueryMachines").Once().Return(nil, nil)
+	cmd.run()
+	mockClient.AssertNotCalled(t, "QueryContainers")
+
+	// Test no connected machines.
+	mockClient.On("QueryMachines").Once().Return(
+		[]db.Machine{{Status: db.Booting}}, nil)
+	cmd.run()
+	mockClient.AssertNotCalled(t, "QueryContainers")
+}
+
 func TestShowSuccess(t *testing.T) {
 	t.Parallel()
 

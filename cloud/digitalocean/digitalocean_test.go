@@ -59,35 +59,18 @@ func TestList(t *testing.T) {
 	dropFirst := []godo.Droplet{
 		{
 			ID:        123,
-			Name:      testNamespace,
 			Networks:  network,
 			SizeSlug:  "size",
 			VolumeIDs: []string{"foo"},
-			Region:    sfo,
-		},
-
-		// This droplet should not be listed because it has a name different from
-		// testNamespace.
-		{
-			ID:        124,
-			Name:      "foo",
-			Networks:  network,
-			SizeSlug:  "size",
-			VolumeIDs: []string{"foo"},
-			Region:    sfo,
-		},
-	}
+			Region:    sfo}}
 
 	dropLast := []godo.Droplet{
 		{
 			ID:        125,
-			Name:      testNamespace,
 			Networks:  network,
 			SizeSlug:  "size",
 			VolumeIDs: []string{"foo"},
-			Region:    sfo,
-		},
-	}
+			Region:    sfo}}
 
 	respFirst := &godo.Response{
 		Links: &godo.Links{
@@ -102,13 +85,15 @@ func TestList(t *testing.T) {
 	}
 
 	reqFirst := &godo.ListOptions{Page: 1, PerPage: 200}
-	mc.On("ListDroplets", reqFirst).Return(dropFirst, respFirst, nil).Once()
+	mc.On("ListDroplets", reqFirst, "namespace-sfo1").Return(
+		dropFirst, respFirst, nil).Once()
 
 	reqLast := &godo.ListOptions{
 		Page:    reqFirst.Page + 1,
 		PerPage: 200,
 	}
-	mc.On("ListDroplets", reqLast).Return(dropLast, respLast, nil).Once()
+	mc.On("ListDroplets", reqLast, "namespace-sfo1").Return(
+		dropLast, respLast, nil).Once()
 
 	floatingIPsFirst := []godo.FloatingIP{
 		{IP: "ignored"},
@@ -133,7 +118,7 @@ func TestList(t *testing.T) {
 
 	machines, err := doPrvdr.List()
 	assert.Nil(t, err)
-	assert.Equal(t, machines, []db.Machine{
+	assert.Equal(t, []db.Machine{
 		{
 			Provider:    "DigitalOcean",
 			Region:      "sfo1",
@@ -151,13 +136,12 @@ func TestList(t *testing.T) {
 			PrivateIP:   "privateIP",
 			FloatingIP:  "floatingIP",
 			Size:        "size",
-			Preemptible: false,
-		},
-	})
+			Preemptible: false}}, machines)
 
 	// Error ListDroplets.
 	mc.On("ListFloatingIPs", mock.Anything).Return(nil, &godo.Response{}, nil).Once()
-	mc.On("ListDroplets", mock.Anything).Return(nil, nil, errMock).Once()
+	mc.On("ListDroplets", mock.Anything, mock.Anything).Return(
+		nil, nil, errMock).Once()
 	machines, err = doPrvdr.List()
 	assert.Nil(t, machines)
 	assert.EqualError(t, err, fmt.Sprintf("list droplets: %s", errMsg))
@@ -179,7 +163,8 @@ func TestList(t *testing.T) {
 			Region:    sfo,
 		},
 	}
-	mc.On("ListDroplets", mock.Anything).Return(droplets, respLast, nil).Once()
+	mc.On("ListDroplets", mock.Anything, mock.Anything).Return(
+		droplets, respLast, nil).Once()
 	mc.On("ListFloatingIPs", mock.Anything).Return(nil, &godo.Response{}, nil).Once()
 	machines, err = doPrvdr.List()
 	assert.Nil(t, machines)
@@ -351,7 +336,7 @@ func TestSetACLs(t *testing.T) {
 		&godo.Firewall{ID: "test", OutboundRules: allowAll}, nil, nil).Once()
 	mc.On("ListFirewalls", mock.Anything).Return(
 		[]godo.Firewall{
-			{Name: tagName, ID: "test", OutboundRules: allowAll},
+			{Tags: []string{tagName}, ID: "test", OutboundRules: allowAll},
 		}, nil, nil).Once()
 	mc.On("AddRules", "test",
 		mock.AnythingOfType("[]godo.InboundRule")).Return(nil, nil).Once()
@@ -375,7 +360,7 @@ func TestSetACLs(t *testing.T) {
 		godo.InboundRule{Sources: &godo.Sources{Tags: []string{"random-tag"}}})
 	mc.On("ListFirewalls", mock.Anything).Return([]godo.Firewall{
 		{
-			Name:          tagName,
+			Tags:          []string{tagName},
 			ID:            "test",
 			OutboundRules: allowAll,
 			InboundRules: append(internalTrafficRules,
@@ -402,7 +387,7 @@ func TestSetACLs(t *testing.T) {
 		&godo.Firewall{ID: "test", OutboundRules: allowAll}, nil, nil).Once()
 	mc.On("ListFirewalls", mock.Anything).Return(
 		[]godo.Firewall{
-			{Name: tagName, ID: "test", OutboundRules: allowAll},
+			{Tags: []string{tagName}, ID: "test", OutboundRules: allowAll},
 		}, nil, nil).Once()
 	mc.On("AddRules", "test",
 		mock.AnythingOfType("[]godo.InboundRule")).Return(nil, errMock).Once()
@@ -413,8 +398,8 @@ func TestSetACLs(t *testing.T) {
 	assert.Error(t, err)
 
 	// Check that getCreateFirewall checks all pages of firewalls.
-	fwFirst := []godo.Firewall{{Name: "otherFW", ID: "testWrong"}}
-	fwLast := []godo.Firewall{{Name: tagName, ID: "testCorrect"}}
+	fwFirst := []godo.Firewall{{Tags: []string{"otherFW"}, ID: "testWrong"}}
+	fwLast := []godo.Firewall{{Tags: []string{tagName}, ID: "testCorrect"}}
 
 	respFirst := &godo.Response{
 		Links: &godo.Links{Pages: &godo.Pages{Last: "2"}},
@@ -643,13 +628,13 @@ func TestNew(t *testing.T) {
 	newDigitalOcean = func(namespace, region string) (*Provider, error) {
 		return client, nil
 	}
-	mc.On("ListDroplets", mock.Anything).Return(nil, nil, nil).Once()
+	mc.On("ListDroplets", mock.Anything, mock.Anything).Return(nil, nil, nil).Once()
 	outClient, err = New(testNamespace, DefaultRegion)
 	assert.Nil(t, err)
 	assert.Equal(t, client, outClient)
 
 	// ListDroplets throws an error.
-	mc.On("ListDroplets", mock.Anything).Return(nil, nil, errMock)
+	mc.On("ListDroplets", mock.Anything, mock.Anything).Return(nil, nil, errMock)
 	outClient, err = New(testNamespace, DefaultRegion)
 	assert.Equal(t, client, outClient)
 	assert.EqualError(t, err, errMsg)

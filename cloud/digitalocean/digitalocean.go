@@ -81,7 +81,7 @@ func New(namespace, region string) (*Provider, error) {
 		return prvdr, err
 	}
 
-	_, _, err = prvdr.ListDroplets(&godo.ListOptions{})
+	_, _, err = prvdr.ListDroplets(&godo.ListOptions{}, prvdr.getTag())
 	return prvdr, err
 }
 
@@ -117,16 +117,12 @@ func (prvdr Provider) List() (machines []db.Machine, err error) {
 	// DigitalOcean's API has a paginated list of droplets.
 	dropletListOpt := &godo.ListOptions{Page: 1, PerPage: 200}
 	for {
-		droplets, resp, err := prvdr.ListDroplets(dropletListOpt)
+		droplets, resp, err := prvdr.ListDroplets(dropletListOpt, prvdr.getTag())
 		if err != nil {
 			return nil, fmt.Errorf("list droplets: %s", err)
 		}
 
 		for _, d := range droplets {
-			if d.Name != prvdr.namespace || d.Region.Slug != prvdr.region {
-				continue
-			}
-
 			pubIP, err := d.PublicIPv4()
 			if err != nil {
 				return nil, fmt.Errorf("get public IP: %s", err)
@@ -194,7 +190,7 @@ func (prvdr Provider) Boot(bootSet []db.Machine) ([]string, error) {
 		}
 
 		createReq := &godo.DropletCreateRequest{
-			Name:              prvdr.namespace,
+			Name:              "Kelda",
 			Region:            prvdr.region,
 			Size:              m.Size,
 			Image:             godo.DropletCreateImage{ID: imageID},
@@ -326,9 +322,11 @@ func (prvdr Provider) getCreateFirewall() (*godo.Firewall, error) {
 		}
 
 		for _, firewall := range firewalls {
-			if firewall.Name == tagName {
-				fixRulesPortRange(&firewall)
-				return &firewall, nil
+			for _, tag := range firewall.Tags {
+				if tag == tagName {
+					fixRulesPortRange(&firewall)
+					return &firewall, nil
+				}
 			}
 		}
 

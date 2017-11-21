@@ -12,7 +12,8 @@ import (
 
 // A Client for DigitalOcean's API. Used for unit testing.
 type Client interface {
-	CreateDroplet(*godo.DropletCreateRequest) (*godo.Droplet, *godo.Response, error)
+	CreateDroplets(*godo.DropletMultiCreateRequest) (
+		[]godo.Droplet, *godo.Response, error)
 	DeleteDroplet(int) (*godo.Response, error)
 	GetDroplet(int) (*godo.Droplet, *godo.Response, error)
 	ListDroplets(*godo.ListOptions, string) ([]godo.Droplet, *godo.Response, error)
@@ -40,10 +41,10 @@ type client struct {
 
 var c = counter.New("Digital Ocean")
 
-func (client client) CreateDroplet(req *godo.DropletCreateRequest) (*godo.Droplet,
+func (client client) CreateDroplets(req *godo.DropletMultiCreateRequest) ([]godo.Droplet,
 	*godo.Response, error) {
 	c.Inc("Create Droplet")
-	return client.droplets.Create(context.Background(), req)
+	return client.droplets.CreateMultiple(context.Background(), req)
 }
 
 func (client client) DeleteDroplet(id int) (*godo.Response, error) {

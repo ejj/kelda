@@ -18,7 +18,7 @@ func (r rtErr) RoundTrip(*http.Request) (*http.Response, error) {
 func TestError(t *testing.T) {
 	c := New(&http.Client{Transport: rtErr{}})
 
-	_, _, err := c.CreateDroplet(&godo.DropletCreateRequest{})
+	_, _, err := c.CreateDroplets(&godo.DropletMultiCreateRequest{})
 	assert.EqualError(t, err, "Post https://api.digitalocean.com/v2/droplets: test")
 
 	_, err = c.DeleteDroplet(3)

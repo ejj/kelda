@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/kelda/kelda/cloud/acl"
+	"github.com/kelda/kelda/cloud/cfg"
 	"github.com/kelda/kelda/cloud/digitalocean/client/mocks"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/util"
@@ -182,36 +184,55 @@ func TestBoot(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Nil(t, ids)
 
-	// Create a list of machines to boot.
-	bootSet = []db.Machine{
-		{
-			CloudID:   "123",
-			PublicIP:  "publicIP",
-			PrivateIP: "privateIP",
-			Size:      "size",
-			DiskSize:  0,
-		},
+	// DigitalOcean limits the batch size to 10, so by booting 11 we exercise the
+	// batch splitting code.
+	for i := 0; i < 11; i++ {
+		bootSet = append(bootSet, db.Machine{Size: "size1"})
 	}
+	bootSet = append(bootSet, db.Machine{Size: "size2"}, db.Machine{Size: "size2"})
 
-	mc.On("CreateDroplet", mock.Anything).Return(&godo.Droplet{
-		ID: 123,
-	}, nil, nil).Once()
+	userData := cfg.Ubuntu(bootSet[0], "")
+	mc.On("CreateDroplets", &godo.DropletMultiCreateRequest{
+		Names: []string{"Kelda", "Kelda", "Kelda", "Kelda", "Kelda",
+			"Kelda", "Kelda", "Kelda", "Kelda", "Kelda"},
+		Region:            DefaultRegion,
+		Size:              "size1",
+		Image:             godo.DropletCreateImage{ID: imageID},
+		PrivateNetworking: true,
+		UserData:          userData,
+		Tags:              []string{doPrvdr.getTag()},
+	}).Return([]godo.Droplet{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}, {ID: 5},
+		{ID: 6}, {ID: 7}, {ID: 8}, {ID: 9}, {ID: 10}}, nil, nil).Once()
+
+	mc.On("CreateDroplets", &godo.DropletMultiCreateRequest{
+		Names:             []string{"Kelda"},
+		Region:            DefaultRegion,
+		Size:              "size1",
+		Image:             godo.DropletCreateImage{ID: imageID},
+		PrivateNetworking: true,
+		UserData:          userData,
+		Tags:              []string{doPrvdr.getTag()},
+	}).Return([]godo.Droplet{{ID: 11}}, nil, nil).Once()
+
+	mc.On("CreateDroplets", &godo.DropletMultiCreateRequest{
+		Names:             []string{"Kelda", "Kelda"},
+		Region:            DefaultRegion,
+		Size:              "size2",
+		Image:             godo.DropletCreateImage{ID: imageID},
+		PrivateNetworking: true,
+		UserData:          userData,
+		Tags:              []string{doPrvdr.getTag()},
+	}).Return([]godo.Droplet{{ID: 12}, {ID: 13}}, nil, nil).Once()
 
 	ids, err = doPrvdr.Boot(bootSet)
 	mc.AssertExpectations(t)
 	assert.Nil(t, err)
-	assert.Equal(t, []string{"123"}, ids)
+	sort.Strings(ids)
+	assert.Equal(t, []string{"1", "10", "11", "12", "13", "2", "3", "4",
+		"5", "6", "7", "8", "9"}, ids)
 
-	// Error CreateDroplet.
-	doubleBootSet := append(bootSet, db.Machine{
-		CloudID:   "123",
-		PublicIP:  "publicIP",
-		PrivateIP: "privateIP",
-		Size:      "size",
-		DiskSize:  0,
-	})
-	mc.On("CreateDroplet", mock.Anything).Return(nil, nil, errMock).Twice()
-	ids, err = doPrvdr.Boot(doubleBootSet)
+	mc.On("CreateDroplets", mock.Anything).Return(nil, nil, errMock).Once()
+	ids, err = doPrvdr.Boot(bootSet)
 	assert.EqualError(t, err, errMsg)
 	assert.Nil(t, ids)
 }

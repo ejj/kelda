@@ -65,21 +65,21 @@ func (_m *Client) AssignFloatingIP(_a0 string, _a1 int) (*godo.Action, *godo.Res
 	return r0, r1, r2
 }
 
-// CreateDroplet provides a mock function with given fields: _a0
-func (_m *Client) CreateDroplet(_a0 *godo.DropletCreateRequest) (*godo.Droplet, *godo.Response, error) {
+// CreateDroplets provides a mock function with given fields: _a0
+func (_m *Client) CreateDroplets(_a0 *godo.DropletMultiCreateRequest) ([]godo.Droplet, *godo.Response, error) {
 	ret := _m.Called(_a0)
 
-	var r0 *godo.Droplet
-	if rf, ok := ret.Get(0).(func(*godo.DropletCreateRequest) *godo.Droplet); ok {
+	var r0 []godo.Droplet
+	if rf, ok := ret.Get(0).(func(*godo.DropletMultiCreateRequest) []godo.Droplet); ok {
 		r0 = rf(_a0)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*godo.Droplet)
+			r0 = ret.Get(0).([]godo.Droplet)
 		}
 	}
 
 	var r1 *godo.Response
-	if rf, ok := ret.Get(1).(func(*godo.DropletCreateRequest) *godo.Response); ok {
+	if rf, ok := ret.Get(1).(func(*godo.DropletMultiCreateRequest) *godo.Response); ok {
 		r1 = rf(_a0)
 	} else {
 		if ret.Get(1) != nil {
@@ -88,7 +88,7 @@ func (_m *Client) CreateDroplet(_a0 *godo.DropletCreateRequest) (*godo.Droplet, 
 	}
 
 	var r2 error
-	if rf, ok := ret.Get(2).(func(*godo.DropletCreateRequest) error); ok {
+	if rf, ok := ret.Get(2).(func(*godo.DropletMultiCreateRequest) error); ok {
 		r2 = rf(_a0)
 	} else {
 		r2 = ret.Error(2)

@@ -181,29 +181,60 @@ func (prvdr Provider) getFloatingIPs() (map[int]string, error) {
 }
 
 // Boot will boot every machine in a goroutine, and wait for the machines to come up.
-func (prvdr Provider) Boot(bootSet []db.Machine) ([]string, error) {
-	var ids []string
-	for _, m := range bootSet {
+func (prvdr Provider) Boot(machines []db.Machine) ([]string, error) {
+	type bootRequest struct {
+		size     string
+		userData string
+	}
+
+	bootSet := map[bootRequest]int{}
+	for _, m := range machines {
 		if m.Preemptible {
-			return ids, errors.New(
-				"preemptible instances are not implemented")
+			err := errors.New("preemptible instances are not implemented")
+			return nil, err
 		}
 
-		createReq := &godo.DropletCreateRequest{
-			Name:              "Kelda",
-			Region:            prvdr.region,
-			Size:              m.Size,
-			Image:             godo.DropletCreateImage{ID: imageID},
-			PrivateNetworking: true,
-			UserData:          cfg.Ubuntu(m, ""),
-			Tags:              []string{prvdr.getTag()},
+		br := bootRequest{size: m.Size, userData: cfg.Ubuntu(m, "")}
+		bootSet[br] = bootSet[br] + 1
+	}
+
+	var reqs []godo.DropletMultiCreateRequest
+	for br, count := range bootSet {
+		// Digital Ocean has an arbitrary limit of 10 on the number of droplets
+		// that can be created in a single request.
+		for count > 0 {
+			n := count
+			if n > 10 {
+				n = 10
+			}
+			count -= n
+
+			var names []string
+			for i := 0; i < n; i++ {
+				names = append(names, "Kelda")
+			}
+
+			reqs = append(reqs, godo.DropletMultiCreateRequest{
+				Names:             names,
+				Region:            prvdr.region,
+				Size:              br.size,
+				Image:             godo.DropletCreateImage{ID: imageID},
+				PrivateNetworking: true,
+				UserData:          br.userData,
+				Tags:              []string{prvdr.getTag()}})
 		}
-		d, _, err := prvdr.CreateDroplet(createReq)
+	}
+
+	var ids []string
+	for _, req := range reqs {
+		droplets, _, err := prvdr.CreateDroplets(&req)
 		if err != nil {
 			return ids, err
 		}
 
-		ids = append(ids, strconv.Itoa(d.ID))
+		for _, d := range droplets {
+			ids = append(ids, strconv.Itoa(d.ID))
+		}
 	}
 
 	return ids, nil

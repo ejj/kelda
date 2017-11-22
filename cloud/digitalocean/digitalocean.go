@@ -225,13 +225,25 @@ func (prvdr Provider) Boot(machines []db.Machine) ([]string, error) {
 		}
 	}
 
-	var ids []string
+	errChan := make(chan error, len(reqs))
+	dropChan := make(chan []godo.Droplet, len(reqs))
 	for _, req := range reqs {
-		droplets, _, err := prvdr.CreateDroplets(&req)
-		if err != nil {
-			return ids, err
-		}
+		go func(req godo.DropletMultiCreateRequest) {
+			droplets, _, err := prvdr.CreateDroplets(&req)
+			dropChan <- droplets
+			errChan <- err
+		}(req)
+	}
 
+	for i := 0; i < len(reqs); i++ {
+		if err := <-errChan; err != nil {
+			return nil, err
+		}
+	}
+
+	close(dropChan) // So we can range over it.
+	var ids []string
+	for droplets := range dropChan {
 		for _, d := range droplets {
 			ids = append(ids, strconv.Itoa(d.ID))
 		}
@@ -306,14 +318,21 @@ func (prvdr Provider) syncFloatingIPs(curr, targets []db.Machine) error {
 
 // Stop stops each machine and deletes their attached volumes.
 func (prvdr Provider) Stop(machines []db.Machine) error {
+	errChan := make(chan error, len(machines))
 	for _, m := range machines {
 		id, err := strconv.Atoi(m.CloudID)
 		if err != nil {
 			return err
 		}
 
-		_, err = prvdr.DeleteDroplet(id)
-		if err != nil {
+		go func(id int) {
+			_, err = prvdr.DeleteDroplet(id)
+			errChan <- err
+		}(id)
+	}
+
+	for i := 0; i < len(machines); i++ {
+		if err := <-errChan; err != nil {
 			return err
 		}
 	}

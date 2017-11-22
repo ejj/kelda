@@ -231,7 +231,7 @@ func TestBoot(t *testing.T) {
 	assert.Equal(t, []string{"1", "10", "11", "12", "13", "2", "3", "4",
 		"5", "6", "7", "8", "9"}, ids)
 
-	mc.On("CreateDroplets", mock.Anything).Return(nil, nil, errMock).Once()
+	mc.On("CreateDroplets", mock.Anything).Return(nil, nil, errMock)
 	ids, err = doPrvdr.Boot(bootSet)
 	assert.EqualError(t, err, errMsg)
 	assert.Nil(t, ids)

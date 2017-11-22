@@ -41,6 +41,9 @@ func TestErrors(t *testing.T) {
 	_, err = ac.CreateSecurityGroup("", "")
 	assert.EqualError(t, err, "test")
 
+	err = ac.DeleteSecurityGroup("")
+	assert.EqualError(t, err, "test")
+
 	err = ac.AuthorizeSecurityGroup("name", "src", nil)
 	assert.EqualError(t, err, "test")
 

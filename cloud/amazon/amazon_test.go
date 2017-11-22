@@ -547,3 +547,23 @@ func TestUpdateFloatingIPs(t *testing.T) {
 	err := amazonProvider.UpdateFloatingIPs(mockMachines)
 	assert.Nil(t, err)
 }
+
+func TestCleanup(t *testing.T) {
+	t.Parallel()
+
+	mc := new(mocks.Client)
+	amazonProvider := newAmazon(testNamespace, DefaultRegion)
+	amazonProvider.Client = mc
+
+	mc.On("DescribeSecurityGroup", testNamespace).Return(nil, assert.AnError).Once()
+	assert.Error(t, amazonProvider.Cleanup())
+
+	mc.On("DescribeSecurityGroup", testNamespace).Return(
+		[]*ec2.SecurityGroup{{GroupName: aws.String(testNamespace),
+			GroupId: aws.String("1")}}, nil)
+	mc.On("DeleteSecurityGroup", mock.Anything).Return(assert.AnError).Once()
+	assert.Error(t, amazonProvider.Cleanup())
+
+	mc.On("DeleteSecurityGroup", mock.Anything).Return(nil)
+	assert.NoError(t, amazonProvider.Cleanup())
+}

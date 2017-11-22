@@ -132,3 +132,9 @@ func (prvdr Provider) SetACLs(acls []acl.ACL) error {
 func (prvdr *Provider) UpdateFloatingIPs([]db.Machine) error {
 	return errors.New("vagrant provider does not support floating IPs")
 }
+
+// Cleanup removes unnecessary detritus from this provider.  It's intended to be called
+// when there are no VMs running or expected to be running soon.
+func (prvdr *Provider) Cleanup() error {
+	return nil
+}

@@ -461,6 +461,15 @@ func (prvdr *Provider) UpdateFloatingIPs(machines []db.Machine) error {
 	return nil
 }
 
+// Cleanup removes unnecessary detritus from this provider.  It's intended to be called
+// when there are no VMs running or expected to be running soon.
+func (prvdr *Provider) Cleanup() error {
+	// XXX: There are several resources that could be cleaned up here.  Some are
+	// handled in a sort of ad hoc way in the other provider functions.  Some are not
+	// cleaned up at all.
+	return nil
+}
+
 func (prvdr *Provider) getFirewall(name string) (*compute.Firewall, error) {
 	list, err := prvdr.ListFirewalls()
 	if err != nil {

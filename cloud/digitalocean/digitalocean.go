@@ -17,6 +17,7 @@ import (
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
 	"github.com/kelda/kelda/util"
+	log "github.com/sirupsen/logrus"
 
 	"golang.org/x/oauth2"
 )
@@ -362,8 +363,45 @@ func (prvdr Provider) SetACLs(acls []acl.ACL) error {
 	return nil
 }
 
+// Cleanup removes unnecessary detritus from this provider.  It's intended to be called
+// when there are no VMS running or expected to be running soon.
+func (prvdr Provider) Cleanup() error {
+	fw, err := prvdr.getFirewall()
+	if err == nil && fw != nil {
+		log.WithFields(log.Fields{
+			"name": fw.Name,
+			"id":   fw.ID,
+		}).Debug("DigitalOcean Delete Firewall")
+		_, err = prvdr.DeleteFirewall(fw.ID)
+	}
+	return err
+}
+
 func (prvdr Provider) getCreateFirewall() (*godo.Firewall, error) {
-	tagName := prvdr.getTag()
+	firewall, err := prvdr.getFirewall()
+	if err != nil {
+		return nil, err
+	}
+
+	if firewall != nil {
+		return firewall, nil
+	}
+
+	tag := prvdr.getTag()
+	_, _, err = prvdr.CreateTag(tag)
+	if err != nil {
+		return nil, err
+	}
+
+	// The outbound rules are generated only once: when the firewall is first
+	// created. If these rules are externally deleted, there will be errors
+	// unless the firewall is destroyed (and then recreated by the daemon).
+	firewall, _, err = prvdr.CreateFirewall(tag, allowAll, nil)
+	return firewall, err
+}
+
+func (prvdr Provider) getFirewall() (*godo.Firewall, error) {
+	tag := prvdr.getTag()
 	firewallListOpt := &godo.ListOptions{Page: 1, PerPage: 200}
 	for {
 		firewalls, resp, err := prvdr.ListFirewalls(firewallListOpt)
@@ -372,8 +410,8 @@ func (prvdr Provider) getCreateFirewall() (*godo.Firewall, error) {
 		}
 
 		for _, firewall := range firewalls {
-			for _, tag := range firewall.Tags {
-				if tag == tagName {
+			for _, t := range firewall.Tags {
+				if t == tag {
 					fixRulesPortRange(&firewall)
 					return &firewall, nil
 				}
@@ -381,21 +419,10 @@ func (prvdr Provider) getCreateFirewall() (*godo.Firewall, error) {
 		}
 
 		if resp.Links == nil || resp.Links.IsLastPage() {
-			break
+			return nil, nil
 		}
 		firewallListOpt.Page++
 	}
-
-	_, _, err := prvdr.CreateTag(tagName)
-	if err != nil {
-		return nil, err
-	}
-
-	// The outbound rules are generated only once: when the firewall is first
-	// created. If these rules are externally deleted, there will be errors
-	// unless the firewall is destroyed (and then recreated by the daemon).
-	firewall, _, err := prvdr.CreateFirewall(tagName, allowAll, nil)
-	return firewall, err
 }
 
 // The DigitalOcean API is inconsistent for listing rules, and manipulating

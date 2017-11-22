@@ -24,6 +24,7 @@ type Client interface {
 
 	DescribeSecurityGroup(name string) ([]*ec2.SecurityGroup, error)
 	CreateSecurityGroup(name, description string) (string, error)
+	DeleteSecurityGroup(id string) error
 	AuthorizeSecurityGroup(name, src string, ranges []*ec2.IpPermission) error
 	RevokeSecurityGroup(name string, ranges []*ec2.IpPermission) error
 	DescribeAddresses() ([]*ec2.Address, error)
@@ -110,6 +111,13 @@ func (ac awsClient) CreateSecurityGroup(name, description string) (string, error
 		return "", err
 	}
 	return *csgResp.GroupId, err
+}
+
+func (ac awsClient) DeleteSecurityGroup(id string) error {
+	c.Inc("Delete Security Group")
+	_, err := ac.client.DeleteSecurityGroup(
+		&ec2.DeleteSecurityGroupInput{GroupId: &id})
+	return err
 }
 
 func (ac awsClient) AuthorizeSecurityGroup(name, src string,

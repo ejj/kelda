@@ -625,6 +625,29 @@ func logACLs(add bool, perms []*ec2.IpPermission) {
 	}
 }
 
+// Cleanup removes unnecessary detritus from this provider.  It's intended to be called
+// when there are no VMs running or expected to be running soon.
+func (prvdr *Provider) Cleanup() error {
+	groups, err := prvdr.DescribeSecurityGroup(prvdr.namespace)
+	if err != nil {
+		return err
+	}
+
+	for _, group := range groups {
+		log.WithFields(log.Fields{
+			"name":   *group.GroupName,
+			"id":     *group.GroupId,
+			"region": prvdr.region,
+		}).Debug("Amazon Delete Security Group")
+
+		if err := prvdr.DeleteSecurityGroup(*group.GroupId); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // blockDevice returns the block device we use for our AWS machines.
 func blockDevice(diskSize int) *ec2.BlockDeviceMapping {
 	return &ec2.BlockDeviceMapping{

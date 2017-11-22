@@ -48,6 +48,10 @@ func TestError(t *testing.T) {
 	assert.EqualError(t, err,
 		"Post https://api.digitalocean.com/v2/firewalls: test")
 
+	_, err = c.DeleteFirewall("")
+	assert.EqualError(t, err,
+		"Delete https://api.digitalocean.com/v2/firewalls: test")
+
 	_, _, err = c.ListFirewalls(nil)
 	assert.EqualError(t, err,
 		"Get https://api.digitalocean.com/v2/firewalls: test")

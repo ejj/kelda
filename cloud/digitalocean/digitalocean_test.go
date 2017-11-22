@@ -646,3 +646,19 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, client, outClient)
 	assert.EqualError(t, err, errMsg)
 }
+
+func TestCleanup(t *testing.T) {
+	mc := new(mocks.Client)
+	client := &Provider{Client: mc}
+
+	mc.On("ListFirewalls", mock.Anything).Return(nil, nil, assert.AnError).Once()
+	assert.Error(t, client.Cleanup())
+
+	mc.On("ListFirewalls", mock.Anything).Return(
+		[]godo.Firewall{{Tags: []string{client.getTag()}, ID: "test"}}, nil, nil)
+	mc.On("DeleteFirewall", "test").Return(nil, assert.AnError).Once()
+	assert.Error(t, client.Cleanup())
+
+	mc.On("DeleteFirewall", "test").Return(nil, nil)
+	assert.NoError(t, client.Cleanup())
+}

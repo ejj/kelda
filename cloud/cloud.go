@@ -28,6 +28,15 @@ type provider interface {
 	SetACLs([]acl.ACL) error
 
 	UpdateFloatingIPs([]db.Machine) error
+
+	// The Cleanup() function will be called occaisionally in those regions that have
+	// no machines running, and no machines expected to be running in the future.
+	// The provider may use this method to free up resources that are only necessary
+	// when machines are running.  Note that a call to Cleanup() does not guarnatee
+	// that at some point in the future calls to the other provider methods won't
+	// occur, so nothing should be done in this method that can't be undone later if
+	// necessary.
+	Cleanup() error
 }
 
 var c = counter.New("Cloud")
@@ -176,6 +185,14 @@ func (cld cloud) runOnce() (active bool) {
 		// there's no particular advantage to checking regularly, so we consider
 		// it inactive.
 		return false
+	}
+
+	if !jr.isActive {
+		if err := cld.provider.Cleanup(); err != nil {
+			log.WithError(err).WithField("region", cld.String()).Debug(
+				"Failed to clean up region")
+		}
+		return jr.isActive
 	}
 
 	if len(jr.boot) == 0 &&

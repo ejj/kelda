@@ -73,6 +73,20 @@ func (_m *Client) CreateSecurityGroup(name string, description string) (string, 
 	return r0, r1
 }
 
+// DeleteSecurityGroup provides a mock function with given fields: id
+func (_m *Client) DeleteSecurityGroup(id string) error {
+	ret := _m.Called(id)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string) error); ok {
+		r0 = rf(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // DescribeAddresses provides a mock function with given fields:
 func (_m *Client) DescribeAddresses() ([]*ec2.Address, error) {
 	ret := _m.Called()

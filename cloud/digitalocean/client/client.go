@@ -26,6 +26,7 @@ type Client interface {
 
 	CreateFirewall(string, []godo.OutboundRule, []godo.InboundRule) (*godo.Firewall,
 		*godo.Response, error)
+	DeleteFirewall(string) (*godo.Response, error)
 	ListFirewalls(*godo.ListOptions) ([]godo.Firewall, *godo.Response, error)
 	AddRules(string, []godo.InboundRule) (*godo.Response, error)
 	RemoveRules(string, []godo.InboundRule) (*godo.Response, error)
@@ -121,6 +122,11 @@ func (client client) CreateFirewall(tag string, outbound []godo.OutboundRule,
 		Tags:          []string{tag},
 	}
 	return client.acls.Create(context.Background(), req)
+}
+
+func (client client) DeleteFirewall(fID string) (*godo.Response, error) {
+	c.Inc("Delete Firewall")
+	return client.acls.Delete(context.Background(), fID)
 }
 
 func (client client) ListFirewalls(opt *godo.ListOptions) ([]godo.Firewall,

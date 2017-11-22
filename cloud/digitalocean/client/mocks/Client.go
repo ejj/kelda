@@ -184,6 +184,29 @@ func (_m *Client) DeleteDroplet(_a0 int) (*godo.Response, error) {
 	return r0, r1
 }
 
+// DeleteFirewall provides a mock function with given fields: _a0
+func (_m *Client) DeleteFirewall(_a0 string) (*godo.Response, error) {
+	ret := _m.Called(_a0)
+
+	var r0 *godo.Response
+	if rf, ok := ret.Get(0).(func(string) *godo.Response); ok {
+		r0 = rf(_a0)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*godo.Response)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(_a0)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetDroplet provides a mock function with given fields: _a0
 func (_m *Client) GetDroplet(_a0 int) (*godo.Droplet, *godo.Response, error) {
 	ret := _m.Called(_a0)

@@ -108,6 +108,10 @@ func (p *fakeProvider) UpdateFloatingIPs(machines []db.Machine) error {
 	return nil
 }
 
+func (p *fakeProvider) Cleanup() error {
+	return nil
+}
+
 func newTestCloud(provider db.ProviderName, region, namespace string) *cloud {
 	sleep = func(t time.Duration) {}
 	mock()
@@ -178,6 +182,7 @@ func TestCloudRunOnce(t *testing.T) {
 		CloudID:    "b",
 		FloatingIP: "1.2.3.4",
 	}}
+	jr.isActive = true
 
 	cld := newTestCloud(FakeAmazon, testRegion, "ns")
 	checkSync(cld, assertion{

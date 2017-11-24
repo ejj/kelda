@@ -58,12 +58,8 @@ func main() {
 		log.SetOutput(file)
 	}
 
-	// GRPC spews a lot of useless log messages so we discard its logs, unless
-	// we are in debug mode
+	// GRPC spews a lot of useless log messages so we discard its logs.
 	grpclog.SetLogger(l_mod.New(ioutil.Discard, "", 0))
-	if level == log.DebugLevel {
-		grpclog.SetLogger(log.StandardLogger())
-	}
 
 	if len(flag.Args()) == 0 {
 		usage()

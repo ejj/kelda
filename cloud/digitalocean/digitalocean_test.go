@@ -177,8 +177,6 @@ func TestBoot(t *testing.T) {
 	assert.Nil(t, err)
 	doPrvdr.Client = mc
 
-	util.Sleep = func(t time.Duration) {}
-
 	bootSet := []db.Machine{}
 	ids, err := doPrvdr.Boot(bootSet)
 	assert.Nil(t, err)
@@ -195,24 +193,12 @@ func TestBoot(t *testing.T) {
 		},
 	}
 
-	mc.On("GetDroplet", 123).Return(&godo.Droplet{
-		Status:    "active",
-		VolumeIDs: []string{"abc"},
-	}, nil, nil).Twice()
-
 	mc.On("CreateDroplet", mock.Anything).Return(&godo.Droplet{
 		ID: 123,
 	}, nil, nil).Once()
 
-	mc.On("CreateVolume", mock.Anything).Return(&godo.Volume{
-		ID: "abc",
-	}, nil, nil).Once()
-
-	mc.On("AttachVolume", mock.Anything, mock.Anything).Return(nil, nil, nil).Once()
-
 	ids, err = doPrvdr.Boot(bootSet)
-	// Make sure machines are booted.
-	mc.AssertNumberOfCalls(t, "CreateDroplet", 1)
+	mc.AssertExpectations(t)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"123"}, ids)
 

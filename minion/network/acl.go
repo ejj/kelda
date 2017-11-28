@@ -214,10 +214,10 @@ func syncACLs(ovsdbClient ovsdb.Client, connections []connection) {
 func getMatchString(conn connection) string {
 	return or(
 		and(
-			and(from(conn.from), to(conn.to)),
+			from(conn.from), to(conn.to),
 			portConstraint(conn.minPort, conn.maxPort, "dst")),
 		and(
-			and(from(conn.to), to(conn.from)),
+			from(conn.to), to(conn.from),
 			portConstraint(conn.minPort, conn.maxPort, "src")))
 }
 

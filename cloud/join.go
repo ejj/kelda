@@ -146,9 +146,15 @@ func (cld cloud) planUpdates(view db.Database) joinResult {
 		dbm := view.InsertMachine()
 		bpm.ID = dbm.ID
 		bpm.Status = db.Booting
-		view.Commit(bpm)
 
 		res.boot = append(res.boot, bpm)
+
+		// Don't bother assigning the role to the database, as the foreman will
+		// just unassign it in the next run loop.  We can't be sure which machine
+		// in the database gets which role until we actually connect to it
+		// anyways.
+		bpm.Role = db.None
+		view.Commit(bpm)
 	}
 
 	return res

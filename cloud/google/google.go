@@ -138,23 +138,27 @@ func (prvdr *Provider) List() ([]db.Machine, error) {
 
 // Boot blocks while creating instances.
 func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
-	// XXX: should probably have a better clean up routine if an error is encountered
 	var names []string
+	errChan := make(chan error)
+
 	for _, m := range bootSet {
 		if m.Preemptible {
 			return nil, errors.New("preemptible vms are not implemented")
 		}
 
 		name := "kelda-" + uuid.NewV4().String()
-		_, err := prvdr.instanceNew(name, m.Size, cfg.Ubuntu(m, ""))
-		if err != nil {
-			log.WithFields(log.Fields{
-				"error": err,
-				"id":    m.CloudID,
-			}).Error("Failed to start instance.")
-			continue
-		}
 		names = append(names, name)
+
+		go func(m db.Machine) {
+			_, err := prvdr.instanceNew(name, m.Size, cfg.Ubuntu(m, ""))
+			errChan <- err
+		}(m)
+	}
+
+	for i := 0; i < len(bootSet); i++ {
+		if err := <-errChan; err != nil {
+			return nil, err
+		}
 	}
 
 	return names, nil
@@ -165,18 +169,18 @@ func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
 // If an error occurs while deleting, it will finish the ones that have
 // successfully started before returning.
 func (prvdr *Provider) Stop(machines []db.Machine) error {
-	// XXX: should probably have a better clean up routine if an error is encountered
-	var names []string
+	errChan := make(chan error)
 	for _, m := range machines {
-		_, err := prvdr.DeleteInstance(prvdr.zone, m.CloudID)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"error": err,
-				"id":    m.CloudID,
-			}).Error("Failed to delete instance.")
-			continue
+		go func(m db.Machine) {
+			_, err := prvdr.DeleteInstance(prvdr.zone, m.CloudID)
+			errChan <- err
+		}(m)
+	}
+
+	for i := 0; i < len(machines); i++ {
+		if err := <-errChan; err != nil {
+			return err
 		}
-		names = append(names, m.CloudID)
 	}
 	return nil
 }

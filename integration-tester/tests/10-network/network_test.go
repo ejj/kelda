@@ -44,4 +44,8 @@ func TestNetwork(t *testing.T) {
 		testPing(t, sshUtil, containers, loadBalancers, connections)
 	})
 
+	t.Run("HPing", func(t *testing.T) {
+		t.Parallel()
+		testHPing(t, sshUtil, containers, connections)
+	})
 }

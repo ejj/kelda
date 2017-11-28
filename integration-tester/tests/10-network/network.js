@@ -3,7 +3,10 @@ const infrastructure = require('../../config/infrastructure.js');
 
 const infra = infrastructure.createTestInfrastructure();
 
-const image = 'alpine';
+const image = new kelda.Image('network-image',
+  'FROM ubuntu\n' +
+  'RUN apt-get update\n' +
+  'RUN apt-get install -y iputils-ping hping3\n');
 const command = ['tail', '-f', '/dev/null'];
 
 const redContainers = [];

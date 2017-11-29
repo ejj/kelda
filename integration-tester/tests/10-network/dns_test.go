@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kelda/kelda/api/client"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/integration-tester/util"
 )
@@ -18,21 +17,8 @@ const anyIPAllowed = "0.0.0.0"
 
 var externalHostnames = []string{"google.com", "facebook.com", "en.wikipedia.org"}
 
-type dnsTester struct {
-	hostnameIPMap map[string]string
-	sshUtil       util.SSHUtil
-}
-
-func newDNSTester(clnt client.Client, sshUtil util.SSHUtil) (dnsTester, error) {
-	loadBalancers, err := clnt.QueryLoadBalancers()
-	if err != nil {
-		return dnsTester{}, err
-	}
-
-	containers, err := clnt.QueryContainers()
-	if err != nil {
-		return dnsTester{}, err
-	}
+func testDNS(t *testing.T, sshUtil util.SSHUtil, containers []db.Container,
+	loadBalancers []db.LoadBalancer) {
 
 	hostnameIPMap := make(map[string]string)
 	for _, host := range externalHostnames {
@@ -49,18 +35,14 @@ func newDNSTester(clnt client.Client, sshUtil util.SSHUtil) (dnsTester, error) {
 		}
 	}
 
-	return dnsTester{hostnameIPMap, sshUtil}, nil
-}
-
-func (tester dnsTester) test(t *testing.T, container db.Container) {
 	var wg sync.WaitGroup
 
-	test := func(hostname string) {
+	test := func(container db.Container, hostname string) {
 		defer wg.Done()
 
-		ip, err := tester.lookup(container, hostname)
+		ip, err := lookup(sshUtil, container, hostname)
 
-		expIP := tester.hostnameIPMap[hostname]
+		expIP := hostnameIPMap[hostname]
 		if err == nil && expIP != anyIPAllowed && ip != expIP {
 			err = fmt.Errorf("wrong IP. expected %s, actual %s", expIP, ip)
 		}
@@ -73,16 +55,18 @@ func (tester dnsTester) test(t *testing.T, container db.Container) {
 		}
 	}
 
-	for h := range tester.hostnameIPMap {
-		wg.Add(1)
-		go test(h)
+	for _, container := range containers {
+		for hostname := range hostnameIPMap {
+			wg.Add(1)
+			go test(container, hostname)
+		}
 	}
 
 	wg.Wait()
 }
 
-func (tester dnsTester) lookup(dbc db.Container, hostname string) (string, error) {
-	stdout, err := tester.sshUtil.SSH(dbc, "getent", "hosts", hostname)
+func lookup(sshUtil util.SSHUtil, dbc db.Container, hostname string) (string, error) {
+	stdout, err := sshUtil.SSH(dbc, "getent", "hosts", hostname)
 	if err != nil {
 		return "", err
 	}

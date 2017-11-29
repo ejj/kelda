@@ -6,33 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kelda/kelda/api/client"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/integration-tester/util"
 )
 
-type connectionTester struct {
-	connectionMap map[string][]string
-	allHostnames  []string
-	sshUtil       util.SSHUtil
-}
-
-func newConnectionTester(clnt client.Client, sshUtil util.SSHUtil) (
-	connectionTester, error) {
-	loadBalancers, err := clnt.QueryLoadBalancers()
-	if err != nil {
-		return connectionTester{}, err
-	}
-
-	containers, err := clnt.QueryContainers()
-	if err != nil {
-		return connectionTester{}, err
-	}
-
-	connections, err := clnt.QueryConnections()
-	if err != nil {
-		return connectionTester{}, err
-	}
+func testPing(t *testing.T, sshUtil util.SSHUtil, containers []db.Container,
+	loadBalancers []db.LoadBalancer, connections []db.Connection) {
 
 	var allHostnames []string
 	for _, lb := range loadBalancers {
@@ -49,51 +28,46 @@ func newConnectionTester(clnt client.Client, sshUtil util.SSHUtil) (
 		}
 	}
 
-	return connectionTester{
-		connectionMap: connectionMap,
-		allHostnames:  allHostnames,
-		sshUtil:       sshUtil,
-	}, nil
+	var wg sync.WaitGroup
+	for _, container := range containers {
+		// We should be able to ping ourselves.
+		expReachable := map[string]struct{}{container.Hostname + ".q": {}}
+		for _, dst := range connectionMap[container.Hostname] {
+			expReachable[dst+".q"] = struct{}{}
+		}
+
+		for _, hostname := range allHostnames {
+			wg.Add(1)
+			_, reachable := expReachable[hostname]
+			container := container
+			hostname := hostname
+			go func() {
+				defer wg.Done()
+				out, err := ping(sshUtil, container, reachable,
+					[]string{"ping", "-c", "3", "-W", "1"}, hostname)
+				if err != nil {
+					fmt.Printf("%s\n%s\n", err, out)
+					t.Error(err)
+				}
+			}()
+		}
+	}
+	wg.Wait()
 }
 
-func (tester connectionTester) test(t *testing.T, container db.Container) {
-	// We should be able to ping ourselves.
-	expReachable := map[string]struct{}{
-		container.Hostname + ".q": {},
-	}
-	for _, dst := range tester.connectionMap[container.Hostname] {
-		expReachable[dst+".q"] = struct{}{}
-	}
-
-	var wg sync.WaitGroup
-
-	test := func(hostname string) {
-		defer wg.Done()
-		output, err := tester.sshUtil.SSH(container,
-			"ping", "-c", "3", "-W", "1", hostname)
-
-		var errStr string
-		reached := err == nil
-		if _, ok := expReachable[hostname]; ok {
-			if !reached {
-				errStr = fmt.Sprintf("Failed to ping: %s %s -> %s. %s",
-					time.Now(), container.BlueprintID, hostname, err)
-			}
-		} else if reached {
-			errStr = fmt.Sprintf("Unexpected ping success: %s %s -> %s",
-				time.Now(), container.BlueprintID, hostname)
+func ping(sshUtil util.SSHUtil, container db.Container, reachable bool,
+	cmd []string, hostname string) (string, error) {
+	cmd = append(cmd, hostname)
+	out, err := sshUtil.SSH(container, cmd...)
+	reached := err == nil
+	if reachable {
+		if !reached {
+			return out, fmt.Errorf("unexpected failure: %s %s -> %s. %s",
+				time.Now(), container.BlueprintID, hostname, err)
 		}
-
-		if errStr != "" {
-			fmt.Printf("%s\n%s\n", errStr, output)
-			t.Error(errStr)
-		}
+	} else if reached {
+		return out, fmt.Errorf("unexpected success: %s %s -> %s",
+			time.Now(), container.BlueprintID, hostname)
 	}
-
-	for _, h := range tester.allHostnames {
-		wg.Add(1)
-		go test(h)
-	}
-
-	wg.Wait()
+	return out, nil
 }

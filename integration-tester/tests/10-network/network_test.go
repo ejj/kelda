@@ -1,10 +1,8 @@
 package main
 
 import (
-	"sync"
 	"testing"
 
-	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/integration-tester/util"
 )
 
@@ -25,41 +23,25 @@ func TestNetwork(t *testing.T) {
 		t.Fatalf("failed to query machines: %s", err)
 	}
 
-	sshUtil := util.NewSSHUtil(machines)
-	t.Run("Ping", func(t *testing.T) {
-		connTester, err := newConnectionTester(clnt, sshUtil)
-		if err != nil {
-			t.Fatalf("couldn't initialize connection tester: %s",
-				err.Error())
-		}
-
-		testContainers(t, connTester, containers)
-	})
-
-	t.Run("DNS", func(t *testing.T) {
-		dnsTester, err := newDNSTester(clnt, sshUtil)
-		if err != nil {
-			t.Fatalf("couldn't initialize dns tester: %s", err.Error())
-		}
-
-		testContainers(t, dnsTester, containers)
-	})
-}
-
-type testerIntf interface {
-	test(t *testing.T, c db.Container)
-}
-
-// Gather test results for each container. For each minion machine, run one test
-// at a time.
-func testContainers(t *testing.T, tester testerIntf, containers []db.Container) {
-	var wg sync.WaitGroup
-	wg.Add(len(containers))
-	for _, c := range containers {
-		go func(c db.Container) {
-			tester.test(t, c)
-			wg.Done()
-		}(c)
+	loadBalancers, err := clnt.QueryLoadBalancers()
+	if err != nil {
+		t.Fatalf("failed to query load balancers: %s", err)
 	}
-	wg.Wait()
+
+	connections, err := clnt.QueryConnections()
+	if err != nil {
+		t.Fatalf("Failed to query connections: %s", err)
+	}
+
+	sshUtil := util.NewSSHUtil(machines)
+	t.Run("DNS", func(t *testing.T) {
+		t.Parallel()
+		testDNS(t, sshUtil, containers, loadBalancers)
+	})
+
+	t.Run("Ping", func(t *testing.T) {
+		t.Parallel()
+		testPing(t, sshUtil, containers, loadBalancers, connections)
+	})
+
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/kelda/kelda/cloud/acl"
 	"github.com/kelda/kelda/cloud/cfg"
@@ -15,19 +16,22 @@ import (
 )
 
 func getProvider() (*mocks.Client, Provider) {
+	backoffWaitFor = func(p func() bool, c time.Duration, t time.Duration) error {
+		return nil
+	}
+
 	mc := new(mocks.Client)
 	return mc, Provider{
 		Client:    mc,
 		namespace: "namespace",
 		network:   "network",
 		zone:      "zone-1",
-		intFW:     "intFW",
 	}
 }
 
 func TestList(t *testing.T) {
 	mc, gce := getProvider()
-	mc.On("ListInstances", "zone-1", "network").Return(&compute.InstanceList{
+	mc.On("ListInstances", "zone-1", gce.network).Return(&compute.InstanceList{
 		Items: []*compute.Instance{
 			{
 				MachineType: "machine/split/type-1",
@@ -59,44 +63,12 @@ func TestList(t *testing.T) {
 	})
 }
 
-func TestListFirewalls(t *testing.T) {
-	mc, gce := getProvider()
-	mc.On("ListFirewalls", gce.network).Return(&compute.FirewallList{
-		Items: []*compute.Firewall{
-			{
-				Network:    gce.networkURL(),
-				Name:       "badZone",
-				TargetTags: []string{"zone-2"},
-			},
-			{
-				Network:    gce.networkURL(),
-				Name:       "intFW",
-				TargetTags: []string{"zone-1"},
-			},
-			{
-				Network:    gce.networkURL(),
-				Name:       "shouldReturn",
-				TargetTags: []string{"zone-1"},
-			},
-		},
-	}, nil).Once()
-
-	fws, err := gce.listFirewalls()
-	assert.NoError(t, err)
-	assert.Len(t, fws, 1)
-	assert.Equal(t, fws[0].Name, "shouldReturn")
-
-	mc.On("ListFirewalls", gce.network).Return(nil, errors.New("err")).Once()
-	_, err = gce.listFirewalls()
-	assert.EqualError(t, err, "list firewalls: err")
-}
-
 func TestListBadNetworkInterface(t *testing.T) {
 	mc, gce := getProvider()
 
 	// Tests that List returns an error when no network interfaces are
 	// configured.
-	mc.On("ListInstances", "zone-1", "network").Return(&compute.InstanceList{
+	mc.On("ListInstances", "zone-1", gce.network).Return(&compute.InstanceList{
 		Items: []*compute.Instance{
 			{
 				MachineType:       "machine/split/type-1",
@@ -111,62 +83,232 @@ func TestListBadNetworkInterface(t *testing.T) {
 		"interface; for instance name-1, found 0")
 }
 
-func TestParseACLs(t *testing.T) {
+func TestParseACL(t *testing.T) {
 	_, gce := getProvider()
-	parsed, err := gce.parseACLs([]compute.Firewall{
-		{
-			Name: "firewall",
-			Allowed: []*compute.FirewallAllowed{
-				{Ports: []string{"80", "20-25"}},
-			},
-			SourceRanges: []string{"foo", "bar"},
-		},
-		{
-			Name: "firewall2",
-			Allowed: []*compute.FirewallAllowed{
-				{Ports: []string{"1-65535"}},
-			},
-			SourceRanges: []string{"foo"},
-		},
+
+	_, err := gce.parseACL(&compute.Firewall{})
+	assert.EqualError(t, err, "malformed firewall")
+
+	// Missing ports.
+	_, err = gce.parseACL(&compute.Firewall{
+		SourceRanges: []string{"1.2.3.4/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "icmp",
+		}, {
+			IPProtocol: "udp",
+		}, {
+			IPProtocol: "tcp",
+		}},
+	})
+	assert.EqualError(t, err, "malformed firewall")
+
+	// Unequal ports.
+	_, err = gce.parseACL(&compute.Firewall{
+		SourceRanges: []string{"1.2.3.4/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "icmp",
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"80"},
+		}, {
+			IPProtocol: "tcp",
+			Ports:      []string{"90"},
+		}},
+	})
+	assert.EqualError(t, err, "malformed firewall")
+
+	// Bad Ports
+	_, err = gce.parseACL(&compute.Firewall{
+		SourceRanges: []string{"1.2.3.4/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "icmp",
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"rabbit"},
+		}, {
+			IPProtocol: "tcp",
+			Ports:      []string{"rabbit"},
+		}},
+	})
+	assert.EqualError(t, err, "invalid port: rabbit")
+
+	// Bad dashed port
+	_, err = gce.parseACL(&compute.Firewall{
+		SourceRanges: []string{"1.2.3.4/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "icmp",
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"1-2-3"},
+		}, {
+			IPProtocol: "tcp",
+			Ports:      []string{"1-2-3"},
+		}},
+	})
+	assert.EqualError(t, err, "invalid port: 1-2-3")
+
+	// Single Port
+	gacl, err := gce.parseACL(&compute.Firewall{
+		Name:         "name",
+		SourceRanges: []string{"1.2.3.4/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "icmp",
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"1"},
+		}, {
+			IPProtocol: "tcp",
+			Ports:      []string{"1"},
+		}},
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, []acl.ACL{
-		{MinPort: 80, MaxPort: 80, CidrIP: "foo"},
-		{MinPort: 20, MaxPort: 25, CidrIP: "foo"},
-		{MinPort: 80, MaxPort: 80, CidrIP: "bar"},
-		{MinPort: 20, MaxPort: 25, CidrIP: "bar"},
-		{MinPort: 1, MaxPort: 65535, CidrIP: "foo"},
-	}, parsed)
+	assert.Equal(t, gACL{"name", acl.ACL{CidrIP: "1.2.3.4/32",
+		MinPort: 1, MaxPort: 1}}, gacl)
 
-	_, err = gce.parseACLs([]compute.Firewall{
-		{
-			Name: "firewall",
-			Allowed: []*compute.FirewallAllowed{
-				{Ports: []string{"NaN"}},
-			},
-			SourceRanges: []string{"foo"},
-		},
+	// Double Port
+	gacl, err = gce.parseACL(&compute.Firewall{
+		Name:         "name",
+		SourceRanges: []string{"1.2.3.4/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "icmp",
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"1-2"},
+		}, {
+			IPProtocol: "tcp",
+			Ports:      []string{"1-2"},
+		}},
 	})
-	assert.EqualError(t, err, `parse ports of firewall: parse ints: strconv.Atoi: `+
-		`parsing "NaN": invalid syntax`)
+	assert.NoError(t, err)
+	assert.Equal(t, gACL{"name", acl.ACL{CidrIP: "1.2.3.4/32",
+		MinPort: 1, MaxPort: 2}}, gacl)
+}
 
-	_, err = gce.parseACLs([]compute.Firewall{
-		{
-			Name: "firewall",
-			Allowed: []*compute.FirewallAllowed{
-				{Ports: []string{"1-80-81"}},
-			},
-			SourceRanges: []string{"foo"},
-		},
-	})
-	assert.EqualError(t, err,
-		"parse ports of firewall: unrecognized port format: 1-80-81")
+func TestSetACLs(t *testing.T) {
+	mc, gce := getProvider()
+
+	mc.On("ListFirewalls", mock.Anything).Return(nil, errors.New("err")).Once()
+	err := gce.setACLs(nil)
+	assert.EqualError(t, err, "list firewalls: err")
+
+	mc.On("ListFirewalls", gce.network).Return(&compute.FirewallList{
+		Items: []*compute.Firewall{{Name: "Delete"}},
+	}, nil)
+
+	mc.On("DeleteFirewall", "Delete").Return(nil, errors.New("delete")).Once()
+	err = gce.setACLs(nil)
+	assert.EqualError(t, err, "delete")
+
+	mc.On("DeleteFirewall", "Delete").Return(nil, nil)
+
+	mc.On("InsertFirewall", mock.Anything).Return(nil, errors.New("insert")).Once()
+	err = gce.setACLs([]acl.ACL{{CidrIP: "1.2.3.4/32"}})
+	assert.EqualError(t, err, "insert")
+
+	mc.On("InsertFirewall", &compute.Firewall{
+		Name:         "network-1-2-3-4-32-0-0",
+		Network:      gce.networkURL(),
+		Description:  gce.network,
+		SourceRanges: []string{"1.2.3.4/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "tcp",
+			Ports:      []string{"0-0"},
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"0-0"},
+		}, {
+			IPProtocol: "icmp",
+		}}}).Return(nil, nil)
+	err = gce.setACLs([]acl.ACL{{CidrIP: "1.2.3.4/32"}})
+	assert.NoError(t, err)
+
+	// Verify internal firewall rule gets installed.
+	mc.On("InsertFirewall", &compute.Firewall{
+		Name:         "network-172-16-0-0-12-0-65535",
+		Network:      gce.networkURL(),
+		Description:  gce.network,
+		SourceRanges: []string{ipv4Range},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "tcp",
+			Ports:      []string{"0-65535"},
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"0-65535"},
+		}, {
+			IPProtocol: "icmp",
+		}}}).Return(nil, nil)
+	err = gce.SetACLs(nil)
+	assert.NoError(t, err)
+	mc.AssertExpectations(t)
+}
+
+func TestPlanSetACLs(t *testing.T) {
+	_, gce := getProvider()
+	add, remove := gce.planSetACLs([]*compute.Firewall{{
+		Name: "Unparseable",
+	}, {
+		Name:         "Delete",
+		SourceRanges: []string{"1.2.3.4/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "icmp",
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"1"},
+		}, {
+			IPProtocol: "tcp",
+			Ports:      []string{"1"},
+		}},
+	}, {
+		Name:         "network-5-6-7-8-32-1-2",
+		SourceRanges: []string{"5.6.7.8/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "icmp",
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"1-2"},
+		}, {
+			IPProtocol: "tcp",
+			Ports:      []string{"1-2"},
+		}},
+	}}, []acl.ACL{{
+		CidrIP:  "5.6.7.8/32",
+		MinPort: 1,
+		MaxPort: 2,
+	}, {
+		CidrIP:  "9.9.9.9/32",
+		MinPort: 3,
+		MaxPort: 4,
+	}})
+	assert.Equal(t, []string{"Unparseable", "Delete"}, remove)
+	assert.Equal(t, []*compute.Firewall{{
+		Name:         "network-9-9-9-9-32-3-4",
+		Network:      gce.networkURL(),
+		Description:  gce.network,
+		SourceRanges: []string{"9.9.9.9/32"},
+		Allowed: []*compute.FirewallAllowed{{
+			IPProtocol: "tcp",
+			Ports:      []string{"3-4"},
+		}, {
+			IPProtocol: "udp",
+			Ports:      []string{"3-4"},
+		}, {
+			IPProtocol: "icmp",
+		}},
+	}}, add)
 }
 
 func TestBoot(t *testing.T) {
 	mc, gce := getProvider()
 
-	_, err := gce.Boot([]db.Machine{{Preemptible: true}})
+	mc.On("ListNetworks", mock.Anything).Return(nil, errors.New("list err")).Once()
+	_, err := gce.Boot(nil)
+	assert.EqualError(t, err, "list err")
+
+	mc.On("ListNetworks", mock.Anything).Return(&compute.NetworkList{
+		Items: []*compute.Network{{Name: gce.network}},
+	}, nil)
+
+	_, err = gce.Boot([]db.Machine{{Preemptible: true}})
 	assert.EqualError(t, err, "preemptible vms are not implemented")
 
 	mc.On("InsertInstance", "zone-1", mock.Anything).Return(
@@ -238,10 +380,54 @@ func TestInstanceConfig(t *testing.T) {
 				Value: &cloudConfig,
 			}},
 		},
-		Tags: &compute.Tags{
-			Items: []string{gce.zone},
-		},
 	}
 
 	assert.Equal(t, exp, res)
+}
+
+func TestCleanup(t *testing.T) {
+	mc, gce := getProvider()
+
+	mc.On("ListNetworks", gce.network).Return(nil, errors.New("err")).Once()
+	assert.EqualError(t, gce.Cleanup(), "err")
+
+	// Do nothing if there are no networks listed.
+	mc.On("ListNetworks", gce.network).Return(&compute.NetworkList{
+		Items: []*compute.Network{}}, nil).Once()
+	assert.NoError(t, gce.Cleanup())
+
+	mc.On("ListNetworks", gce.network).Return(&compute.NetworkList{
+		Items: []*compute.Network{{Name: gce.network}}}, nil)
+
+	mc.On("ListFirewalls", gce.network).Return(nil, errors.New("lf")).Once()
+	assert.EqualError(t, gce.Cleanup(), "list firewalls: lf")
+
+	mc.On("ListFirewalls", gce.network).Return(&compute.FirewallList{}, nil)
+	mc.On("DeleteNetwork", gce.network).Return(nil, errors.New("del")).Once()
+	assert.EqualError(t, gce.Cleanup(), "del")
+
+	mc.On("DeleteNetwork", gce.network).Return(nil, nil)
+	assert.NoError(t, gce.Cleanup())
+}
+
+func TestCreateNetwork(t *testing.T) {
+	mc, gce := getProvider()
+
+	mc.On("ListNetworks", gce.network).Return(nil, errors.New("err")).Once()
+	assert.EqualError(t, gce.createNetwork(), "err")
+
+	// Do nothing if the network already exists
+	mc.On("ListNetworks", gce.network).Return(&compute.NetworkList{
+		Items: []*compute.Network{{Name: gce.network}}}, nil).Once()
+	assert.NoError(t, gce.createNetwork())
+
+	mc.On("ListNetworks", gce.network).Return(&compute.NetworkList{
+		Items: []*compute.Network{}}, nil)
+	mc.On("InsertNetwork", mock.Anything).Return(nil, errors.New("err")).Once()
+	assert.EqualError(t, gce.createNetwork(), "err")
+
+	mc.On("InsertNetwork", &compute.Network{
+		Name: gce.network, IPv4Range: ipv4Range}).Return(nil, nil)
+	assert.NoError(t, gce.createNetwork())
+	mc.AssertExpectations(t)
 }

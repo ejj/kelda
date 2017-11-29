@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -46,7 +45,6 @@ type Provider struct {
 
 	namespace string // client namespace
 	network   string // gce identifier for the network
-	intFW     string // gce internal firewall name
 	zone      string // gce boot region
 }
 
@@ -63,14 +61,8 @@ func New(namespace, zone string) (*Provider, error) {
 	prvdr := Provider{
 		Client:    gce,
 		namespace: namespace,
-		network:   namespace,
-		intFW:     fmt.Sprintf("%s-internal", namespace),
+		network:   fmt.Sprintf("kelda-%s-%s", namespace, zone),
 		zone:      zone,
-	}
-
-	if err := prvdr.createNetwork(); err != nil {
-		log.WithError(err).Debug("failed to start up gce network")
-		return nil, err
 	}
 
 	return &prvdr, nil
@@ -135,6 +127,10 @@ func (prvdr *Provider) List() ([]db.Machine, error) {
 
 // Boot blocks while creating instances.
 func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
+	if err := prvdr.createNetwork(); err != nil {
+		return nil, err
+	}
+
 	var names []string
 	errChan := make(chan error)
 
@@ -186,8 +182,10 @@ func (prvdr *Provider) Stop(machines []db.Machine) error {
 // Blocking wait with a hardcoded timeout.
 //
 // Waits for the given operations to all complete.
+var backoffWaitFor = util.BackoffWaitFor
+
 func (prvdr *Provider) operationWait(ops ...*compute.Operation) (err error) {
-	return util.BackoffWaitFor(func() bool {
+	return backoffWaitFor(func() bool {
 		for _, op := range ops {
 			var res *compute.Operation
 			if op.Zone != "" {
@@ -230,163 +228,138 @@ func (prvdr Provider) instanceConfig(name, size, cloudConfig string) *compute.In
 				Value: &cloudConfig,
 			}},
 		},
-		Tags: &compute.Tags{
-			// Tag the machine with its zone so that we can create zone-scoped
-			// firewall rules.
-			Items: []string{prvdr.zone},
-		},
 	}
 }
 
-// listFirewalls returns the firewalls managed by the cluster. Specifically,
-// it returns all firewalls that are attached to the cluster's network, and
-// apply to the managed zone.
-func (prvdr Provider) listFirewalls() ([]compute.Firewall, error) {
-	firewalls, err := prvdr.ListFirewalls(prvdr.network)
-	if err != nil {
-		return nil, fmt.Errorf("list firewalls: %s", err)
+func (prvdr *Provider) parseACL(fw *compute.Firewall) (gACL, error) {
+	if len(fw.SourceRanges) != 1 || len(fw.Allowed) != 3 {
+		return gACL{}, errors.New("malformed firewall")
 	}
 
-	var fws []compute.Firewall
-	for _, fw := range firewalls.Items {
-		_, nwName := path.Split(fw.Network)
-		if nwName != prvdr.network || fw.Name == prvdr.intFW {
+	var portsStr string
+	for _, allowed := range fw.Allowed {
+		if allowed.IPProtocol == "icmp" {
 			continue
 		}
 
-		for _, tag := range fw.TargetTags {
-			if tag == prvdr.zone {
-				fws = append(fws, *fw)
-				break
-			}
+		if len(allowed.Ports) != 1 {
+			return gACL{}, errors.New("malformed firewall")
+		}
+
+		if portsStr == "" {
+			portsStr = allowed.Ports[0]
+		} else if portsStr != allowed.Ports[0] {
+			return gACL{}, errors.New("malformed firewall")
 		}
 	}
 
-	return fws, nil
-}
-
-// parseACLs parses the firewall rules contained in the given firewall into
-// `acl.ACL`s.
-// parseACLs only handles rules specified in the format that Kelda generates: it
-// does not handle all the possible rule strings supported by the Google API.
-func (prvdr *Provider) parseACLs(fws []compute.Firewall) (acls []acl.ACL, err error) {
-	for _, fw := range fws {
-		portACLs, err := parsePorts(fw.Allowed)
+	var ports []int
+	for _, p := range strings.Split(portsStr, "-") {
+		portInt, err := strconv.Atoi(p)
 		if err != nil {
-			return nil, fmt.Errorf("parse ports of %s: %s", fw.Name, err)
+			return gACL{}, fmt.Errorf("invalid port: %s", portsStr)
 		}
-
-		for _, cidrIP := range fw.SourceRanges {
-			for _, acl := range portACLs {
-				acl.CidrIP = cidrIP
-				acls = append(acls, acl)
-			}
-		}
+		ports = append(ports, portInt)
 	}
 
-	return acls, nil
-}
+	acl := gACL{name: fw.Name}
+	acl.CidrIP = fw.SourceRanges[0]
 
-func parsePorts(allowed []*compute.FirewallAllowed) (acls []acl.ACL, err error) {
-	for _, rule := range allowed {
-		for _, portsStr := range rule.Ports {
-			portRange, err := parseInts(strings.Split(portsStr, "-"))
-			if err != nil {
-				return nil, fmt.Errorf("parse ints: %s", err)
-			}
-
-			var min, max int
-			switch len(portRange) {
-			case 1:
-				min, max = portRange[0], portRange[0]
-			case 2:
-				min, max = portRange[0], portRange[1]
-			default:
-				return nil, fmt.Errorf(
-					"unrecognized port format: %s", portsStr)
-			}
-			acls = append(acls, acl.ACL{MinPort: min, MaxPort: max})
-		}
+	switch len(ports) {
+	case 1:
+		acl.MinPort, acl.MaxPort = ports[0], ports[0]
+	case 2:
+		acl.MinPort, acl.MaxPort = ports[0], ports[1]
+	default:
+		return gACL{}, fmt.Errorf("invalid port: %s", portsStr)
 	}
-	return acls, nil
-}
 
-func parseInts(intStrings []string) (parsed []int, err error) {
-	for _, str := range intStrings {
-		parsedInt, err := strconv.Atoi(str)
-		if err != nil {
-			return nil, err
-		}
-		parsed = append(parsed, parsedInt)
-	}
-	return parsed, nil
+	return acl, nil
 }
 
 // SetACLs adds and removes acls in `prvdr` so that it conforms to `acls`.
 func (prvdr *Provider) SetACLs(acls []acl.ACL) error {
-	fws, err := prvdr.listFirewalls()
+	// Allow inter-vm communication.
+	return prvdr.setACLs(append(acls, acl.ACL{CidrIP: ipv4Range, MaxPort: 65535}))
+}
+
+func (prvdr *Provider) setACLs(acls []acl.ACL) error {
+	firewalls, err := prvdr.ListFirewalls(prvdr.network)
 	if err != nil {
-		return err
+		return fmt.Errorf("list firewalls: %s", err)
 	}
 
-	currACLs, err := prvdr.parseACLs(fws)
-	if err != nil {
-		return fmt.Errorf("parse ACLs: %s", err)
-	}
-
-	pair, toAdd, toRemove := join.HashJoin(acl.Slice(acls), acl.Slice(currACLs),
-		nil, nil)
-
-	var toSet []acl.ACL
-	for _, a := range toAdd {
-		toSet = append(toSet, a.(acl.ACL))
-	}
-	for _, p := range pair {
-		toSet = append(toSet, p.L.(acl.ACL))
-	}
-	for _, a := range toRemove {
-		toSet = append(toSet, acl.ACL{
-			MinPort: a.(acl.ACL).MinPort,
-			MaxPort: a.(acl.ACL).MaxPort,
-			CidrIP:  "", // Remove all currently allowed IPs.
-		})
-	}
-
-	for acl, cidrIPs := range groupACLsByPorts(toSet) {
-		fw, err := prvdr.getCreateFirewall(acl.MinPort, acl.MaxPort)
+	var ops []*compute.Operation
+	adds, removes := prvdr.planSetACLs(firewalls.Items, acls)
+	for _, name := range removes {
+		log.Debugf("Google Remove ACL: %s", name)
+		op, err := prvdr.DeleteFirewall(name)
 		if err != nil {
 			return err
 		}
+		ops = append(ops, op)
+	}
 
-		if reflect.DeepEqual(fw.SourceRanges, cidrIPs) {
-			continue
-		}
-
-		var op *compute.Operation
-		if len(cidrIPs) == 0 {
-			log.WithField("ports", fmt.Sprintf(
-				"%d-%d", acl.MinPort, acl.MaxPort)).
-				Debug("Google: Deleting firewall")
-			op, err = prvdr.DeleteFirewall(fw.Name)
-			if err != nil {
-				return err
-			}
-		} else {
-			log.WithField("ports", fmt.Sprintf(
-				"%d-%d", acl.MinPort, acl.MaxPort)).
-				WithField("CidrIPs", cidrIPs).
-				Debug("Google: Setting ACLs")
-			op, err = prvdr.firewallPatch(fw.Name, cidrIPs)
-			if err != nil {
-				return err
-			}
-		}
-		if err := prvdr.operationWait(op); err != nil {
+	for _, fw := range adds {
+		log.Debugf("Google Add ACL: %s", fw.Name)
+		op, err := prvdr.InsertFirewall(fw)
+		if err != nil {
 			return err
+		}
+		ops = append(ops, op)
+	}
+	return prvdr.operationWait(ops...)
+}
+
+func (prvdr *Provider) planSetACLs(cloudFWs []*compute.Firewall, acls []acl.ACL) (
+	add []*compute.Firewall, remove []string) {
+
+	var cloudACLs []gACL
+	for _, fw := range cloudFWs {
+		if acl, err := prvdr.parseACL(fw); err != nil {
+			remove = append(remove, fw.Name)
+			log.WithError(err).Debugf("Failed to parse ACL, removing: %s",
+				fw.Name)
+		} else {
+			cloudACLs = append(cloudACLs, acl)
 		}
 	}
 
-	return nil
+	var gacls []gACL
+	for _, a := range acls {
+		ip := strings.Replace(a.CidrIP, ".", "-", -1)
+		ip = strings.Replace(ip, "/", "-", -1)
+		name := fmt.Sprintf("%s-%s-%d-%d", prvdr.network, ip,
+			a.MinPort, a.MaxPort)
+		gacls = append(gacls, gACL{name: name, ACL: a})
+	}
+
+	_, adds, removes := join.HashJoin(aclSlice(gacls), aclSlice(cloudACLs), nil, nil)
+
+	for _, i := range removes {
+		remove = append(remove, i.(gACL).name)
+	}
+
+	for _, a := range adds {
+		acl := a.(gACL)
+		ports := fmt.Sprintf("%d-%d", acl.MinPort, acl.MaxPort)
+		add = append(add, &compute.Firewall{
+			Name:         acl.name,
+			Network:      prvdr.networkURL(),
+			Description:  prvdr.network,
+			SourceRanges: []string{acl.CidrIP},
+			Allowed: []*compute.FirewallAllowed{{
+				IPProtocol: "tcp",
+				Ports:      []string{ports},
+			}, {
+				IPProtocol: "udp",
+				Ports:      []string{ports},
+			}, {
+				IPProtocol: "icmp",
+			}}})
+	}
+
+	return
 }
 
 // UpdateFloatingIPs updates IPs of machines by recreating their network interfaces.
@@ -450,114 +423,30 @@ func (prvdr *Provider) UpdateFloatingIPs(machines []db.Machine) error {
 // Cleanup removes unnecessary detritus from this provider.  It's intended to be called
 // when there are no VMs running or expected to be running soon.
 func (prvdr *Provider) Cleanup() error {
-	// XXX: There are several resources that could be cleaned up here.  Some are
-	// handled in a sort of ad hoc way in the other provider functions.  Some are not
-	// cleaned up at all.
-	return nil
-}
-
-func (prvdr *Provider) getFirewall(name string) (*compute.Firewall, error) {
-	list, err := prvdr.ListFirewalls(prvdr.network)
-	if err != nil {
-		return nil, err
-	}
-	for _, val := range list.Items {
-		if val.Name == name {
-			return val, nil
-		}
-	}
-
-	return nil, nil
-}
-
-func (prvdr *Provider) getCreateFirewall(minPort int, maxPort int) (
-	*compute.Firewall, error) {
-
-	ports := fmt.Sprintf("%d-%d", minPort, maxPort)
-	fwName := fmt.Sprintf("%s-%s-%s", prvdr.namespace, prvdr.zone, ports)
-
-	if fw, _ := prvdr.getFirewall(fwName); fw != nil {
-		return fw, nil
-	}
-
-	log.WithField("name", fwName).Debug("Creating firewall")
-	op, err := prvdr.insertFirewall(fwName, ports, []string{"127.0.0.1/32"}, true)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := prvdr.operationWait(op); err != nil {
-		return nil, err
-	}
-
-	return prvdr.getFirewall(fwName)
-}
-
-// This creates a firewall but does nothing else
-func (prvdr *Provider) insertFirewall(name, ports string, sourceRanges []string,
-	restrictToZone bool) (*compute.Operation, error) {
-
-	var targetTags []string
-	if restrictToZone {
-		targetTags = []string{prvdr.zone}
-	}
-
-	firewall := &compute.Firewall{
-		Name:        name,
-		Network:     prvdr.networkURL(),
-		Description: prvdr.network,
-		Allowed: []*compute.FirewallAllowed{
-			{
-				IPProtocol: "tcp",
-				Ports:      []string{ports},
-			},
-			{
-				IPProtocol: "udp",
-				Ports:      []string{ports},
-			},
-			{
-				IPProtocol: "icmp",
-			},
-		},
-		SourceRanges: sourceRanges,
-		TargetTags:   targetTags,
-	}
-
-	return prvdr.InsertFirewall(firewall)
-}
-
-func (prvdr *Provider) firewallExists(name string) (bool, error) {
-	fw, err := prvdr.getFirewall(name)
-	return fw != nil, err
-}
-
-// Updates the firewall using PATCH semantics.
-//
-// The IP addresses must be in CIDR notation.
-func (prvdr *Provider) firewallPatch(name string,
-	ips []string) (*compute.Operation, error) {
-	firewall := &compute.Firewall{
-		Name:         name,
-		Network:      prvdr.networkURL(),
-		SourceRanges: ips,
-	}
-
-	return prvdr.PatchFirewall(name, firewall)
-}
-
-// Initializes the network for the cluster
-func (prvdr *Provider) createNetwork() error {
-	networks, err := prvdr.ListNetworks(prvdr.network)
-	if err != nil {
+	list, err := prvdr.ListNetworks(prvdr.network)
+	if err != nil || len(list.Items) == 0 {
 		return err
 	}
 
-	if len(networks.Items) > 0 {
-		log.Debug("Network already exists")
-		return nil
+	if err := prvdr.setACLs(nil); err != nil {
+		return err
 	}
 
-	log.Debug("Creating network")
+	log.Debugf("Google Delete Network: %s", prvdr.network)
+	op, err := prvdr.DeleteNetwork(prvdr.network)
+	if err != nil {
+		return err
+	}
+	return prvdr.operationWait(op)
+}
+
+func (prvdr *Provider) createNetwork() error {
+	list, err := prvdr.ListNetworks(prvdr.network)
+	if err != nil || len(list.Items) > 0 {
+		return err
+	}
+
+	log.Debug("Google Create Network")
 	op, err := prvdr.InsertNetwork(&compute.Network{
 		Name:      prvdr.network,
 		IPv4Range: ipv4Range,
@@ -566,33 +455,7 @@ func (prvdr *Provider) createNetwork() error {
 		return err
 	}
 
-	err = prvdr.operationWait(op)
-	if err != nil {
-		return err
-	}
-	return prvdr.createInternalFirewall()
-}
-
-// Initializes the internal firewall for the cluster to allow machines to talk
-// on the private network.
-func (prvdr *Provider) createInternalFirewall() error {
-	var ops []*compute.Operation
-
-	if exists, err := prvdr.firewallExists(prvdr.intFW); err != nil {
-		return err
-	} else if exists {
-		log.Debug("internal firewall already exists")
-	} else {
-		log.Debug("creating internal firewall")
-		op, err := prvdr.insertFirewall(
-			prvdr.intFW, "1-65535", []string{ipv4Range}, false)
-		if err != nil {
-			return err
-		}
-		ops = append(ops, op)
-	}
-
-	return prvdr.operationWait(ops...)
+	return prvdr.operationWait(op)
 }
 
 func (prvdr Provider) networkURL() string {
@@ -609,19 +472,13 @@ func randNameImpl() string {
 	return fmt.Sprintf("k%s", strings.ToLower(base32.StdEncoding.EncodeToString(b)))
 }
 
-func groupACLsByPorts(acls []acl.ACL) map[acl.ACL][]string {
-	grouped := make(map[acl.ACL][]string)
-	for _, a := range acls {
-		key := acl.ACL{
-			MinPort: a.MinPort,
-			MaxPort: a.MaxPort,
-		}
-		if _, ok := grouped[key]; !ok {
-			grouped[key] = nil
-		}
-		if a.CidrIP != "" {
-			grouped[key] = append(grouped[key], a.CidrIP)
-		}
-	}
-	return grouped
+type gACL struct {
+	name string
+	acl.ACL
 }
+
+type aclSlice []gACL
+
+func (s aclSlice) Get(i int) interface{} { return s[i] }
+
+func (s aclSlice) Len() int { return len(s) }

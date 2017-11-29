@@ -61,9 +61,6 @@ func TestErrors(t *testing.T) {
 	_, err = c.InsertFirewall(nil)
 	assert.EqualError(t, err, "Post "+url+"global/firewalls?alt=json: test")
 
-	_, err = c.PatchFirewall("", nil)
-	assert.EqualError(t, err, "Patch "+url+"global/firewalls/?alt=json: test")
-
 	_, err = c.DeleteFirewall("f")
 	assert.EqualError(t, err, "Delete "+url+"global/firewalls/f?alt=json: test")
 
@@ -73,6 +70,9 @@ func TestErrors(t *testing.T) {
 
 	_, err = c.InsertNetwork(nil)
 	assert.EqualError(t, err, "Post "+url+"global/networks?alt=json: test")
+
+	_, err = c.DeleteNetwork("n")
+	assert.EqualError(t, err, "Delete "+url+"global/networks/n?alt=json: test")
 }
 
 func TestGetProjectID(t *testing.T) {

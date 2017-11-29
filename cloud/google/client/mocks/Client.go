@@ -102,6 +102,29 @@ func (_m *Client) DeleteInstance(zone string, operation string) (*compute.Operat
 	return r0, r1
 }
 
+// DeleteNetwork provides a mock function with given fields: name
+func (_m *Client) DeleteNetwork(name string) (*compute.Operation, error) {
+	ret := _m.Called(name)
+
+	var r0 *compute.Operation
+	if rf, ok := ret.Get(0).(func(string) *compute.Operation); ok {
+		r0 = rf(name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*compute.Operation)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(name)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetGlobalOperation provides a mock function with given fields: operation
 func (_m *Client) GetGlobalOperation(operation string) (*compute.Operation, error) {
 	ret := _m.Called(operation)
@@ -302,29 +325,6 @@ func (_m *Client) ListNetworks(name string) (*compute.NetworkList, error) {
 	var r1 error
 	if rf, ok := ret.Get(1).(func(string) error); ok {
 		r1 = rf(name)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// PatchFirewall provides a mock function with given fields: name, firewall
-func (_m *Client) PatchFirewall(name string, firewall *compute.Firewall) (*compute.Operation, error) {
-	ret := _m.Called(name, firewall)
-
-	var r0 *compute.Operation
-	if rf, ok := ret.Get(0).(func(string, *compute.Firewall) *compute.Operation); ok {
-		r0 = rf(name, firewall)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*compute.Operation)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(string, *compute.Firewall) error); ok {
-		r1 = rf(name, firewall)
 	} else {
 		r1 = ret.Error(1)
 	}

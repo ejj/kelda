@@ -32,11 +32,10 @@ type Client interface {
 	GetGlobalOperation(operation string) (*compute.Operation, error)
 	ListFirewalls(description string) (*compute.FirewallList, error)
 	InsertFirewall(firewall *compute.Firewall) (*compute.Operation, error)
-	PatchFirewall(name string, firewall *compute.Firewall) (
-		*compute.Operation, error)
 	DeleteFirewall(firewall string) (*compute.Operation, error)
 	ListNetworks(name string) (*compute.NetworkList, error)
 	InsertNetwork(network *compute.Network) (*compute.Operation, error)
+	DeleteNetwork(name string) (*compute.Operation, error)
 }
 
 type client struct {
@@ -153,12 +152,6 @@ func (ci *client) InsertFirewall(firewall *compute.Firewall) (
 	return ci.gce.Firewalls.Insert(ci.projID, firewall).Do()
 }
 
-func (ci *client) PatchFirewall(name string, firewall *compute.Firewall) (
-	*compute.Operation, error) {
-	c.Inc("Patch Firewall")
-	return ci.gce.Firewalls.Patch(ci.projID, name, firewall).Do()
-}
-
 func (ci *client) DeleteFirewall(firewall string) (
 	*compute.Operation, error) {
 	c.Inc("Delete Firewall")
@@ -174,6 +167,11 @@ func (ci *client) ListNetworks(name string) (*compute.NetworkList, error) {
 func (ci *client) InsertNetwork(network *compute.Network) (*compute.Operation, error) {
 	c.Inc("Insert Network")
 	return ci.gce.Networks.Insert(ci.projID, network).Do()
+}
+
+func (ci *client) DeleteNetwork(network string) (*compute.Operation, error) {
+	c.Inc("Delete Network")
+	return ci.gce.Networks.Delete(ci.projID, network).Do()
 }
 
 func descFilter(desc string) string {

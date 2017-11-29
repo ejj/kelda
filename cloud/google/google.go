@@ -37,12 +37,13 @@ const floatingIPName = "Floating IP"
 const image = "https://www.googleapis.com/compute/v1/projects/" +
 	"ubuntu-os-cloud/global/images/ubuntu-1604-xenial-v20170202"
 
+const ipv4Range string = "172.16.0.0/12"
+
 // The Provider objects represents a connection to GCE.
 type Provider struct {
 	client.Client
 
 	networkName string // gce identifier for the network
-	ipv4Range   string // ipv4 range of the internal network
 	intFW       string // gce internal firewall name
 	zone        string // gce boot region
 
@@ -60,10 +61,9 @@ func New(namespace, zone string) (*Provider, error) {
 	}
 
 	prvdr := Provider{
-		Client:    gce,
-		ns:        namespace,
-		ipv4Range: "192.168.0.0/16",
-		zone:      zone,
+		Client: gce,
+		ns:     namespace,
+		zone:   zone,
 	}
 	prvdr.intFW = fmt.Sprintf("%s-internal", prvdr.ns)
 	prvdr.networkName = prvdr.ns
@@ -588,7 +588,7 @@ func (prvdr *Provider) createNetwork() error {
 	log.Debug("Creating network")
 	op, err := prvdr.InsertNetwork(&compute.Network{
 		Name:      prvdr.networkName,
-		IPv4Range: prvdr.ipv4Range,
+		IPv4Range: ipv4Range,
 	})
 	if err != nil {
 		return err
@@ -613,7 +613,7 @@ func (prvdr *Provider) createInternalFirewall() error {
 	} else {
 		log.Debug("creating internal firewall")
 		op, err := prvdr.insertFirewall(
-			prvdr.intFW, "1-65535", []string{prvdr.ipv4Range}, false)
+			prvdr.intFW, "1-65535", []string{ipv4Range}, false)
 		if err != nil {
 			return err
 		}

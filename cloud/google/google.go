@@ -34,13 +34,13 @@ const ephemeralIPName = "External NAT"
 // floatingIPName is a constant for what we label NATs with floating IPs in GCE.
 const floatingIPName = "Floating IP"
 
-const computeBaseURL string = "https://www.googleapis.com/compute/v1/projects"
+const image = "https://www.googleapis.com/compute/v1/projects/" +
+	"ubuntu-os-cloud/global/images/ubuntu-1604-xenial-v20170202"
 
 // The Provider objects represents a connection to GCE.
 type Provider struct {
 	client.Client
 
-	imgURL      string // gce url to the VM image
 	networkName string // gce identifier for the network
 	ipv4Range   string // ipv4 range of the internal network
 	intFW       string // gce internal firewall name
@@ -66,8 +66,6 @@ func New(namespace, zone string) (*Provider, error) {
 		zone:      zone,
 	}
 	prvdr.intFW = fmt.Sprintf("%s-internal", prvdr.ns)
-	prvdr.imgURL = fmt.Sprintf("%s/%s", computeBaseURL,
-		"ubuntu-os-cloud/global/images/ubuntu-1604-xenial-v20170202")
 	prvdr.networkName = prvdr.ns
 
 	if err := prvdr.createNetwork(); err != nil {
@@ -223,7 +221,7 @@ func (prvdr *Provider) instanceNew(name string, size string,
 				Boot:       true,
 				AutoDelete: true,
 				InitializeParams: &compute.AttachedDiskInitializeParams{
-					SourceImage: prvdr.imgURL,
+					SourceImage: image,
 				},
 			},
 		},

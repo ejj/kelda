@@ -31,14 +31,12 @@ type Client interface {
 	GetZoneOperation(zone, operation string) (*compute.Operation, error)
 	GetGlobalOperation(operation string) (*compute.Operation, error)
 	ListFirewalls() (*compute.FirewallList, error)
-	InsertFirewall(firewall *compute.Firewall) (
-		*compute.Operation, error)
+	InsertFirewall(firewall *compute.Firewall) (*compute.Operation, error)
 	PatchFirewall(name string, firewall *compute.Firewall) (
 		*compute.Operation, error)
 	DeleteFirewall(firewall string) (*compute.Operation, error)
 	ListNetworks() (*compute.NetworkList, error)
-	InsertNetwork(network *compute.Network) (
-		*compute.Operation, error)
+	InsertNetwork(network *compute.Network) (*compute.Operation, error)
 }
 
 type client struct {
@@ -177,8 +175,7 @@ func (ci *client) ListNetworks() (*compute.NetworkList, error) {
 	return ci.gce.Networks.List(ci.projID).Do()
 }
 
-func (ci *client) InsertNetwork(network *compute.Network) (
-	*compute.Operation, error) {
+func (ci *client) InsertNetwork(network *compute.Network) (*compute.Operation, error) {
 	c.Inc("Insert Network")
 	return ci.gce.Networks.Insert(ci.projID, network).Do()
 }

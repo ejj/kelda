@@ -44,11 +44,10 @@ const ipv4Range string = "172.16.0.0/12"
 type Provider struct {
 	client.Client
 
-	networkName string // gce identifier for the network
-	intFW       string // gce internal firewall name
-	zone        string // gce boot region
-
-	ns string // client namespace
+	namespace string // client namespace
+	network   string // gce identifier for the network
+	intFW     string // gce internal firewall name
+	zone      string // gce boot region
 }
 
 // New creates a GCE client.
@@ -62,12 +61,12 @@ func New(namespace, zone string) (*Provider, error) {
 	}
 
 	prvdr := Provider{
-		Client: gce,
-		ns:     namespace,
-		zone:   zone,
+		Client:    gce,
+		namespace: namespace,
+		network:   namespace,
+		intFW:     fmt.Sprintf("%s-internal", namespace),
+		zone:      zone,
 	}
-	prvdr.intFW = fmt.Sprintf("%s-internal", prvdr.ns)
-	prvdr.networkName = prvdr.ns
 
 	if err := prvdr.createNetwork(); err != nil {
 		log.WithError(err).Debug("failed to start up gce network")
@@ -104,7 +103,7 @@ func getNetworkConfig(inst *compute.Instance) (
 func (prvdr *Provider) List() ([]db.Machine, error) {
 	var machines []db.Machine
 	instances, err := prvdr.ListInstances(prvdr.zone,
-		fmt.Sprintf("description eq %s", prvdr.ns))
+		fmt.Sprintf("description eq %s", prvdr.namespace))
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +212,7 @@ func (prvdr *Provider) instanceNew(name string, size string,
 	cloudConfig string) (*compute.Operation, error) {
 	instance := &compute.Instance{
 		Name:        name,
-		Description: prvdr.ns,
+		Description: prvdr.namespace,
 		MachineType: fmt.Sprintf("zones/%s/machineTypes/%s",
 			prvdr.zone,
 			size),
@@ -234,7 +233,7 @@ func (prvdr *Provider) instanceNew(name string, size string,
 						Name: ephemeralIPName,
 					},
 				},
-				Network: networkURL(prvdr.networkName),
+				Network: prvdr.networkURL(),
 			},
 		},
 		Metadata: &compute.Metadata{
@@ -267,7 +266,7 @@ func (prvdr Provider) listFirewalls() ([]compute.Firewall, error) {
 	var fws []compute.Firewall
 	for _, fw := range firewalls.Items {
 		_, nwName := path.Split(fw.Network)
-		if nwName != prvdr.networkName || fw.Name == prvdr.intFW {
+		if nwName != prvdr.network || fw.Name == prvdr.intFW {
 			continue
 		}
 
@@ -491,7 +490,7 @@ func (prvdr *Provider) getCreateFirewall(minPort int, maxPort int) (
 	*compute.Firewall, error) {
 
 	ports := fmt.Sprintf("%d-%d", minPort, maxPort)
-	fwName := fmt.Sprintf("%s-%s-%s", prvdr.ns, prvdr.zone, ports)
+	fwName := fmt.Sprintf("%s-%s-%s", prvdr.namespace, prvdr.zone, ports)
 
 	if fw, _ := prvdr.getFirewall(fwName); fw != nil {
 		return fw, nil
@@ -534,7 +533,7 @@ func (prvdr *Provider) insertFirewall(name, ports string, sourceRanges []string,
 
 	firewall := &compute.Firewall{
 		Name:    name,
-		Network: networkURL(prvdr.networkName),
+		Network: prvdr.networkURL(),
 		Allowed: []*compute.FirewallAllowed{
 			{
 				IPProtocol: "tcp",
@@ -567,7 +566,7 @@ func (prvdr *Provider) firewallPatch(name string,
 	ips []string) (*compute.Operation, error) {
 	firewall := &compute.Firewall{
 		Name:         name,
-		Network:      networkURL(prvdr.networkName),
+		Network:      prvdr.networkURL(),
 		SourceRanges: ips,
 	}
 
@@ -576,7 +575,7 @@ func (prvdr *Provider) firewallPatch(name string,
 
 // Initializes the network for the cluster
 func (prvdr *Provider) createNetwork() error {
-	exists, err := prvdr.networkExists(prvdr.networkName)
+	exists, err := prvdr.networkExists(prvdr.network)
 	if err != nil {
 		return err
 	}
@@ -588,7 +587,7 @@ func (prvdr *Provider) createNetwork() error {
 
 	log.Debug("Creating network")
 	op, err := prvdr.InsertNetwork(&compute.Network{
-		Name:      prvdr.networkName,
+		Name:      prvdr.network,
 		IPv4Range: ipv4Range,
 	})
 	if err != nil {
@@ -624,8 +623,8 @@ func (prvdr *Provider) createInternalFirewall() error {
 	return prvdr.operationWait(ops...)
 }
 
-func networkURL(networkName string) string {
-	return fmt.Sprintf("global/networks/%s", networkName)
+func (prvdr Provider) networkURL() string {
+	return fmt.Sprintf("global/networks/%s", prvdr.network)
 }
 
 var randName = randNameImpl

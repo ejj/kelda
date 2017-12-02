@@ -22,9 +22,10 @@ type GoogleTestSuite struct {
 func (s *GoogleTestSuite) SetupTest() {
 	s.gce = new(mocks.Client)
 	s.Provider = &Provider{
-		Client: s.gce,
-		ns:     "namespace",
-		zone:   "zone-1",
+		Client:    s.gce,
+		namespace: "namespace",
+		network:   "network",
+		zone:      "zone-1",
 	}
 }
 
@@ -63,28 +64,28 @@ func (s *GoogleTestSuite) TestList() {
 }
 
 func (s *GoogleTestSuite) TestListFirewalls() {
-	s.networkName = "network"
+	s.network = "network"
 	s.intFW = "intFW"
 
 	s.gce.On("ListFirewalls").Return(&compute.FirewallList{
 		Items: []*compute.Firewall{
 			{
-				Network:    networkURL(s.networkName),
+				Network:    s.networkURL(),
 				Name:       "badZone",
 				TargetTags: []string{"zone-2"},
 			},
 			{
-				Network:    networkURL(s.networkName),
+				Network:    s.networkURL(),
 				Name:       "intFW",
 				TargetTags: []string{"zone-1"},
 			},
 			{
-				Network:    networkURL("ignoreMe"),
+				Network:    "ignoreMe",
 				Name:       "badNetwork",
 				TargetTags: []string{"zone-1"},
 			},
 			{
-				Network:    networkURL(s.networkName),
+				Network:    s.networkURL(),
 				Name:       "shouldReturn",
 				TargetTags: []string{"zone-1"},
 			},

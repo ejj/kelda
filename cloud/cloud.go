@@ -373,7 +373,7 @@ func (cld *cloud) updateCloud(jr joinResult) {
 		return true
 	}
 
-	if err := util.BackoffWaitFor(pred, 30*time.Second, 5*time.Minute); err != nil {
+	if err := util.BackoffWaitFor(pred, 10*time.Second, 5*time.Minute); err != nil {
 		log.WithError(err).Warn("Failed to wait for cloud provider updates.")
 	}
 	log.Debug("Finished waiting for updates.")

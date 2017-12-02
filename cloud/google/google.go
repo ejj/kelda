@@ -202,7 +202,7 @@ func (prvdr *Provider) operationWait(ops ...*compute.Operation) (err error) {
 			}
 		}
 		return true
-	}, 30*time.Second, 3*time.Minute)
+	}, 10*time.Second, 3*time.Minute)
 }
 
 // Create new GCE instance.

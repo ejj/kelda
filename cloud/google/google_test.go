@@ -2,13 +2,15 @@ package google
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/kelda/kelda/cloud/acl"
+	"github.com/kelda/kelda/cloud/cfg"
 	"github.com/kelda/kelda/cloud/google/client/mocks"
 	"github.com/kelda/kelda/db"
 	"github.com/stretchr/testify/assert"
-
+	"github.com/stretchr/testify/mock"
 	compute "google.golang.org/api/compute/v1"
 )
 
@@ -159,4 +161,73 @@ func TestParseACLs(t *testing.T) {
 	})
 	assert.EqualError(t, err,
 		"parse ports of firewall: unrecognized port format: 1-80-81")
+}
+
+func TestBoot(t *testing.T) {
+	mc, gce := getProvider()
+
+	_, err := gce.Boot([]db.Machine{{Preemptible: true}})
+	assert.EqualError(t, err, "preemptible vms are not implemented")
+
+	mc.On("InsertInstance", "zone-1", mock.Anything).Return(
+		nil, errors.New("err")).Once()
+
+	_, err = gce.Boot([]db.Machine{{Size: "size1"}})
+	assert.EqualError(t, err, "err")
+
+	name := 0
+	randName = func() string {
+		name++
+		return fmt.Sprintf("%d", name)
+	}
+
+	machines := []db.Machine{{Size: "size1"}, {Size: "size2"}}
+
+	cfg1 := gce.instanceConfig("1", "size1", cfg.Ubuntu(machines[0], ""))
+	mc.On("InsertInstance", "zone-1", cfg1).Return(nil, nil)
+
+	cfg2 := gce.instanceConfig("2", "size2", cfg.Ubuntu(machines[1], ""))
+	mc.On("InsertInstance", "zone-1", cfg2).Return(nil, nil)
+
+	ids, err := gce.Boot(machines)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1", "2"}, ids)
+
+	mc.AssertExpectations(t)
+}
+
+func TestInstanceConfig(t *testing.T) {
+	_, gce := getProvider()
+	cloudConfig := "cloudConfig"
+	res := gce.instanceConfig("name", "size", cloudConfig)
+	exp := &compute.Instance{
+		Name:        "name",
+		Description: gce.network,
+		MachineType: "zones/zone-1/machineTypes/size",
+		Disks: []*compute.AttachedDisk{{
+			Boot:       true,
+			AutoDelete: true,
+			InitializeParams: &compute.AttachedDiskInitializeParams{
+				SourceImage: image,
+			},
+		}},
+		NetworkInterfaces: []*compute.NetworkInterface{{
+			AccessConfigs: []*compute.AccessConfig{{
+				Type: "ONE_TO_ONE_NAT",
+				Name: ephemeralIPName,
+			}},
+			Network: gce.networkURL(),
+		}},
+		Metadata: &compute.Metadata{
+			Items: []*compute.MetadataItems{{
+				Key:   "startup-script",
+				Value: &cloudConfig,
+			}},
+		},
+		Tags: &compute.Tags{
+			Items: []string{gce.zone},
+		},
+	}
+
+	assert.Equal(t, exp, res)
 }

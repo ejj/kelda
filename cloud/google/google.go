@@ -147,7 +147,8 @@ func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
 		names = append(names, name)
 
 		go func(m db.Machine) {
-			_, err := prvdr.instanceNew(name, m.Size, cfg.Ubuntu(m, ""))
+			icfg := prvdr.instanceConfig(name, m.Size, cfg.Ubuntu(m, ""))
+			_, err := prvdr.InsertInstance(prvdr.zone, icfg)
 			errChan <- err
 		}(m)
 	}
@@ -204,44 +205,30 @@ func (prvdr *Provider) operationWait(ops ...*compute.Operation) (err error) {
 	}, 10*time.Second, 3*time.Minute)
 }
 
-// Create new GCE instance.
-//
-// Does not check if the operation succeeds.
-func (prvdr *Provider) instanceNew(name string, size string,
-	cloudConfig string) (*compute.Operation, error) {
-	instance := &compute.Instance{
+func (prvdr Provider) instanceConfig(name, size, cloudConfig string) *compute.Instance {
+	return &compute.Instance{
 		Name:        name,
 		Description: prvdr.network,
-		MachineType: fmt.Sprintf("zones/%s/machineTypes/%s",
-			prvdr.zone,
-			size),
-		Disks: []*compute.AttachedDisk{
-			{
-				Boot:       true,
-				AutoDelete: true,
-				InitializeParams: &compute.AttachedDiskInitializeParams{
-					SourceImage: image,
-				},
+		MachineType: fmt.Sprintf("zones/%s/machineTypes/%s", prvdr.zone, size),
+		Disks: []*compute.AttachedDisk{{
+			Boot:       true,
+			AutoDelete: true,
+			InitializeParams: &compute.AttachedDiskInitializeParams{
+				SourceImage: image,
 			},
-		},
-		NetworkInterfaces: []*compute.NetworkInterface{
-			{
-				AccessConfigs: []*compute.AccessConfig{
-					{
-						Type: "ONE_TO_ONE_NAT",
-						Name: ephemeralIPName,
-					},
-				},
-				Network: prvdr.networkURL(),
-			},
-		},
+		}},
+		NetworkInterfaces: []*compute.NetworkInterface{{
+			AccessConfigs: []*compute.AccessConfig{{
+				Type: "ONE_TO_ONE_NAT",
+				Name: ephemeralIPName,
+			}},
+			Network: prvdr.networkURL(),
+		}},
 		Metadata: &compute.Metadata{
-			Items: []*compute.MetadataItems{
-				{
-					Key:   "startup-script",
-					Value: &cloudConfig,
-				},
-			},
+			Items: []*compute.MetadataItems{{
+				Key:   "startup-script",
+				Value: &cloudConfig,
+			}},
 		},
 		Tags: &compute.Tags{
 			// Tag the machine with its zone so that we can create zone-scoped
@@ -249,8 +236,6 @@ func (prvdr *Provider) instanceNew(name string, size string,
 			Items: []string{prvdr.zone},
 		},
 	}
-
-	return prvdr.InsertInstance(prvdr.zone, instance)
 }
 
 // listFirewalls returns the firewalls managed by the cluster. Specifically,

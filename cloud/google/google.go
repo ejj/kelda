@@ -1,6 +1,8 @@
 package google
 
 import (
+	"crypto/rand"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"path"
@@ -16,7 +18,6 @@ import (
 	"github.com/kelda/kelda/join"
 	"github.com/kelda/kelda/util"
 
-	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	compute "google.golang.org/api/compute/v1"
 )
@@ -144,7 +145,7 @@ func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
 			return nil, errors.New("preemptible vms are not implemented")
 		}
 
-		name := "kelda-" + uuid.NewV4().String()
+		name := randName()
 		names = append(names, name)
 
 		go func(m db.Machine) {
@@ -625,6 +626,16 @@ func (prvdr *Provider) createInternalFirewall() error {
 
 func networkURL(networkName string) string {
 	return fmt.Sprintf("global/networks/%s", networkName)
+}
+
+var randName = randNameImpl
+
+func randNameImpl() string {
+	b := make([]byte, 10)
+	if _, err := rand.Read(b); err != nil {
+		panic(err) // This really shouldn't ever happen.
+	}
+	return fmt.Sprintf("k%s", strings.ToLower(base32.StdEncoding.EncodeToString(b)))
 }
 
 func groupACLsByPorts(acls []acl.ACL) map[acl.ACL][]string {

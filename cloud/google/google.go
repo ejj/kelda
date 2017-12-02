@@ -102,8 +102,7 @@ func getNetworkConfig(inst *compute.Instance) (
 // List the current machines in the cluster.
 func (prvdr *Provider) List() ([]db.Machine, error) {
 	var machines []db.Machine
-	instances, err := prvdr.ListInstances(prvdr.zone,
-		fmt.Sprintf("description eq %s", prvdr.namespace))
+	instances, err := prvdr.ListInstances(prvdr.zone, prvdr.network)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +211,7 @@ func (prvdr *Provider) instanceNew(name string, size string,
 	cloudConfig string) (*compute.Operation, error) {
 	instance := &compute.Instance{
 		Name:        name,
-		Description: prvdr.namespace,
+		Description: prvdr.network,
 		MachineType: fmt.Sprintf("zones/%s/machineTypes/%s",
 			prvdr.zone,
 			size),
@@ -258,7 +257,7 @@ func (prvdr *Provider) instanceNew(name string, size string,
 // it returns all firewalls that are attached to the cluster's network, and
 // apply to the managed zone.
 func (prvdr Provider) listFirewalls() ([]compute.Firewall, error) {
-	firewalls, err := prvdr.ListFirewalls()
+	firewalls, err := prvdr.ListFirewalls(prvdr.network)
 	if err != nil {
 		return nil, fmt.Errorf("list firewalls: %s", err)
 	}
@@ -473,7 +472,7 @@ func (prvdr *Provider) Cleanup() error {
 }
 
 func (prvdr *Provider) getFirewall(name string) (*compute.Firewall, error) {
-	list, err := prvdr.ListFirewalls()
+	list, err := prvdr.ListFirewalls(prvdr.network)
 	if err != nil {
 		return nil, err
 	}
@@ -509,19 +508,6 @@ func (prvdr *Provider) getCreateFirewall(minPort int, maxPort int) (
 	return prvdr.getFirewall(fwName)
 }
 
-func (prvdr *Provider) networkExists(name string) (bool, error) {
-	list, err := prvdr.ListNetworks()
-	if err != nil {
-		return false, err
-	}
-	for _, val := range list.Items {
-		if val.Name == name {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // This creates a firewall but does nothing else
 func (prvdr *Provider) insertFirewall(name, ports string, sourceRanges []string,
 	restrictToZone bool) (*compute.Operation, error) {
@@ -532,8 +518,9 @@ func (prvdr *Provider) insertFirewall(name, ports string, sourceRanges []string,
 	}
 
 	firewall := &compute.Firewall{
-		Name:    name,
-		Network: prvdr.networkURL(),
+		Name:        name,
+		Network:     prvdr.networkURL(),
+		Description: prvdr.network,
 		Allowed: []*compute.FirewallAllowed{
 			{
 				IPProtocol: "tcp",
@@ -575,12 +562,12 @@ func (prvdr *Provider) firewallPatch(name string,
 
 // Initializes the network for the cluster
 func (prvdr *Provider) createNetwork() error {
-	exists, err := prvdr.networkExists(prvdr.network)
+	networks, err := prvdr.ListNetworks(prvdr.network)
 	if err != nil {
 		return err
 	}
 
-	if exists {
+	if len(networks.Items) > 0 {
 		log.Debug("Network already exists")
 		return nil
 	}

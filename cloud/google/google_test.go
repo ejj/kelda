@@ -30,8 +30,7 @@ func (s *GoogleTestSuite) SetupTest() {
 }
 
 func (s *GoogleTestSuite) TestList() {
-	s.gce.On("ListInstances", "zone-1",
-		"description eq namespace").Return(&compute.InstanceList{
+	s.gce.On("ListInstances", "zone-1", "network").Return(&compute.InstanceList{
 		Items: []*compute.Instance{
 			{
 				MachineType: "machine/split/type-1",
@@ -67,7 +66,7 @@ func (s *GoogleTestSuite) TestListFirewalls() {
 	s.network = "network"
 	s.intFW = "intFW"
 
-	s.gce.On("ListFirewalls").Return(&compute.FirewallList{
+	s.gce.On("ListFirewalls", s.network).Return(&compute.FirewallList{
 		Items: []*compute.Firewall{
 			{
 				Network:    s.networkURL(),
@@ -77,11 +76,6 @@ func (s *GoogleTestSuite) TestListFirewalls() {
 			{
 				Network:    s.networkURL(),
 				Name:       "intFW",
-				TargetTags: []string{"zone-1"},
-			},
-			{
-				Network:    "ignoreMe",
-				Name:       "badNetwork",
 				TargetTags: []string{"zone-1"},
 			},
 			{
@@ -97,7 +91,7 @@ func (s *GoogleTestSuite) TestListFirewalls() {
 	s.Len(fws, 1)
 	s.Equal(fws[0].Name, "shouldReturn")
 
-	s.gce.On("ListFirewalls").Return(nil, errors.New("err")).Once()
+	s.gce.On("ListFirewalls", s.network).Return(nil, errors.New("err")).Once()
 	_, err = s.listFirewalls()
 	s.EqualError(err, "list firewalls: err")
 }
@@ -105,8 +99,7 @@ func (s *GoogleTestSuite) TestListFirewalls() {
 func (s *GoogleTestSuite) TestListBadNetworkInterface() {
 	// Tests that List returns an error when no network interfaces are
 	// configured.
-	s.gce.On("ListInstances", "zone-1",
-		"description eq namespace").Return(&compute.InstanceList{
+	s.gce.On("ListInstances", "zone-1", "network").Return(&compute.InstanceList{
 		Items: []*compute.Instance{
 			{
 				MachineType:       "machine/split/type-1",

@@ -31,7 +31,8 @@ func TestErrors(t *testing.T) {
 	assert.EqualError(t, err, "Get "+inst+"?alt=json: test")
 
 	_, err = c.ListInstances("z", "f")
-	assert.EqualError(t, err, "Get "+zone+"instances?alt=json&filter=f: test")
+	assert.EqualError(t, err, "Get "+zone+
+		"instances?alt=json&filter=description+eq+f: test")
 
 	_, err = c.InsertInstance("z", nil)
 	assert.EqualError(t, err, "Post "+zone+"instances?alt=json: test")
@@ -53,8 +54,9 @@ func TestErrors(t *testing.T) {
 	_, err = c.GetGlobalOperation("o")
 	assert.EqualError(t, err, "Get "+url+"global/operations/o?alt=json: test")
 
-	_, err = c.ListFirewalls()
-	assert.EqualError(t, err, "Get "+url+"global/firewalls?alt=json: test")
+	_, err = c.ListFirewalls("n")
+	assert.EqualError(t, err, "Get "+url+
+		"global/firewalls?alt=json&filter=description+eq+n: test")
 
 	_, err = c.InsertFirewall(nil)
 	assert.EqualError(t, err, "Post "+url+"global/firewalls?alt=json: test")
@@ -65,8 +67,9 @@ func TestErrors(t *testing.T) {
 	_, err = c.DeleteFirewall("f")
 	assert.EqualError(t, err, "Delete "+url+"global/firewalls/f?alt=json: test")
 
-	_, err = c.ListNetworks()
-	assert.EqualError(t, err, "Get "+url+"global/networks?alt=json: test")
+	_, err = c.ListNetworks("n")
+	assert.EqualError(t, err, "Get "+url+
+		"global/networks?alt=json&filter=name+eq+n: test")
 
 	_, err = c.InsertNetwork(nil)
 	assert.EqualError(t, err, "Post "+url+"global/networks?alt=json: test")

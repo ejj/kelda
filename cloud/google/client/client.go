@@ -20,7 +20,7 @@ import (
 // A Client for Google's API. Used for unit testing.
 type Client interface {
 	GetInstance(zone, id string) (*compute.Instance, error)
-	ListInstances(zone, filter string) (*compute.InstanceList, error)
+	ListInstances(zone, description string) (*compute.InstanceList, error)
 	InsertInstance(zone string, instance *compute.Instance) (
 		*compute.Operation, error)
 	DeleteInstance(zone, operation string) (*compute.Operation, error)
@@ -30,12 +30,12 @@ type Client interface {
 		networkInterface string) (*compute.Operation, error)
 	GetZoneOperation(zone, operation string) (*compute.Operation, error)
 	GetGlobalOperation(operation string) (*compute.Operation, error)
-	ListFirewalls() (*compute.FirewallList, error)
+	ListFirewalls(description string) (*compute.FirewallList, error)
 	InsertFirewall(firewall *compute.Firewall) (*compute.Operation, error)
 	PatchFirewall(name string, firewall *compute.Firewall) (
 		*compute.Operation, error)
 	DeleteFirewall(firewall string) (*compute.Operation, error)
-	ListNetworks() (*compute.NetworkList, error)
+	ListNetworks(name string) (*compute.NetworkList, error)
 	InsertNetwork(network *compute.Network) (*compute.Operation, error)
 }
 
@@ -100,14 +100,9 @@ func (ci *client) GetInstance(zone, id string) (*compute.Instance, error) {
 	return ci.gce.Instances.Get(ci.projID, zone, id).Do()
 }
 
-func (ci *client) ListInstances(zone, filter string) (*compute.InstanceList, error) {
+func (ci *client) ListInstances(zone, desc string) (*compute.InstanceList, error) {
 	c.Inc("List Instances")
-	call := ci.gce.Instances.List(ci.projID, zone)
-	if filter != "" {
-		call = call.Filter(filter)
-	}
-
-	return call.Do()
+	return ci.gce.Instances.List(ci.projID, zone).Filter(descFilter(desc)).Do()
 }
 
 func (ci *client) InsertInstance(zone string, instance *compute.Instance) (
@@ -147,9 +142,9 @@ func (ci *client) GetGlobalOperation(operation string) (*compute.Operation,
 	return ci.gce.GlobalOperations.Get(ci.projID, operation).Do()
 }
 
-func (ci *client) ListFirewalls() (*compute.FirewallList, error) {
+func (ci *client) ListFirewalls(description string) (*compute.FirewallList, error) {
 	c.Inc("List Firewalls")
-	return ci.gce.Firewalls.List(ci.projID).Do()
+	return ci.gce.Firewalls.List(ci.projID).Filter(descFilter(description)).Do()
 }
 
 func (ci *client) InsertFirewall(firewall *compute.Firewall) (
@@ -170,12 +165,17 @@ func (ci *client) DeleteFirewall(firewall string) (
 	return ci.gce.Firewalls.Delete(ci.projID, firewall).Do()
 }
 
-func (ci *client) ListNetworks() (*compute.NetworkList, error) {
+func (ci *client) ListNetworks(name string) (*compute.NetworkList, error) {
 	c.Inc("List Networks")
-	return ci.gce.Networks.List(ci.projID).Do()
+	return ci.gce.Networks.List(ci.projID).Filter(
+		fmt.Sprintf("name eq %s", name)).Do()
 }
 
 func (ci *client) InsertNetwork(network *compute.Network) (*compute.Operation, error) {
 	c.Inc("Insert Network")
 	return ci.gce.Networks.Insert(ci.projID, network).Do()
+}
+
+func descFilter(desc string) string {
+	return fmt.Sprintf("description eq %s", desc)
 }

@@ -240,13 +240,13 @@ func (_m *Client) InsertNetwork(network *compute.Network) (*compute.Operation, e
 	return r0, r1
 }
 
-// ListFirewalls provides a mock function with given fields:
-func (_m *Client) ListFirewalls() (*compute.FirewallList, error) {
-	ret := _m.Called()
+// ListFirewalls provides a mock function with given fields: description
+func (_m *Client) ListFirewalls(description string) (*compute.FirewallList, error) {
+	ret := _m.Called(description)
 
 	var r0 *compute.FirewallList
-	if rf, ok := ret.Get(0).(func() *compute.FirewallList); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(string) *compute.FirewallList); ok {
+		r0 = rf(description)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*compute.FirewallList)
@@ -254,8 +254,8 @@ func (_m *Client) ListFirewalls() (*compute.FirewallList, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(description)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -263,13 +263,13 @@ func (_m *Client) ListFirewalls() (*compute.FirewallList, error) {
 	return r0, r1
 }
 
-// ListInstances provides a mock function with given fields: zone, filter
-func (_m *Client) ListInstances(zone string, filter string) (*compute.InstanceList, error) {
-	ret := _m.Called(zone, filter)
+// ListInstances provides a mock function with given fields: zone, description
+func (_m *Client) ListInstances(zone string, description string) (*compute.InstanceList, error) {
+	ret := _m.Called(zone, description)
 
 	var r0 *compute.InstanceList
 	if rf, ok := ret.Get(0).(func(string, string) *compute.InstanceList); ok {
-		r0 = rf(zone, filter)
+		r0 = rf(zone, description)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*compute.InstanceList)
@@ -278,7 +278,7 @@ func (_m *Client) ListInstances(zone string, filter string) (*compute.InstanceLi
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = rf(zone, filter)
+		r1 = rf(zone, description)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -286,13 +286,13 @@ func (_m *Client) ListInstances(zone string, filter string) (*compute.InstanceLi
 	return r0, r1
 }
 
-// ListNetworks provides a mock function with given fields:
-func (_m *Client) ListNetworks() (*compute.NetworkList, error) {
-	ret := _m.Called()
+// ListNetworks provides a mock function with given fields: name
+func (_m *Client) ListNetworks(name string) (*compute.NetworkList, error) {
+	ret := _m.Called(name)
 
 	var r0 *compute.NetworkList
-	if rf, ok := ret.Get(0).(func() *compute.NetworkList); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(string) *compute.NetworkList); ok {
+		r0 = rf(name)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*compute.NetworkList)
@@ -300,8 +300,8 @@ func (_m *Client) ListNetworks() (*compute.NetworkList, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(name)
 	} else {
 		r1 = ret.Error(1)
 	}

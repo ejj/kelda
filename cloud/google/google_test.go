@@ -196,6 +196,20 @@ func TestBoot(t *testing.T) {
 	mc.AssertExpectations(t)
 }
 
+func TestStop(t *testing.T) {
+	mc, gce := getProvider()
+
+	mc.On("DeleteInstance", mock.Anything, mock.Anything).Return(
+		nil, errors.New("err")).Once()
+	err := gce.Stop([]db.Machine{{CloudID: "1"}})
+	assert.EqualError(t, err, "err")
+
+	mc.On("DeleteInstance", "zone-1", "1").Return(nil, nil)
+	mc.On("DeleteInstance", "zone-1", "2").Return(nil, nil)
+	assert.NoError(t, gce.Stop([]db.Machine{{CloudID: "1"}, {CloudID: "2"}}))
+	mc.AssertExpectations(t)
+}
+
 func TestInstanceConfig(t *testing.T) {
 	_, gce := getProvider()
 	cloudConfig := "cloudConfig"

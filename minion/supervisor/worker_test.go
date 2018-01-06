@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/kelda/kelda/db"
@@ -11,6 +13,7 @@ import (
 	"github.com/kelda/kelda/minion/nl"
 	"github.com/kelda/kelda/minion/nl/nlmock"
 	"github.com/kelda/kelda/minion/supervisor/images"
+	"github.com/kelda/kelda/util/str"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/vishvananda/netlink"
@@ -62,8 +65,9 @@ func TestWorker(t *testing.T) {
 	}
 	assert.Equal(t, exp, ctx.fd.running())
 
-	execExp := ovsExecArgs(ip, leaderIP)
-	assert.Equal(t, execExp, ctx.execs)
+	assert.Equal(t, [][]string{
+		[]string{"cfgOvn", "1.2.3.4", "5.6.7.8"},
+	}, ctx.execs)
 }
 
 func TestSetupWorker(t *testing.T) {
@@ -118,6 +122,96 @@ func TestCfgGateway(t *testing.T) {
 	mk.AssertCalled(t, "AddrAdd", mock.Anything, ip)
 }
 
+func TestCfgOVN(t *testing.T) {
+	type mockSetCall struct {
+		args   []string
+		called bool
+	}
+	expGetArgs := []string{"--if-exists", "get", "Open_vSwitch", ".",
+		"external_ids:ovn-remote",
+		"external_ids:ovn-encap-ip",
+		"external_ids:ovn-encap-type",
+		"external_ids:api_server",
+		"external_ids:system-id"}
+
+	// setupExec sets up the mock environment for execRun. It configures
+	// execRun such that if the configuration get command is called, the
+	// getResp is returned.  It also returns a pointer to *mockSetCall, whose
+	// contents will be updated if the configuration set command is called.
+	setupExec := func(getResp string) *mockSetCall {
+		var result mockSetCall
+		execRun = func(name string, args ...string) ([]byte, error) {
+			switch {
+			case name == "ovs-vsctl" && reflect.DeepEqual(args, expGetArgs):
+				return []byte(getResp), nil
+			case name == "ovs-vsctl" && str.SliceContains(args, "set"):
+				result.called = true
+				result.args = args
+				return []byte("ignored"), nil
+			default:
+				t.Errorf("Unexpected exec call: %v", append([]string{name}, args...))
+				return nil, errors.New("unreached")
+			}
+		}
+		return &result
+	}
+
+	myIP := "ip"
+	leaderIP := "leader"
+
+	// Test that if the values have not yet been set, set is called.
+	result := setupExec("\n\n\n\n\n")
+	assert.NoError(t, cfgOVNImpl(myIP, leaderIP))
+	assert.True(t, result.called)
+	assert.Equal(t, ovsExecSetArgs(myIP, leaderIP), result.args)
+
+	// Test that if the values are already correct, set is not called.
+	getResp := fmt.Sprintf(`"tcp:%[2]s:6640"
+%[1]q
+stt
+"http://%[2]s:9000"
+%[1]q
+`, myIP, leaderIP)
+	result = setupExec(getResp)
+	assert.NoError(t, cfgOVNImpl(myIP, leaderIP))
+	assert.False(t, result.called)
+
+	// Test that if the leader IP changes, set is called with the new IP.
+	leaderIP = "leader2"
+	result = setupExec(getResp)
+	assert.NoError(t, cfgOVNImpl(myIP, leaderIP))
+	assert.True(t, result.called)
+	assert.Equal(t, ovsExecSetArgs(myIP, leaderIP), result.args)
+}
+
+func TestCfgOVNErrors(t *testing.T) {
+	setupExec := func(getShouldError, setShouldError bool) {
+		execRun = func(name string, args ...string) ([]byte, error) {
+			switch {
+			case str.SliceContains(args, "get"):
+				if getShouldError {
+					return nil, assert.AnError
+				}
+				return nil, nil
+			case str.SliceContains(args, "set"):
+				if setShouldError {
+					return nil, assert.AnError
+				}
+				return nil, nil
+			default:
+				t.Errorf("Unexpected exec call: %v", append([]string{name}, args...))
+				return nil, errors.New("unreached")
+			}
+		}
+	}
+
+	setupExec(true, true)
+	assert.True(t, strings.HasPrefix(cfgOVNImpl("", "").Error(), "get OVN config"))
+
+	setupExec(false, true)
+	assert.True(t, strings.HasPrefix(cfgOVNImpl("", "").Error(), "set OVN config"))
+}
+
 func setupArgs() [][]string {
 	vsctl := []string{
 		"ovs-vsctl", "add-br", "kelda-int",
@@ -128,15 +222,14 @@ func setupArgs() [][]string {
 	return [][]string{vsctl, gateway}
 }
 
-func ovsExecArgs(ip, leader string) [][]string {
-	vsctl := []string{"ovs-vsctl", "set", "Open_vSwitch", ".",
+func ovsExecSetArgs(ip, leader string) []string {
+	return []string{"set", "Open_vSwitch", ".",
 		fmt.Sprintf("external_ids:ovn-remote=\"tcp:%s:6640\"", leader),
-		fmt.Sprintf("external_ids:ovn-encap-ip=%s", ip),
-		"external_ids:ovn-encap-type=\"stt\"",
+		fmt.Sprintf("external_ids:ovn-encap-ip=%q", ip),
+		"external_ids:ovn-encap-type=stt",
 		fmt.Sprintf("external_ids:api_server=\"http://%s:9000\"", leader),
-		fmt.Sprintf("external_ids:system-id=\"%s\"", ip),
+		fmt.Sprintf("external_ids:system-id=%q", ip),
 	}
-	return [][]string{vsctl}
 }
 
 func etcdArgsWorker(etcdIPs []string) []string {

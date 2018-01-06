@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/kelda/kelda/db"
+	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/ipdef"
 	"github.com/kelda/kelda/minion/nl"
 	"github.com/kelda/kelda/minion/supervisor/images"
 	"github.com/kelda/kelda/util"
-	"github.com/kelda/kelda/util/str"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -21,8 +21,22 @@ func runWorker() {
 }
 
 func setupWorker() {
-	run(images.Ovsdb, "ovsdb-server")
-	run(images.Ovsvswitchd, "ovs-vswitchd")
+	desiredContainers := []docker.RunOptions{
+		{
+			Name:        images.Ovsdb,
+			Image:       ovsImage,
+			Args:        []string{"ovsdb-server"},
+			VolumesFrom: []string{"minion"},
+		},
+		{
+			Name:        images.Ovsvswitchd,
+			Image:       ovsImage,
+			Args:        []string{"ovs-vswitchd"},
+			Privileged:  true,
+			VolumesFrom: []string{"minion"},
+		},
+	}
+	joinContainers(desiredContainers)
 
 	for {
 		err := setupBridge()
@@ -63,48 +77,88 @@ func runWorkerOnce() {
 
 	etcdIPs := etcdRow.EtcdIPs
 	leaderIP := etcdRow.LeaderIP
-	IP := minion.PrivateIP
+	ip := minion.PrivateIP
 
-	if !str.SliceEq(oldEtcdIPs, etcdIPs) {
-		c.Inc("Reset Etcd")
-		Remove(images.Etcd)
+	desiredContainers := []docker.RunOptions{
+		{
+			Name:        images.Ovsdb,
+			Image:       ovsImage,
+			Args:        []string{"ovsdb-server"},
+			VolumesFrom: []string{"minion"},
+		},
+		{
+			Name:        images.Ovsvswitchd,
+			Image:       ovsImage,
+			Args:        []string{"ovs-vswitchd"},
+			VolumesFrom: []string{"minion"},
+			Privileged:  true,
+		},
+	}
+	if len(etcdIPs) != 0 {
+		desiredContainers = append(desiredContainers, etcdContainer(
+			fmt.Sprintf("--initial-cluster=%s", initialClusterString(etcdIPs)),
+			"--heartbeat-interval="+etcdHeartbeatInterval,
+			"--election-timeout="+etcdElectionTimeout,
+			"--proxy=on"))
 	}
 
-	oldEtcdIPs = etcdIPs
-
-	run(images.Etcd, "etcd",
-		fmt.Sprintf("--initial-cluster=%s", initialClusterString(etcdIPs)),
-		"--heartbeat-interval="+etcdHeartbeatInterval,
-		"--election-timeout="+etcdElectionTimeout,
-		"--proxy=on")
-
-	run(images.Ovsdb, "ovsdb-server")
-	run(images.Ovsvswitchd, "ovs-vswitchd")
-
-	if leaderIP == "" || IP == "" {
-		return
+	if ip != "" && leaderIP != "" {
+		if err := cfgOVN(ip, leaderIP); err == nil {
+			desiredContainers = append(desiredContainers, docker.RunOptions{
+				Name:        images.Ovncontroller,
+				Image:       ovsImage,
+				Args:        []string{"ovn-controller"},
+				VolumesFrom: []string{"minion"},
+			})
+		} else {
+			log.WithError(err).Error("Failed to configure OVN")
+		}
 	}
-	c.Inc("Update OVS IPs")
 
-	err := execRun("ovs-vsctl", "set", "Open_vSwitch", ".",
-		fmt.Sprintf("external_ids:ovn-remote=\"tcp:%s:6640\"", leaderIP),
-		fmt.Sprintf("external_ids:ovn-encap-ip=%s", IP),
-		fmt.Sprintf("external_ids:ovn-encap-type=\"%s\"", tunnelingProtocol),
-		fmt.Sprintf("external_ids:api_server=\"http://%s:9000\"", leaderIP),
-		fmt.Sprintf("external_ids:system-id=\"%s\"", IP))
+	joinContainers(desiredContainers)
+}
+
+func cfgOVNImpl(myIP, leaderIP string) error {
+	// The values in the conf map must match the exact output of `ovs-vsctl get`.
+	// Therefore, although most of the values are quoted, ovn-encap-type
+	// is not.
+	conf := []struct{ key, val string }{
+		{"external_ids:ovn-remote", fmt.Sprintf(`"tcp:%s:6640"`, leaderIP)},
+		{"external_ids:ovn-encap-ip", fmt.Sprintf("%q", myIP)},
+		{"external_ids:ovn-encap-type", tunnelingProtocol},
+		{"external_ids:api_server", fmt.Sprintf(`"http://%s:9000"`, leaderIP)},
+		{"external_ids:system-id", fmt.Sprintf("%q", myIP)},
+	}
+
+	var expOutput string
+	getCmd := []string{"--if-exists", "get", "Open_vSwitch", "."}
+	setCmd := []string{"set", "Open_vSwitch", "."}
+	for _, kv := range conf {
+		expOutput += kv.val + "\n"
+		getCmd = append(getCmd, kv.key)
+		setCmd = append(setCmd, fmt.Sprintf("%s=%s", kv.key, kv.val))
+	}
+
+	actualOutput, err := execRun("ovs-vsctl", getCmd...)
 	if err != nil {
-		log.WithError(err).Warnf("Failed to exec in %s.", images.Ovsvswitchd)
-		return
+		return fmt.Errorf("get OVN config: %s", err)
 	}
 
-	run(images.Ovncontroller, "ovn-controller")
+	if string(actualOutput) != expOutput {
+		c.Inc("Update OVN config")
+		if _, err = execRun("ovs-vsctl", setCmd...); err != nil {
+			return fmt.Errorf("set OVN config: %s", err)
+		}
+	}
+	return nil
 }
 
 func setupBridge() error {
 	gwMac := ipdef.IPToMac(ipdef.GatewayIP)
-	return execRun("ovs-vsctl", "add-br", ipdef.KeldaBridge,
+	_, err := execRun("ovs-vsctl", "add-br", ipdef.KeldaBridge,
 		"--", "set", "bridge", ipdef.KeldaBridge, "fail_mode=secure",
 		fmt.Sprintf("other_config:hwaddr=\"%s\"", gwMac))
+	return err
 }
 
 func cfgGatewayImpl(name string, ip net.IPNet) error {
@@ -125,3 +179,4 @@ func cfgGatewayImpl(name string, ip net.IPNet) error {
 }
 
 var cfgGateway = cfgGatewayImpl
+var cfgOVN = cfgOVNImpl

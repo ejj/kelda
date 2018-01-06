@@ -29,13 +29,18 @@ func initTest() *testCtx {
 		return nil
 	})
 
-	execRun = func(name string, args ...string) error {
+	execRun = func(name string, args ...string) ([]byte, error) {
 		ctx.execs = append(ctx.execs, append([]string{name}, args...))
-		return nil
+		return nil, nil
 	}
 
 	cfgGateway = func(name string, ip net.IPNet) error {
 		execRun("cfgGateway", ip.String())
+		return nil
+	}
+
+	cfgOVN = func(myIP, leaderIP string) error {
+		execRun("cfgOvn", myIP, leaderIP)
 		return nil
 	}
 

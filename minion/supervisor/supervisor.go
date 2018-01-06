@@ -1,16 +1,16 @@
 package supervisor
 
 import (
-	"fmt"
 	"os/exec"
 	"strings"
 
 	"github.com/kelda/kelda/counter"
 	"github.com/kelda/kelda/db"
+	"github.com/kelda/kelda/join"
 	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/supervisor/images"
+	"github.com/kelda/kelda/util/str"
 
-	dkc "github.com/fsouza/go-dockerclient"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -29,15 +29,10 @@ var imageMap = map[string]string{
 	images.Registry:      "registry:2.6.2",
 }
 
-const etcdHeartbeatInterval = "500"
-const etcdElectionTimeout = "5000"
-
 var c = counter.New("Supervisor")
 
 var conn db.Conn
 var dk docker.Client
-var oldEtcdIPs []string
-var oldIP string
 
 // Run blocks implementing the supervisor module.
 func Run(_conn db.Conn, _dk docker.Client, role db.Role) {
@@ -61,77 +56,85 @@ func Run(_conn db.Conn, _dk docker.Client, role db.Role) {
 	}
 }
 
-// run calls out to the Docker client to run the container specified by name.
-func run(name string, args ...string) {
-	c.Inc("Docker Run " + name)
-	isRunning, err := dk.IsRunning(name)
+const containerTypeKey = "containerType"
+const sysContainerVal = "keldaSystemContainer"
+
+// joinContainers boots and stops system containers so that only the
+// desiredContainers are running. Note that only containers with the
+// keldaSystemContainer tag are considered. Other containers, such as blueprint
+// containers, or containers manually created on the host, are ignored.
+func joinContainers(desiredContainers []docker.RunOptions) {
+	actual, err := dk.List(map[string][]string{
+		"label": {containerTypeKey + "=" + sysContainerVal}})
 	if err != nil {
-		log.WithError(err).Warnf("could not check running status of %s.", name)
-		return
-	}
-	if isRunning {
+		log.WithError(err).Error("Failed to list current containers")
 		return
 	}
 
-	ro := docker.RunOptions{
-		Name:        name,
-		Image:       imageMap[name],
-		Args:        args,
-		NetworkMode: "host",
-		VolumesFrom: []string{"minion"},
-		Env:         map[string]string{},
-	}
+	_, toBoot, toStop := join.Join(desiredContainers, actual, syncContainersScore)
 
-	if name == images.Ovsvswitchd {
-		ro.Privileged = true
-	}
-
-	// Run etcd with a data directory that's mounted on the host disk.
-	// This way, if the container restarts, its previous state will still be
-	// available.
-	if name == images.Etcd {
-		etcdDataDir := "/etcd-data"
-		ro.Mounts = []dkc.HostMount{
-			{
-				Target: etcdDataDir,
-				Source: "/var/lib/etcd",
-				Type:   "bind",
-			},
+	for _, intf := range toStop {
+		// Docker prepends a leading "/" to container names.
+		name := strings.TrimPrefix(intf.(docker.Container).Name, "/")
+		log.WithField("name", name).Info("Stopping system container")
+		c.Inc("Docker Remove " + name)
+		if err := dk.Remove(name); err != nil {
+			log.WithError(err).WithField("name", name).
+				Error("Failed to remove container")
 		}
-		ro.Env["ETCD_DATA_DIR"] = etcdDataDir
 	}
 
-	log.Infof("Start Container: %s", name)
-	_, err = dk.Run(ro)
-	if err != nil {
-		log.WithError(err).Warnf("Failed to run %s.", name)
+	for _, intf := range toBoot {
+		ro := intf.(docker.RunOptions)
+		log.WithField("name", ro.Name).Info("Booting system container")
+		c.Inc("Docker Run " + ro.Name)
+
+		if ro.Labels == nil {
+			ro.Labels = map[string]string{}
+		}
+		ro.Labels[containerTypeKey] = sysContainerVal
+		ro.NetworkMode = "host"
+
+		if _, err := dk.Run(ro); err != nil {
+			log.WithError(err).WithField("name", ro.Name).
+				Error("Failed to run container")
+		}
 	}
 }
 
-// Remove removes the docker container specified by name.
-func Remove(name string) {
-	log.WithField("name", name).Info("Removing container")
-	err := dk.Remove(name)
-	if err != nil && err != docker.ErrNoSuchContainer {
-		log.WithError(err).Warnf("Failed to remove %s.", name)
-	}
-}
+// For simplicity, syncContainersScore only considers the container attributes
+// that might change. For example, VolumesFrom, NetworkMode, and
+// FilepathToContent aren't considered.
+func syncContainersScore(left, right interface{}) int {
+	ro := left.(docker.RunOptions)
+	dkc := right.(docker.Container)
 
-func initialClusterString(etcdIPs []string) string {
-	var initialCluster []string
-	for _, ip := range etcdIPs {
-		initialCluster = append(initialCluster,
-			fmt.Sprintf("%s=http://%s:2380", nodeName(ip), ip))
+	if ro.Image != dkc.Image {
+		return -1
 	}
-	return strings.Join(initialCluster, ",")
-}
 
-func nodeName(IP string) string {
-	return fmt.Sprintf("master-%s", IP)
+	for key, value := range ro.Env {
+		if dkc.Env[key] != value {
+			return -1
+		}
+	}
+
+	// Depending on the container, the command in the database could be
+	// either the command plus it's arguments, or just it's arguments.  To
+	// handle that case, we check both.
+	cmd1 := dkc.Args
+	cmd2 := append([]string{dkc.Path}, dkc.Args...)
+	if len(ro.Args) != 0 &&
+		!str.SliceEq(ro.Args, cmd1) &&
+		!str.SliceEq(ro.Args, cmd2) {
+		return -1
+	}
+
+	return 0
 }
 
 // execRun() is a global variable so that it can be mocked out by the unit tests.
-var execRun = func(name string, arg ...string) error {
+var execRun = func(name string, arg ...string) ([]byte, error) {
 	c.Inc(name)
-	return exec.Command(name, arg...).Run()
+	return exec.Command(name, arg...).Output()
 }

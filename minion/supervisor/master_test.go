@@ -11,7 +11,7 @@ import (
 )
 
 func TestMaster(t *testing.T) {
-	ctx := initTest(db.Master)
+	ctx := initTest()
 	ip := "1.2.3.4"
 	etcdIPs := []string{""}
 	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
@@ -24,7 +24,7 @@ func TestMaster(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runMasterOnce()
 
 	exp := map[string][]string{
 		images.Etcd:     etcdArgsMaster(ip, etcdIPs),
@@ -54,7 +54,7 @@ func TestMaster(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runMasterOnce()
 
 	exp = map[string][]string{
 		images.Etcd:      etcdArgsMaster(ip, etcdIPs),
@@ -77,7 +77,7 @@ func TestMaster(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runMasterOnce()
 
 	exp = map[string][]string{
 		images.Etcd:     etcdArgsMaster(ip, etcdIPs),
@@ -94,7 +94,7 @@ func TestMaster(t *testing.T) {
 }
 
 func TestEtcdAdd(t *testing.T) {
-	ctx := initTest(db.Master)
+	ctx := initTest()
 	ip := "1.2.3.4"
 	etcdIPs := []string{ip, "5.6.7.8"}
 	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
@@ -107,7 +107,7 @@ func TestEtcdAdd(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runMasterOnce()
 
 	exp := map[string][]string{
 		images.Etcd:     etcdArgsMaster(ip, etcdIPs),
@@ -130,7 +130,7 @@ func TestEtcdAdd(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runMasterOnce()
 
 	exp = map[string][]string{
 		images.Etcd:     etcdArgsMaster(ip, etcdIPs),
@@ -144,7 +144,7 @@ func TestEtcdAdd(t *testing.T) {
 }
 
 func TestEtcdRemove(t *testing.T) {
-	ctx := initTest(db.Master)
+	ctx := initTest()
 	ip := "1.2.3.4"
 	etcdIPs := []string{ip, "5.6.7.8"}
 	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
@@ -157,7 +157,7 @@ func TestEtcdRemove(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runMasterOnce()
 
 	exp := map[string][]string{
 		images.Etcd:     etcdArgsMaster(ip, etcdIPs),
@@ -180,7 +180,7 @@ func TestEtcdRemove(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runMasterOnce()
 
 	exp = map[string][]string{
 		images.Etcd:     etcdArgsMaster(ip, etcdIPs),

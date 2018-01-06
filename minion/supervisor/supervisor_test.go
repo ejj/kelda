@@ -11,16 +11,13 @@ type testCtx struct {
 	fd    fakeDocker
 	execs [][]string
 
-	conn  db.Conn
-	trigg db.Trigger
+	conn db.Conn
 }
 
-func initTest(r db.Role) *testCtx {
+func initTest() *testCtx {
 	conn = db.New()
 	md, _dk := docker.NewMock()
-	ctx := testCtx{fakeDocker{_dk, md}, nil, conn,
-		conn.Trigger(db.MinionTable, db.EtcdTable)}
-	role = r
+	ctx := testCtx{fakeDocker{_dk, md}, nil, conn}
 	dk = ctx.fd.Client
 
 	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
@@ -43,20 +40,6 @@ func initTest(r db.Role) *testCtx {
 	}
 
 	return &ctx
-}
-
-func (ctx *testCtx) run() {
-	ctx.execs = nil
-	select {
-	case <-ctx.trigg.C:
-	}
-
-	switch role {
-	case db.Master:
-		runMasterOnce()
-	case db.Worker:
-		runWorkerOnce()
-	}
 }
 
 type fakeDocker struct {

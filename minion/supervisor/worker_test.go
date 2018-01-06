@@ -19,7 +19,7 @@ import (
 )
 
 func TestWorker(t *testing.T) {
-	ctx := initTest(db.Worker)
+	ctx := initTest()
 	ip := "1.2.3.4"
 	etcdIPs := []string{ip}
 	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
@@ -32,7 +32,7 @@ func TestWorker(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runWorkerOnce()
 
 	exp := map[string][]string{
 		images.Etcd:        etcdArgsWorker(etcdIPs),
@@ -59,7 +59,7 @@ func TestWorker(t *testing.T) {
 		view.Commit(e)
 		return nil
 	})
-	ctx.run()
+	runWorkerOnce()
 
 	exp = map[string][]string{
 		images.Etcd:          etcdArgsWorker(etcdIPs),
@@ -80,7 +80,7 @@ func TestWorker(t *testing.T) {
 }
 
 func TestSetupWorker(t *testing.T) {
-	ctx := initTest(db.Worker)
+	ctx := initTest()
 
 	setupWorker()
 

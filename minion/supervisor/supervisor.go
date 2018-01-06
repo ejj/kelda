@@ -36,15 +36,13 @@ var c = counter.New("Supervisor")
 
 var conn db.Conn
 var dk docker.Client
-var role db.Role
 var oldEtcdIPs []string
 var oldIP string
 
 // Run blocks implementing the supervisor module.
-func Run(_conn db.Conn, _dk docker.Client, _role db.Role) {
+func Run(_conn db.Conn, _dk docker.Client, role db.Role) {
 	conn = _conn
 	dk = _dk
-	role = _role
 
 	imageSet := map[string]struct{}{}
 	for _, image := range imageMap {

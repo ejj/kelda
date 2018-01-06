@@ -328,7 +328,8 @@ func containersToTargets(containers []db.Container, ips map[string]string) []log
 			cmds: nil,
 		}
 		for _, cmd := range containerCmds {
-			cmd.cmd = fmt.Sprintf(cmd.cmd, c.DockerID)
+			// TODO
+			cmd.cmd = fmt.Sprintf(cmd.cmd, c.PodID)
 			t.cmds = append(t.cmds, cmd)
 		}
 		targets = append(targets, t)

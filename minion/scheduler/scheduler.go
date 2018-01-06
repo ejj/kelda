@@ -6,27 +6,16 @@
 package scheduler
 
 import (
-	"time"
-
 	"github.com/kelda/kelda/counter"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/docker"
-	"github.com/kelda/kelda/minion/network/plugin"
 	"github.com/kelda/kelda/util"
-	log "github.com/sirupsen/logrus"
 )
 
 var c = counter.New("Scheduler")
 
 // Run blocks implementing the scheduler module.
 func Run(conn db.Conn, dk docker.Client) {
-	bootWait(conn)
-
-	err := dk.ConfigureNetwork(plugin.NetworkName)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to configure network plugin")
-	}
-
 	loopLog := util.NewEventTimer("Scheduler")
 	trig := conn.TriggerTick(60, db.MinionTable, db.ContainerTable,
 		db.PlacementTable, db.EtcdTable, db.ImageTable).C
@@ -34,25 +23,9 @@ func Run(conn db.Conn, dk docker.Client) {
 		loopLog.LogStart()
 		minion := conn.MinionSelf()
 
-		if minion.Role == db.Worker {
-			runWorker(conn, dk, minion.PrivateIP, minion.PublicIP)
-		} else if minion.Role == db.Master {
+		if minion.Role == db.Master {
 			runMaster(conn)
 		}
 		loopLog.LogEnd()
-	}
-}
-
-func bootWait(conn db.Conn) {
-	waitFn := isMasterReady
-	if conn.MinionSelf().Role == db.Worker {
-		waitFn = isWorkerReady
-	}
-
-	err := util.BackoffWaitFor(func() bool {
-		return waitFn(conn)
-	}, 30*time.Second, 1*time.Hour)
-	if err != nil {
-		panic("timed out waiting for scheduler module to start")
 	}
 }

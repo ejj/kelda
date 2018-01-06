@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/kelda/kelda/blueprint"
-	"github.com/kelda/kelda/util"
 )
 
 // A Container row is created for each container specified by the policy.  Each row will
@@ -19,7 +18,7 @@ type Container struct {
 	Minion            string                              `json:",omitempty"`
 	EndpointID        string                              `json:",omitempty"`
 	BlueprintID       string                              `json:",omitempty"`
-	DockerID          string                              `json:",omitempty"`
+	PodID             string                              `json:",omitempty"`
 	Status            string                              `json:",omitempty"`
 	Command           []string                            `json:",omitempty"`
 	Env               map[string]blueprint.ContainerValue `json:",omitempty"`
@@ -27,8 +26,9 @@ type Container struct {
 	Hostname          string                              `json:",omitempty"`
 	Created           time.Time                           `json:","`
 
+	// TODO: Consider renaming Image to FriendlyImage to convey that the field
+	// doesn't contain the actual built image if it's built by Kelda.
 	Image      string `json:",omitempty"`
-	ImageID    string `json:",omitempty"`
 	Dockerfile string `json:"-"`
 }
 
@@ -88,14 +88,8 @@ func (c Container) String() string {
 	cmdStr := strings.Join(append([]string{"run", c.Image}, c.Command...), " ")
 	tags := []string{cmdStr}
 
-	if c.ImageID != "" {
-		id := util.ShortUUID(c.ImageID)
-		tags = append(tags, fmt.Sprintf("ImageID: %s", id))
-	}
-
-	if c.DockerID != "" {
-		id := util.ShortUUID(c.DockerID)
-		tags = append(tags, fmt.Sprintf("DockerID: %s", id))
+	if c.PodID != "" {
+		tags = append(tags, fmt.Sprintf("PodID: %s", c.PodID))
 	}
 
 	if c.Minion != "" {

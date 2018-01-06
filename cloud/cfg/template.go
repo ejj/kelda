@@ -58,6 +58,10 @@ initialize_minion() {
 	# unable to write to the directory.
 	install -d -o kelda -m 755 {{.TLSDir}}
 
+	mkdir -p /var/lib/kubelet
+	mount -o bind /var/lib/kubelet /var/lib/kubelet/
+	mount --make-shared /var/lib/kubelet/
+
 	# Create the etcd data directory.
 	mkdir -p /var/lib/etcd
 

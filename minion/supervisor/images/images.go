@@ -18,4 +18,6 @@ const (
 
 	// Registry is the name of the registry container.
 	Registry = "registry"
+
+	KubeAPIServer = "kube-apiserver"
 )

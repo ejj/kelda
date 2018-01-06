@@ -2,11 +2,15 @@ package supervisor
 
 import (
 	"fmt"
+	"strings"
 
+	tlsIO "github.com/kelda/kelda/connection/tls/io"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/supervisor/images"
 	"github.com/kelda/kelda/util"
+
+	dkc "github.com/fsouza/go-dockerclient"
 )
 
 func runMaster() {
@@ -45,6 +49,12 @@ func runMasterOnce() {
 	}
 
 	if minion.PrivateIP != "" && len(etcdIPs) != 0 {
+		var etcdServerAddrs []string
+		for _, ip := range etcdIPs {
+			etcdServerAddrs = append(etcdServerAddrs, fmt.Sprintf("http://%s:2379", ip))
+		}
+		etcdServersStr := strings.Join(etcdServerAddrs, ",")
+
 		ip := minion.PrivateIP
 		desiredContainers = append(desiredContainers, etcdContainer(
 			fmt.Sprintf("--name=master-%s", ip),
@@ -55,7 +65,49 @@ func runMasterOnce() {
 			"--listen-client-urls=http://0.0.0.0:2379",
 			"--heartbeat-interval="+etcdHeartbeatInterval,
 			"--initial-cluster-state=new",
-			"--election-timeout="+etcdElectionTimeout))
+			"--election-timeout="+etcdElectionTimeout,
+		), docker.RunOptions{
+			Name:        images.KubeAPIServer,
+			Image:       kubeImage,
+			NetworkMode: "host",
+			Mounts: []dkc.HostMount{
+				{
+					Source: tlsIO.MinionTLSDir,
+					Target: tlsIO.MinionTLSDir,
+					Type:   "bind",
+				},
+			},
+			Args: []string{
+				"kube-apiserver", "--admission-control=AlwaysAdmit",
+				"--advertise-address=" + ip, "--etcd-servers=" + etcdServersStr,
+				"--tls-cert-file", tlsIO.SignedCertPath(tlsIO.MinionTLSDir),
+				"--tls-private-key-file", tlsIO.SignedKeyPath(tlsIO.MinionTLSDir),
+				"--kubelet-client-certificate", tlsIO.SignedCertPath(tlsIO.MinionTLSDir),
+				"--kubelet-client-key", tlsIO.SignedKeyPath(tlsIO.MinionTLSDir),
+				"--insecure-bind-address", "0.0.0.0", // TODO: Only serve insecurely on localhost.
+			},
+		}, docker.RunOptions{
+			Name:        "kube-controller-manager",
+			Image:       kubeImage,
+			NetworkMode: "host",
+			Mounts: []dkc.HostMount{
+				{
+					Source: tlsIO.MinionTLSDir,
+					Target: tlsIO.MinionTLSDir,
+					Type:   "bind",
+				},
+			},
+			Args: []string{
+				"kube-controller-manager", "--master", "http://localhost:8080",
+			},
+		}, docker.RunOptions{
+			Name:        "kube-scheduler",
+			Image:       kubeImage,
+			NetworkMode: "host",
+			Args: []string{
+				"kube-scheduler", "--master", "http://localhost:8080",
+			},
+		})
 	}
 
 	if etcdRow.Leader {

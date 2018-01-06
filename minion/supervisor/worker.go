@@ -3,8 +3,10 @@ package supervisor
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
+	tlsIO "github.com/kelda/kelda/connection/tls/io"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/ipdef"
@@ -12,6 +14,7 @@ import (
 	"github.com/kelda/kelda/minion/supervisor/images"
 	"github.com/kelda/kelda/util"
 
+	dkc "github.com/fsouza/go-dockerclient"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -113,6 +116,58 @@ func runWorkerOnce() {
 		} else {
 			log.WithError(err).Error("Failed to configure OVN")
 		}
+
+		user := "system:node:" + ip
+		kubeletCmds := []string{
+			fmt.Sprintf("kubectl config set-cluster kelda --server=http://%s:8080 "+
+				"--certificate-authority=%s --embed-certs=true",
+				leaderIP, tlsIO.CACertPath(tlsIO.MinionTLSDir)),
+			fmt.Sprintf("kubectl config set-credentials %s --client-certificate "+
+				"%s --client-key %s --embed-certs",
+				user, tlsIO.SignedCertPath(tlsIO.MinionTLSDir),
+				tlsIO.SignedKeyPath(tlsIO.MinionTLSDir)),
+			fmt.Sprintf("kubectl config set-context default --cluster=kelda "+
+				"--user %s", user),
+			"kubectl config use-context default",
+			"kubelet --pod-cidr=10.0.0.0/24 --network-plugin=kubenet " +
+				"--runtime-cgroups=/systemd/system.slice --kubelet-cgroups=/systemd/system.slice " +
+				"--cgroups-per-qos=false --enforce-node-allocatable=\"\" --kubeconfig ~/.kube/config",
+		}
+		desiredContainers = append(desiredContainers, docker.RunOptions{
+			PidMode:     "host",
+			Name:        "kubelet",
+			Image:       kubeImage,
+			NetworkMode: "host",
+			Privileged:  true,
+			Mounts: []dkc.HostMount{
+				{
+					Source: "/dev",
+					Target: "/dev",
+					Type:   "bind",
+				}, {
+					Source: "/sys",
+					Target: "/syso",
+					Type:   "bind",
+				}, {
+					Source: "/var/run",
+					Target: "/var/run",
+					Type:   "bind",
+				}, {
+					Source: "/var/lib/docker",
+					Target: "/var/lib/docker",
+					Type:   "bind",
+				}, {
+					Source: "/var/lib/kubelet/",
+					Target: "/var/lib/kubelet",
+					Type:   "bind",
+				}, {
+					Source: tlsIO.MinionTLSDir,
+					Target: tlsIO.MinionTLSDir,
+					Type:   "bind",
+				},
+			},
+			Args: []string{"sh", "-c", strings.Join(kubeletCmds, " && ")},
+		})
 	}
 
 	joinContainers(desiredContainers)

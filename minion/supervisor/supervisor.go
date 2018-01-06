@@ -15,6 +15,7 @@ import (
 )
 
 const ovsImage = "keldaio/ovs"
+const kubeImage = "gcr.io/google_containers/hyperkube-amd64:v1.9.1"
 
 // The tunneling protocol to use between machines.
 // "stt" and "geneve" are supported.
@@ -27,6 +28,9 @@ var imageMap = map[string]string{
 	images.Ovsdb:         ovsImage,
 	images.Ovsvswitchd:   ovsImage,
 	images.Registry:      "registry:2.6.2",
+	images.KubeAPIServer: kubeImage,
+	// TODO: Add other Kube images, and think through whether this map is
+	// actually useful.
 }
 
 var c = counter.New("Supervisor")

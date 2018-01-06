@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/kelda/kelda/api"
@@ -169,7 +168,7 @@ func (s server) queryFromDaemon(table db.TableType) (
 
 	switch table {
 	case db.ContainerTable:
-		return s.getClusterContainers(leaderClient)
+		return leaderClient.QueryContainers()
 	case db.ConnectionTable:
 		return leaderClient.QueryConnections()
 	case db.LoadBalancerTable:
@@ -284,88 +283,6 @@ func (s server) Deploy(cts context.Context, deployReq *pb.DeployRequest) (
 func (s server) Version(_ context.Context, _ *pb.VersionRequest) (
 	*pb.VersionReply, error) {
 	return &pb.VersionReply{Version: version.Version}, nil
-}
-
-func (s server) getClusterContainers(leaderClient client.Client) (interface{}, error) {
-	leaderContainers, err := leaderClient.QueryContainers()
-	if err != nil {
-		return nil, err
-	}
-
-	workerContainers, err := queryWorkers(s.conn.SelectFromMachine(nil),
-		s.clientCreds)
-	if err != nil {
-		return nil, err
-	}
-
-	return updateLeaderContainerAttrs(leaderContainers, workerContainers), nil
-}
-
-type queryContainersResponse struct {
-	containers []db.Container
-	err        error
-}
-
-// queryWorkers gets a client for all worker machines and returns a list of
-// `db.Container`s on these machines.
-func queryWorkers(machines []db.Machine, creds connection.Credentials) (
-	[]db.Container, error) {
-
-	var wg sync.WaitGroup
-	queryResponses := make(chan queryContainersResponse, len(machines))
-	for _, m := range machines {
-		if m.PublicIP == "" || m.Role != db.Worker || m.Status != db.Connected {
-			continue
-		}
-
-		wg.Add(1)
-		go func(m db.Machine) {
-			defer wg.Done()
-			var qContainers []db.Container
-			client, err := newClient(api.RemoteAddress(m.PublicIP), creds)
-			if err == nil {
-				defer client.Close()
-				qContainers, err = client.QueryContainers()
-			}
-			queryResponses <- queryContainersResponse{qContainers, err}
-		}(m)
-	}
-
-	wg.Wait()
-	close(queryResponses)
-
-	var containers []db.Container
-	for resp := range queryResponses {
-		if resp.err != nil {
-			return nil, resp.err
-		}
-		containers = append(containers, resp.containers...)
-	}
-	return containers, nil
-}
-
-// updateLeaderContainerAttrs updates the containers described by the leader with
-// the worker-only attributes.
-func updateLeaderContainerAttrs(lContainers []db.Container, wContainers []db.Container) (
-	allContainers []db.Container) {
-
-	// Map BlueprintID to db.Container for a hash join.
-	cMap := make(map[string]db.Container)
-	for _, wc := range wContainers {
-		cMap[wc.BlueprintID] = wc
-	}
-
-	// If we are able to match a worker container to a leader container, then we
-	// copy the worker-only attributes to the leader view.
-	for _, lc := range lContainers {
-		if wc, ok := cMap[lc.BlueprintID]; ok {
-			lc.Created = wc.Created
-			lc.DockerID = wc.DockerID
-			lc.Status = wc.Status
-		}
-		allContainers = append(allContainers, lc)
-	}
-	return allContainers
 }
 
 // client.New, client.Leader, and vault.New are saved in variables to

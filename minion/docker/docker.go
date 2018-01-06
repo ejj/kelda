@@ -210,32 +210,36 @@ func (dk Client) RemoveID(id string) error {
 	return nil
 }
 
-// Build builds an image with the given name and Dockerfile, and returns the
-// ID of the resulting image.
-func (dk Client) Build(name, dockerfile string, useCache bool) (id string, err error) {
+// Build builds an image with the given name and Dockerfile.
+func (dk Client) Build(name, dockerfile string, useCache bool) error {
 	c.Inc("Build")
 	tarBuf, err := util.ToTar("Dockerfile", 0644, dockerfile)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	err = dk.BuildImage(dkc.BuildImageOptions{
+	return dk.BuildImage(dkc.BuildImageOptions{
 		NetworkMode:  "host",
 		Name:         name,
 		InputStream:  tarBuf,
 		OutputStream: ioutil.Discard,
 		NoCache:      !useCache,
 	})
-	if err != nil {
-		return "", err
-	}
+}
 
+func (dk Client) GetRepoDigestForImage(name string) (string, error) {
 	img, err := dk.InspectImage(name)
 	if err != nil {
 		return "", err
 	}
 
-	return img.ID, nil
+	if len(img.RepoDigests) != 1 {
+		return "", fmt.Errorf(
+			"unexpected number of repo digests (expected exactly one): %v",
+			img.RepoDigests)
+	}
+
+	return img.RepoDigests[0], nil
 }
 
 // Pull retrieves the given docker image from an image cache.

@@ -1,6 +1,7 @@
 package tls
 
 import (
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"testing"
 
@@ -100,7 +101,7 @@ func TestVerifySignedByCA(t *testing.T) {
 	validCA, err := rsa.NewCertificateAuthority()
 	assert.NoError(t, err)
 
-	validClient, err := rsa.NewSigned(validCA)
+	validClient, err := rsa.NewSigned(validCA, pkix.Name{})
 	assert.NoError(t, err)
 
 	tlsCred, err := New(validCA.CertString(), validClient.CertString(),
@@ -109,7 +110,7 @@ func TestVerifySignedByCA(t *testing.T) {
 
 	// Test that verification passes for servers with a certificate signed
 	// by the same CA.
-	validServer, err := rsa.NewSigned(validCA)
+	validServer, err := rsa.NewSigned(validCA, pkix.Name{})
 	assert.NoError(t, err)
 	verifyErr := tryVerify(tlsCred, validServer.CertString())
 
@@ -117,7 +118,7 @@ func TestVerifySignedByCA(t *testing.T) {
 	otherCA, err := rsa.NewCertificateAuthority()
 	assert.NoError(t, err)
 
-	otherServer, err := rsa.NewSigned(otherCA)
+	otherServer, err := rsa.NewSigned(otherCA, pkix.Name{})
 	assert.NoError(t, err)
 
 	verifyErr = tryVerify(tlsCred, otherServer.CertString())

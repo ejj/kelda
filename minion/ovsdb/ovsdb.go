@@ -47,6 +47,8 @@ type Client interface {
 
 	OpenFlowPorts() (map[string]int, error)
 
+	ListPortsByTag(key, value string) ([]string, error)
+
 	Disconnect()
 }
 
@@ -599,6 +601,29 @@ func (ovsdb client) DeleteAddressSets(sets []AddressSet) error {
 		return fmt.Errorf("transaction error: deleting address set: %s", err)
 	}
 	return errorCheck(results, len(ops))
+}
+
+func (ovsdb client) ListPortsByTag(key, value string) ([]string, error) {
+	c.Inc("ListPortsByTag")
+	reply, err := ovsdb.Transact("Open_vSwitch", ovs.Operation{
+		Op:    "select",
+		Table: "Port",
+		Where: newCondition("external_ids", "includes",
+			[]interface{}{key, value}),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("transaction error: list ports: %s", err)
+	}
+
+	var ports []string
+	for _, iface := range reply[0].Rows {
+		name, ok := iface["name"].(string)
+		if !ok {
+			return nil, fmt.Errorf("malformed port in reply: %v", iface)
+		}
+		ports = append(ports, name)
+	}
+	return ports, nil
 }
 
 // OpenFlowPorts returns a map from interface name to OpenFlow port number for every

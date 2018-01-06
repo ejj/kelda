@@ -512,7 +512,7 @@ func TestImageTxn(t *testing.T) {
 		img := view.SelectFromImage(func(img db.Image) bool {
 			return img.Name == "a"
 		})[0]
-		img.DockerID = "id"
+		img.RepoDigest = "digest"
 		view.Commit(img)
 		return nil
 	})
@@ -531,7 +531,7 @@ func TestImageTxn(t *testing.T) {
 		db.Image{
 			Name:       "a",
 			Dockerfile: "1",
-			DockerID:   "id",
+			RepoDigest: "digest",
 		},
 		db.Image{
 			Name:       "b",

@@ -94,7 +94,7 @@ func queryCounters(c client.Client, tgt string) ([]pb.Counter, error) {
 		return c.QueryCounters()
 	}
 
-	i, ip, err := apiUtil.FuzzyLookup(c, tgt)
+	i, err := apiUtil.FuzzyLookup(c, tgt)
 	if err != nil {
 		return nil, fmt.Errorf("resolve machine: %s", err)
 	}
@@ -103,7 +103,7 @@ func queryCounters(c client.Client, tgt string) ([]pb.Counter, error) {
 		return nil, fmt.Errorf("could not find machine: %s", tgt)
 	}
 
-	return c.QueryMinionCounters(ip)
+	return c.QueryMinionCounters(i.(db.Machine).PublicIP)
 }
 
 func printCounters(out io.Writer, target string, counters []pb.Counter) {

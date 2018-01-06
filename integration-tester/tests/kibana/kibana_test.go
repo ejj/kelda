@@ -13,7 +13,7 @@ import (
 )
 
 func TestKibana(t *testing.T) {
-	c, err := util.GetDefaultDaemonClient()
+	c, _, err := util.GetDefaultDaemonClient()
 	assert.NoError(t, err)
 	defer c.Close()
 

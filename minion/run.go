@@ -15,13 +15,12 @@ import (
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/etcd"
+	"github.com/kelda/kelda/minion/kubernetes"
 	"github.com/kelda/kelda/minion/network"
-	"github.com/kelda/kelda/minion/network/plugin"
+	"github.com/kelda/kelda/minion/network/openflow"
 	"github.com/kelda/kelda/minion/pprofile"
 	"github.com/kelda/kelda/minion/registry"
-	"github.com/kelda/kelda/minion/scheduler"
 	"github.com/kelda/kelda/minion/supervisor"
-	"github.com/kelda/kelda/minion/vault"
 	"github.com/kelda/kelda/util"
 
 	log "github.com/sirupsen/logrus"
@@ -55,15 +54,15 @@ func Run(role db.Role, inboundPubIntf, outboundPubIntf string) {
 		go network.WriteSubnets(conn)
 	}
 
-	// Not in a goroutine, want the plugin to start before the scheduler
-	plugin.Run()
-
 	supervisor.Run(conn, dk, role)
 
 	go network.Run(conn, inboundPubIntf, outboundPubIntf)
 	go registry.Run(conn, dk)
 	go etcd.Run(conn)
 	go syncAuthorizedKeys(conn)
+	if role == db.Worker {
+		go openflow.Run(conn)
+	}
 
 	// Block until the credentials are in place on the local filesystem. We
 	// can't simply fail if the first read fails because the daemon might still
@@ -88,19 +87,11 @@ func Run(role db.Role, inboundPubIntf, outboundPubIntf string) {
 	go apiServer.Run(conn, fmt.Sprintf("tcp://0.0.0.0:%d", api.DefaultRemotePort),
 		false, creds)
 
-	go syncPolicy(conn)
-
-	// Vault must be started after the credentials are resolved because it also
-	// makes use of the credentials.
 	if role == db.Master {
-		vaultClient := vault.Start(conn, dk)
-		go vault.Run(conn, dk, vaultClient)
+		go kubernetes.Run(conn, dk)
 	}
+	syncPolicy(conn)
 
-	// Don't start scheduling containers until after Vault has booted (i.e.
-	// until after vault.Start has returned). This way, workers never attempt
-	// to access secrets before Vault has started.
-	scheduler.Run(conn, dk)
 }
 
 func runProfiler(duration time.Duration) {

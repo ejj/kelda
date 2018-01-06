@@ -96,7 +96,6 @@ func TestMakeConfig(t *testing.T) {
 		Role:      db.Master,
 		PrivateIP: "20.20.20.20",
 		CloudID:   "ID2",
-		PublicKey: "pubKey",
 	}
 	allMachines := []db.Machine{machine1, machine2}
 
@@ -105,18 +104,12 @@ func TestMakeConfig(t *testing.T) {
 	assert.Equal(t, `{"Namespace":"ns"}`, config.Blueprint)
 	assert.Len(t, config.EtcdMembers, 1)
 	assert.Contains(t, config.EtcdMembers, "20.20.20.20")
-	assert.Len(t, config.MinionIPToPublicKey, 1)
-	assert.Contains(t, config.MinionIPToPublicKey, "20.20.20.20")
-	assert.Equal(t, "pubKey", config.MinionIPToPublicKey["20.20.20.20"])
 
 	config = makeConfig(allMachines, machine2, `{"Namespace":"ns"}`)
 	assert.Equal(t, "20.20.20.20", config.PrivateIP)
 	assert.Equal(t, `{"Namespace":"ns"}`, config.Blueprint)
 	assert.Len(t, config.EtcdMembers, 1)
 	assert.Contains(t, config.EtcdMembers, "20.20.20.20")
-	assert.Len(t, config.MinionIPToPublicKey, 1)
-	assert.Contains(t, config.MinionIPToPublicKey, "20.20.20.20")
-	assert.Equal(t, "pubKey", config.MinionIPToPublicKey["20.20.20.20"])
 
 	machine3 := db.Machine{
 		PublicIP:  "3.3.3.3",
@@ -133,9 +126,6 @@ func TestMakeConfig(t *testing.T) {
 	assert.Len(t, config.EtcdMembers, 2)
 	assert.Contains(t, config.EtcdMembers, "20.20.20.20")
 	assert.Contains(t, config.EtcdMembers, "30.30.30.30")
-	assert.Len(t, config.MinionIPToPublicKey, 1)
-	assert.Contains(t, config.MinionIPToPublicKey, "20.20.20.20")
-	assert.Equal(t, "pubKey", config.MinionIPToPublicKey["20.20.20.20"])
 
 	allMachines = []db.Machine{machine1, machine3}
 
@@ -144,7 +134,6 @@ func TestMakeConfig(t *testing.T) {
 	assert.Equal(t, `{"Namespace":"ns"}`, config.Blueprint)
 	assert.Len(t, config.EtcdMembers, 1)
 	assert.Contains(t, config.EtcdMembers, "30.30.30.30")
-	assert.Len(t, config.MinionIPToPublicKey, 0)
 }
 
 func TestClusterReady(t *testing.T) {
@@ -152,17 +141,12 @@ func TestClusterReady(t *testing.T) {
 
 	readyMachine := db.Machine{
 		PrivateIP: "ip",
-		PublicKey: "key",
 		Role:      db.Master,
 	}
 
 	missingIP := readyMachine
 	missingIP.PrivateIP = ""
 	assert.False(t, clusterReady([]db.Machine{readyMachine, missingIP}))
-
-	missingKey := readyMachine
-	missingKey.PublicKey = ""
-	assert.False(t, clusterReady([]db.Machine{readyMachine, missingKey}))
 
 	missingRole := readyMachine
 	missingRole.Role = db.None

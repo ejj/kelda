@@ -13,7 +13,7 @@ import (
 )
 
 func TestZookeeper(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, creds, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err)
 	}
@@ -29,7 +29,7 @@ func TestZookeeper(t *testing.T) {
 		t.Fatalf("couldn't query machines: %s", err)
 	}
 
-	sshUtil, err := util.NewSSHUtil(machines)
+	sshUtil, err := util.NewSSHUtil(machines, creds)
 	if err != nil {
 		t.Fatalf("failed to create SSH util client: %s", err)
 	}

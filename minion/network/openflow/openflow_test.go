@@ -12,7 +12,7 @@ import (
 func TestAddReplaceFlows(t *testing.T) {
 	anErr := errors.New("err")
 	ovsdb.Open = func() (ovsdb.Client, error) { return nil, anErr }
-	assert.EqualError(t, ReplaceFlows(nil), "ovsdb-server connection: err")
+	assert.EqualError(t, replaceFlows(nil), "ovsdb-server connection: err")
 	assert.EqualError(t, AddFlows(nil), "ovsdb-server connection: err")
 
 	client := new(mocks.Client)
@@ -32,7 +32,7 @@ func TestAddReplaceFlows(t *testing.T) {
 
 	client.On("Disconnect").Return(nil)
 	client.On("OpenFlowPorts").Return(map[string]int{}, nil)
-	assert.NoError(t, ReplaceFlows(nil))
+	assert.NoError(t, replaceFlows(nil))
 	client.AssertCalled(t, "Disconnect")
 	client.AssertCalled(t, "OpenFlowPorts")
 	assert.Equal(t, map[string][]string{
@@ -43,7 +43,7 @@ func TestAddReplaceFlows(t *testing.T) {
 	// Test that we don't call replace-flows when there are no differences.
 	actionsToFlows = map[string][]string{}
 	diffFlowsShouldErr = false
-	assert.NoError(t, ReplaceFlows(nil))
+	assert.NoError(t, replaceFlows(nil))
 	assert.Equal(t, map[string][]string{
 		"diff-flows": allFlows(nil),
 	}, actionsToFlows)
@@ -58,7 +58,7 @@ func TestAddReplaceFlows(t *testing.T) {
 	}, actionsToFlows)
 
 	ofctl = func(a string, f []string) error { return anErr }
-	assert.EqualError(t, ReplaceFlows(nil), "ovs-ofctl: err")
+	assert.EqualError(t, replaceFlows(nil), "ovs-ofctl: err")
 	client.AssertCalled(t, "Disconnect")
 	client.AssertCalled(t, "OpenFlowPorts")
 

@@ -18,12 +18,21 @@ var (
 	// DefaultSSHKeyPath is the default filepath where the private SSH key used
 	// to access Kelda will be stored.
 	DefaultSSHKeyPath = filepath.Join(keldaHome, "ssh_key")
+
+	// DefaultKubeSecretPath is the default location for the secret used to
+	// encrypt Kubernetes resources in Etcd.
+	DefaultKubeSecretPath = filepath.Join(keldaHome, "kube_etcd_secret")
 )
 
 var (
-	minionHome = "/home/kelda/.kelda"
+	// MinionHome is the home directory of the user on the cloud machines.
+	MinionHome = "/home/kelda/.kelda"
 
 	// MinionTLSDir is the directory in which the daemon will place TLS
 	// credentials on cloud machines.
-	MinionTLSDir = filepath.Join(minionHome, "tls")
+	MinionTLSDir = filepath.Join(MinionHome, "tls")
+
+	// MinionKubeSecretPath is the filepath at which the Kubernetes encryption
+	// key is located on cloud machines.
+	MinionKubeSecretPath = filepath.Join(MinionHome, "kube_etcd_secret")
 )

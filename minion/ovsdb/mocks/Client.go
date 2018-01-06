@@ -252,6 +252,29 @@ func (_m *Client) ListLoadBalancers() ([]ovsdb.LoadBalancer, error) {
 	return r0, r1
 }
 
+// ListPortsByTag provides a mock function with given fields: key, value
+func (_m *Client) ListPortsByTag(key string, value string) ([]string, error) {
+	ret := _m.Called(key, value)
+
+	var r0 []string
+	if rf, ok := ret.Get(0).(func(string, string) []string); ok {
+		r0 = rf(key, value)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(key, value)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // ListRouterPorts provides a mock function with given fields:
 func (_m *Client) ListRouterPorts() ([]ovsdb.RouterPort, error) {
 	ret := _m.Called()

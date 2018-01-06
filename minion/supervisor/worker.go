@@ -5,13 +5,18 @@ import (
 	"net"
 	"time"
 
+	cliPath "github.com/kelda/kelda/cli/path"
+	tlsIO "github.com/kelda/kelda/connection/tls/io"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/ipdef"
+	"github.com/kelda/kelda/minion/kubernetes"
 	"github.com/kelda/kelda/minion/nl"
 	"github.com/kelda/kelda/util"
 
+	dkc "github.com/fsouza/go-dockerclient"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func runWorker() {
@@ -98,9 +103,81 @@ func runWorkerOnce() {
 		} else {
 			log.WithError(err).Error("Failed to configure OVN")
 		}
+
+		leaderAddr := fmt.Sprintf("https://%s:6443", etcdRow.LeaderIP)
+		kubeconfig := kubernetes.NewKubeconfig(leaderAddr)
+		kubeconfigBytes, err := clientcmd.Write(kubeconfig)
+		if err == nil {
+			desiredContainers = append(desiredContainers, docker.RunOptions{
+				PidMode:     "host",
+				Name:        KubeletName,
+				Image:       kubeImage,
+				Privileged:  true,
+				VolumesFrom: []string{"minion"},
+				Mounts: []dkc.HostMount{
+					{
+						Source: "/dev",
+						Target: "/dev",
+						Type:   "bind",
+					}, {
+						Source: "/sys",
+						Target: "/sys",
+						Type:   "bind",
+					}, {
+						Source: "/var/run",
+						Target: "/var/run",
+						Type:   "bind",
+					}, {
+						Source: "/var/lib/docker",
+						Target: "/var/lib/docker",
+						Type:   "bind",
+					}, {
+						Source: "/var/lib/kubelet/",
+						Target: "/var/lib/kubelet",
+						Type:   "bind",
+						// The Kubelet sometimes creates mounts
+						// inside /var/lib/kubelet (e.g. it
+						// creates a tmpfs mount for secret
+						// volumes).
+						// In order for the mount to propagate
+						// to other containers, the propagation
+						// type must be set to "shared".
+						BindOptions: &dkc.BindOptions{
+							Propagation: "shared",
+						},
+					}, {
+						Source: cliPath.MinionTLSDir,
+						Target: cliPath.MinionTLSDir,
+						Type:   "bind",
+					},
+				},
+				Args: kubeletArgs(minion.PrivateIP),
+				FilepathToContent: map[string]string{
+					"/var/lib/kubelet/kubeconfig": string(
+						kubeconfigBytes),
+				},
+			})
+		} else {
+			log.WithError(err).Error("Failed to generate Kubeconfig")
+		}
 	}
 
 	joinContainers(desiredContainers)
+}
+
+func kubeletArgs(myIP string) []string {
+	return []string{"kubelet",
+		"--pod-cidr=10.0.0.0/24",
+		"--network-plugin=cni",
+		"--resolv-conf=/kelda_resolv.conf",
+		"--make-iptables-util-chains=false",
+		"--kubeconfig=/var/lib/kubelet/kubeconfig",
+		"--hostname-override", myIP,
+		"--anonymous-auth=false",
+		"--client-ca-file", tlsIO.CACertPath(cliPath.MinionTLSDir),
+		"--tls-cert-file", tlsIO.SignedCertPath(cliPath.MinionTLSDir),
+		"--tls-private-key-file", tlsIO.SignedKeyPath(cliPath.MinionTLSDir),
+	}
 }
 
 func cfgOVNImpl(myIP, leaderIP string) error {

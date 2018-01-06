@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/x509/pkix"
 	"fmt"
 	"testing"
 
@@ -32,7 +33,7 @@ func (insecure insecureConnection) ServerOpts() []grpc.ServerOption {
 }
 
 func TestCredentials(t *testing.T) {
-	localClient, err := util.GetDefaultDaemonClient()
+	localClient, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("Failed to get local client: %s", err)
 	}
@@ -89,7 +90,7 @@ func randomTLSCredentials() (tls.TLS, error) {
 		return tls.TLS{}, err
 	}
 
-	signed, err := rsa.NewSigned(ca)
+	signed, err := rsa.NewSigned(ca, pkix.Name{CommonName: "ci"})
 	if err != nil {
 		return tls.TLS{}, err
 	}

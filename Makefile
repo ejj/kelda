@@ -8,11 +8,11 @@ LINE_LENGTH_EXCLUDE=./api/pb/pb.pb.go \
 		    ./cloud/google/client/mocks/% \
 		    ./cloud/machine/amazon.go \
 		    ./cloud/machine/google.go \
+		    ./minion/kubernetes/mocks/% \
 		    ./minion/network/link_test.go \
 		    ./minion/ovsdb/mock_transact_test.go \
 		    ./minion/ovsdb/mocks/Client.go \
 		    ./minion/pb/pb.pb.go \
-		    ./minion/vault/mocks/% \
 		    ./node_modules/%
 
 JS_LINT_COMMAND = node_modules/eslint/bin/eslint.js \
@@ -68,7 +68,7 @@ COV_SKIP= /api/client/mocks \
 	  /minion/pb \
 	  /minion/pprofile \
 	  /minion/supervisor/images \
-	  /minion/vault/mocks \
+	  /minion/kubernetes/mocks \
 	  /scripts \
 	  /scripts/blueprints-tester \
 	  /scripts/blueprints-tester/tests \

@@ -4,19 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
-	"github.com/kelda/kelda/api"
 	"github.com/kelda/kelda/api/client"
 	"github.com/kelda/kelda/api/client/mocks"
 	"github.com/kelda/kelda/api/pb"
 	"github.com/kelda/kelda/blueprint"
 	"github.com/kelda/kelda/connection"
 	"github.com/kelda/kelda/db"
-	"github.com/kelda/kelda/minion/vault"
-	vaultMocks "github.com/kelda/kelda/minion/vault/mocks"
+	"github.com/kelda/kelda/minion/kubernetes"
+	kubeMocks "github.com/kelda/kelda/minion/kubernetes/mocks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,7 +63,7 @@ func TestQueryMachinesDaemon(t *testing.T) {
 	exp := `[{"ID":1,"Role":"Master","Provider":"Amazon",` +
 		`"Region":"","Size":"size","DiskSize":0,"SSHKeys":null,"FloatingIP":"",` +
 		`"Preemptible":false,"CloudID":"","PublicIP":"8.8.8.8",` +
-		`"PrivateIP":"9.9.9.9","Status":"connected","PublicKey":""}]`
+		`"PrivateIP":"9.9.9.9","Status":"connected"}]`
 
 	checkQuery(t, server{conn, true, nil}, db.MachineTable, exp)
 }
@@ -76,7 +74,7 @@ func TestQueryContainersCluster(t *testing.T) {
 	conn := db.New()
 	conn.Txn(db.AllTables...).Run(func(view db.Database) error {
 		c := view.InsertContainer()
-		c.DockerID = "docker-id"
+		c.PodName = "podName"
 		c.Image = "image"
 		c.Command = []string{"cmd", "arg"}
 		view.Commit(c)
@@ -84,60 +82,31 @@ func TestQueryContainersCluster(t *testing.T) {
 		return nil
 	})
 
-	exp := `[{"DockerID":"docker-id","Command":["cmd","arg"],` +
+	exp := `[{"PodName":"podName","Command":["cmd","arg"],` +
 		`"Created":"0001-01-01T00:00:00Z","Image":"image"}]`
 
 	checkQuery(t, server{conn, false, nil}, db.ContainerTable, exp)
 }
 
 func TestQueryContainersDaemon(t *testing.T) {
-	newClient = func(host string, _ connection.Credentials) (client.Client, error) {
-		switch host {
-		case api.RemoteAddress("9.9.9.9"):
-			mc := new(mocks.Client)
-			mc.On("QueryContainers").Return([]db.Container{{
-				BlueprintID: "onWorker",
-				Image:       "shouldIgnore",
-				DockerID:    "dockerID",
-			}}, nil)
-			mc.On("Close").Return(nil)
-			return mc, nil
-		default:
-			t.Fatalf("Unexpected call to getClient with host %s", host)
-		}
-		panic("unreached")
-	}
-
 	newLeaderClient = func(_ []db.Machine, _ connection.Credentials) (
 		client.Client, error) {
 		mc := new(mocks.Client)
 		mc.On("QueryContainers").Return([]db.Container{{
-			BlueprintID: "notScheduled",
-			Image:       "notScheduled",
+			BlueprintID: "id",
+			Image:       "image",
 		}, {
-			BlueprintID: "onWorker",
-			Image:       "onWorker",
+			BlueprintID: "id2",
+			Image:       "image2",
 		}}, nil)
 		mc.On("Close").Return(nil)
 		return mc, nil
 	}
 
-	conn := db.New()
-	conn.Txn(db.MachineTable).Run(func(view db.Database) error {
-		m := view.InsertMachine()
-		m.PublicIP = "9.9.9.9"
-		m.Role = db.Worker
-		m.Status = db.Connected
-		view.Commit(m)
-
-		return nil
-	})
-
-	exp := `[{"BlueprintID":"notScheduled","Created":"0001-01-01T00:00:00Z",` +
-		`"Image":"notScheduled"},{"BlueprintID":"onWorker",` +
-		`"DockerID":"dockerID","Created":"0001-01-01T00:00:00Z",` +
-		`"Image":"onWorker"}]`
-	checkQuery(t, server{conn, true, nil}, db.ContainerTable, exp)
+	exp := `[{"BlueprintID":"id","Created":"0001-01-01T00:00:00Z",` +
+		`"Image":"image"},{"BlueprintID":"id2",` +
+		`"Created":"0001-01-01T00:00:00Z","Image":"image2"}]`
+	checkQuery(t, server{db.New(), true, nil}, db.ContainerTable, exp)
 }
 
 func TestBadDeployment(t *testing.T) {
@@ -300,62 +269,6 @@ func TestVagrantDeployment(t *testing.T) {
 	assert.Equal(t, exp, bp.Blueprint)
 }
 
-func TestUpdateLeaderContainerAttrs(t *testing.T) {
-	t.Parallel()
-
-	created := time.Now()
-
-	lContainers := []db.Container{
-		{
-			BlueprintID: "1",
-		},
-	}
-
-	wContainers := []db.Container{
-		{
-			BlueprintID: "1",
-			Created:     created,
-			Status:      "running",
-		},
-	}
-
-	// Test update a matching container.
-	expect := wContainers
-	result := updateLeaderContainerAttrs(lContainers, wContainers)
-	assert.Equal(t, expect, result)
-
-	// Test container in leader, not in worker.
-	newContainer := db.Container{
-		BlueprintID: "2",
-	}
-	lContainers = append(lContainers, newContainer)
-	expect = append(expect, newContainer)
-	result = updateLeaderContainerAttrs(lContainers, wContainers)
-	assert.Equal(t, expect, result)
-
-	// Test if wContainers empty.
-	lContainers = wContainers
-	wContainers = []db.Container{}
-	expect = lContainers
-	result = updateLeaderContainerAttrs(lContainers, wContainers)
-	assert.Equal(t, expect, result)
-
-	// Test if wContainers and lContainers empty.
-	lContainers = []db.Container{}
-	expect = nil
-	result = updateLeaderContainerAttrs(lContainers, wContainers)
-	assert.Equal(t, expect, result)
-
-	// Test a deployed Dockerfile.
-	lContainers = []db.Container{{BlueprintID: "1", Image: "image"}}
-	wContainers = []db.Container{
-		{BlueprintID: "1", Image: "8.8.8.8/image", Created: created},
-	}
-	expect = []db.Container{{BlueprintID: "1", Image: "image", Created: created}}
-	result = updateLeaderContainerAttrs(lContainers, wContainers)
-	assert.Equal(t, expect, result)
-}
-
 func TestDaemonOnlyEndpoints(t *testing.T) {
 	t.Parallel()
 
@@ -378,7 +291,7 @@ func TestQueryImagesCluster(t *testing.T) {
 		return nil
 	})
 
-	exp := `[{"ID":1,"Name":"foo","Dockerfile":"","DockerID":"","Status":""}]`
+	exp := `[{"ID":1,"Name":"foo","Dockerfile":"","RepoDigest":"","Status":""}]`
 	checkQuery(t, server{conn, false, nil}, db.ImageTable, exp)
 }
 
@@ -393,7 +306,7 @@ func TestQueryImagesDaemon(t *testing.T) {
 		return mc, nil
 	}
 
-	exp := `[{"ID":0,"Name":"bar","Dockerfile":"","DockerID":"","Status":""}]`
+	exp := `[{"ID":0,"Name":"bar","Dockerfile":"","RepoDigest":"","Status":""}]`
 	checkQuery(t, server{db.New(), true, nil}, db.ImageTable, exp)
 }
 
@@ -418,31 +331,30 @@ func TestSetSecretDaemon(t *testing.T) {
 	mc.AssertExpectations(t)
 }
 
-// The minion should get a connection to Vault, and write the secret.
+// The minion should get a connection to the Kubernetes secret client and write
+// the secret.
 func TestSetSecretCluster(t *testing.T) {
 	secretName := "secretName"
 	secretValue := "secretValue"
-	myIP := "1.2.3.4"
 
-	conn := db.New()
-	conn.Txn(db.MinionTable).Run(func(view db.Database) error {
-		m := view.InsertMinion()
-		m.Self = true
-		m.PrivateIP = myIP
-		view.Commit(m)
-		return nil
-	})
-
-	mockClient := &vaultMocks.SecretStore{}
-	newVaultClient = func(addr string) (vault.SecretStore, error) {
-		assert.Equal(t, myIP, addr)
+	mockClient := &kubeMocks.SecretClient{}
+	newSecretClient = func() (kubernetes.SecretClient, error) {
 		return mockClient, nil
 	}
 
-	mockClient.On("Write", secretName, secretValue).Return(nil).Once()
-	_, err := server{conn, false, nil}.SetSecret(nil, &pb.Secret{
+	mockClient.On("Set", secretName, secretValue).Return(nil).Once()
+	_, err := server{db.New(), false, nil}.SetSecret(nil, &pb.Secret{
 		Name: secretName, Value: secretValue,
 	})
 	assert.NoError(t, err)
 	mockClient.AssertExpectations(t)
+}
+
+func TestSetSecretClusterError(t *testing.T) {
+	newSecretClient = func() (kubernetes.SecretClient, error) {
+		return nil, assert.AnError
+	}
+
+	_, err := server{db.New(), false, nil}.SetSecret(nil, &pb.Secret{})
+	assert.NotNil(t, err)
 }

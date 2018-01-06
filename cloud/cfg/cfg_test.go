@@ -10,29 +10,29 @@ import (
 
 func TestCloudConfig(t *testing.T) {
 	cfgTemplate = "({{.KeldaImage}}) ({{.SSHKeys}}) " +
-		"({{.MinionOpts}}) ({{.LogLevel}}) ({{.TLSDir}})"
+		"({{.MinionOpts}}) ({{.LogLevel}}) ({{.KeldaHome}})"
 
 	log.SetLevel(log.InfoLevel)
-	ver = "master"
+	image = "keldaio/test:master"
 	res := Ubuntu(db.Machine{
 		SSHKeys: []string{"a", "b"},
 		Role:    db.Master,
 	}, "")
-	exp := "(keldaio/kelda:master) (a\nb) (--role \"Master\") (info)" +
-		" (/home/kelda/.kelda/tls)"
+	exp := "(keldaio/test:master) (a\nb) (--role \"Master\") (info)" +
+		" (/home/kelda/.kelda)"
 	if res != exp {
 		t.Errorf("res: %s\nexp: %s", res, exp)
 	}
 
 	log.SetLevel(log.DebugLevel)
-	ver = "1.2.3"
+	image = "keldaio/test:1.2.3"
 	res = Ubuntu(db.Machine{
 		SSHKeys: []string{"a", "b"},
 		Role:    db.Worker,
 	}, "ib")
-	exp = "(keldaio/kelda:1.2.3) (a\nb) (--role \"Worker\"" +
+	exp = "(keldaio/test:1.2.3) (a\nb) (--role \"Worker\"" +
 		" --inbound-pub-intf \"ib\") (debug)" +
-		" (/home/kelda/.kelda/tls)"
+		" (/home/kelda/.kelda)"
 	if res != exp {
 		t.Errorf("res: %s\nexp: %s", res, exp)
 	}

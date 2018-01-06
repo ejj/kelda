@@ -15,7 +15,6 @@ import (
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/integration-tester/util"
 	"github.com/kelda/kelda/minion/supervisor"
-	"github.com/kelda/kelda/minion/vault"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/docker/distribution/reference"
@@ -32,7 +31,6 @@ const disableTestMessage = "Version tests are temporarily disabled until we " +
 
 // The names of the containers for which the version should be checked.
 var systemContainerNames = []string{
-	vault.ContainerName,
 	supervisor.EtcdName,
 	supervisor.RegistryName,
 }
@@ -218,7 +216,7 @@ func parseReleaseLinks(url string, versionRegex *regexp.Regexp) ([]string, error
 }
 
 func getMaster() (db.Machine, error) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		return db.Machine{}, err
 	}
@@ -241,7 +239,7 @@ func getMaster() (db.Machine, error) {
 // against the master branch of kelda/kelda since we won't update the versions
 // on Kelda releases that have already been published.
 func skipIfNotDev(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	assert.NoError(t, err)
 	defer clnt.Close()
 

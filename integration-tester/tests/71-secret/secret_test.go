@@ -6,19 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kelda/kelda/api"
 	"github.com/kelda/kelda/api/client"
-	cliPath "github.com/kelda/kelda/cli/path"
-	"github.com/kelda/kelda/connection/tls"
-	tlsIO "github.com/kelda/kelda/connection/tls/io"
-	"github.com/kelda/kelda/db"
+	"github.com/kelda/kelda/cli/ssh"
 	"github.com/kelda/kelda/integration-tester/util"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSecretValues(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err)
 	}
@@ -82,135 +78,34 @@ func getFile(containerID, path string) (string, error) {
 	return string(fileBytes), nil
 }
 
-func TestVaultACLs(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
-	if err != nil {
-		t.Fatalf("couldn't get api client: %s", err)
-	}
-	defer clnt.Close()
+func TestSecretsEncrypted(t *testing.T) {
+	apiClient, creds, err := util.GetDefaultDaemonClient()
+	assert.NoError(t, err, "failed to get API client for daemon")
+	defer apiClient.Close()
 
-	containers, err := clnt.QueryContainers()
-	if err != nil {
-		t.Fatalf("couldn't query containers: %s", err)
-	}
+	machines, err := apiClient.QueryMachines()
+	assert.NoError(t, err, "failed to query machines")
 
-	machines, err := clnt.QueryMachines()
-	if err != nil {
-		t.Fatalf("couldn't query machines: %s", err)
-	}
+	leaderIP, err := client.GetLeaderIP(machines, creds)
+	assert.NoError(t, err, "failed to find leader")
 
-	tlsCreds, err := tlsIO.ReadCredentials(cliPath.DefaultTLSDir)
-	if err != nil {
-		t.Fatalf("couldn't read TLS credentials: %s", err)
-	}
+	sshClient, err := ssh.New(leaderIP, "")
+	assert.NoError(t, err, "failed to get SSH client for leader")
 
-	leaderIP, err := getLeaderIP(machines, tlsCreds)
-	if err != nil {
-		t.Fatalf("couldn't get leader's IP: %s", err)
-	}
-	vaultAddr := fmt.Sprintf("https://%s:8200", leaderIP)
+	secretPathsBytes, err := sshClient.CombinedOutput(
+		"docker exec --env ETCDCTL_API=3 etcd etcdctl get --prefix " +
+			"--keys-only /registry/secrets/")
+	assert.NoError(t, err, "failed to fetch secret paths")
 
-	secretNameToAllowedWorkers := map[string][]string{}
-	for _, c := range containers {
-		for _, secretName := range c.GetReferencedSecrets() {
-			secretNameToAllowedWorkers[secretName] = append(
-				secretNameToAllowedWorkers[secretName], c.Minion)
+	secretPaths := strings.Fields(string(secretPathsBytes))
+	assert.NotEmpty(t, secretPaths)
+
+	for _, secretPath := range secretPaths {
+		secretPathsBytes, err := sshClient.CombinedOutput(
+			"docker exec --env ETCDCTL_API=3 etcd etcdctl get " + secretPath)
+		assert.NoError(t, err, "failed to fetch secret path %s", secretPath)
+		if assert.Contains(t, string(secretPathsBytes), "aescbc") {
+			fmt.Println(secretPath + " is encrypted")
 		}
 	}
-
-	for _, m := range machines {
-		for secretName, allowedWorkers := range secretNameToAllowedWorkers {
-			fmt.Printf("Attempting to fetch secret %q from %v.\n",
-				secretName, m)
-			output, err := tryFetchSecret(m.CloudID, vaultAddr, secretName)
-
-			shouldSucceed := m.Role == db.Master ||
-				containsString(allowedWorkers, m.PrivateIP)
-			if shouldSucceed {
-				fmt.Println(".. It should succeed.")
-				assert.NoError(t, err)
-			} else {
-				fmt.Println(".. It should fail.")
-				assert.NotNil(t, err)
-			}
-
-			fmt.Println(".... Error:", err)
-			fmt.Println(".... Output:", string(output))
-		}
-	}
-}
-
-// tryFetchSecret attempts to fetch the given secretName using the credentials
-// on the given machine.
-func tryFetchSecret(machineID, vaultAddr, secretName string) ([]byte, error) {
-	if exec.Command("kelda", "ssh", machineID, "which", "vault").Run() != nil {
-		if err := setUpVault(machineID); err != nil {
-			return nil, fmt.Errorf("set up vault: %s", err)
-		}
-	}
-
-	vaultOpts := fmt.Sprintf("-address=%s -ca-cert=%s -client-cert=%s -client-key=%s",
-		vaultAddr,
-		tlsIO.CACertPath(cliPath.MinionTLSDir),
-		tlsIO.SignedCertPath(cliPath.MinionTLSDir),
-		tlsIO.SignedKeyPath(cliPath.MinionTLSDir))
-	vaultCmd := fmt.Sprintf("vault auth -method=cert %[1]s && "+
-		"vault read %[1]s /secret/kelda/%[2]s",
-		vaultOpts, secretName)
-	return exec.Command("kelda", "ssh", machineID, "bash", "-c",
-		fmt.Sprintf("%q", vaultCmd)).CombinedOutput()
-}
-
-const vaultReleaseAddress = "https://releases.hashicorp.com/vault/0.8.3/" +
-	"vault_0.8.3_linux_amd64.zip"
-
-// setUpVault installs Vault onto the given machine.
-func setUpVault(machineID string) error {
-	setupVaultCmd := fmt.Sprintf("apt-get install -y unzip && "+
-		"workdir=$(mktemp -d) && "+
-		"cd ${workdir} && "+
-		"curl -s -o vault.zip %s && "+
-		"unzip vault.zip && "+
-		"cp vault /usr/local/bin && "+
-		"rm -rf ${workdir}", vaultReleaseAddress)
-	return exec.Command("kelda", "ssh", machineID, "sudo", "bash", "-c",
-		fmt.Sprintf("%q", setupVaultCmd)).Run()
-}
-
-// Get the private IP of the leader of the cluster by querying each of the
-// given machines.
-func getLeaderIP(machines []db.Machine, tlsCreds tls.TLS) (string, error) {
-	var errors []string
-	for _, m := range machines {
-		c, err := client.New(api.RemoteAddress(m.PublicIP), tlsCreds)
-		if err != nil {
-			errors = append(errors, err.Error())
-			continue
-		}
-
-		etcds, err := c.QueryEtcd()
-		if err != nil {
-			errors = append(errors, err.Error())
-			continue
-		}
-
-		if len(etcds) != 1 || etcds[0].LeaderIP == "" {
-			errors = append(errors,
-				"no leader information on machine "+m.PublicIP)
-			continue
-		}
-
-		return etcds[0].LeaderIP, nil
-	}
-
-	return "", fmt.Errorf(strings.Join(errors, ", "))
-}
-
-func containsString(slc []string, target string) bool {
-	for _, item := range slc {
-		if item == target {
-			return true
-		}
-	}
-	return false
 }

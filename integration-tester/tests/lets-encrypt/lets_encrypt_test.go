@@ -50,7 +50,7 @@ func TestLetsEncrypt(t *testing.T) {
 		"time to obtain a certificate")
 	time.Sleep(2 * time.Minute)
 
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err)
 	}

@@ -24,11 +24,9 @@ func TestContainerString(t *testing.T) {
 		ID:          1,
 		IP:          "1.2.3.4",
 		Minion:      "Test",
-		EndpointID:  "TestEndpoint",
 		BlueprintID: "1",
-		DockerID:    "DockerID",
+		PodName:     "PodName",
 		Image:       "test/test",
-		ImageID:     "imageid",
 		Status:      "testing",
 		Hostname:    "hostname",
 		Command:     []string{"run", "/bin/sh"},
@@ -36,8 +34,8 @@ func TestContainerString(t *testing.T) {
 		Created:     fakeTime,
 	}
 
-	exp = "Container-1{run test/test run /bin/sh, ImageID: imageid, " +
-		"DockerID: DockerID, Minion: Test, BlueprintID: 1, IP: 1.2.3.4, " +
+	exp = "Container-1{run test/test run /bin/sh, " +
+		"PodName: PodName, Minion: Test, BlueprintID: 1, IP: 1.2.3.4, " +
 		"Hostname: hostname, Env: map[test:tester], " +
 		"Status: testing, Created: " + fakeTimeString + "}"
 

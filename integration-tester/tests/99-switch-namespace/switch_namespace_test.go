@@ -20,7 +20,7 @@ import (
 // TestSwitchNamespace tests that if a user switches namespaces then runs the
 // same blueprint, containers are not restarted.
 func TestSwitchNamespace(t *testing.T) {
-	clnt, err := testerUtil.GetDefaultDaemonClient()
+	clnt, _, err := testerUtil.GetDefaultDaemonClient()
 	assert.NoError(t, err)
 
 	initialBlueprint, err := testerUtil.GetCurrentBlueprint(clnt)

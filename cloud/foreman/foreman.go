@@ -197,7 +197,7 @@ func runOnce(waitForMachinesCutoff time.Time, conn db.Conn, cloudID string) (
 // cause an etcd restart once they connect since the EtcdMembers will change.
 func clusterReady(machines []db.Machine) bool {
 	for _, m := range machines {
-		if m.Role == db.None || m.PrivateIP == "" || m.PublicKey == "" {
+		if m.Role == db.None || m.PrivateIP == "" {
 			return false
 		}
 	}
@@ -207,28 +207,22 @@ func clusterReady(machines []db.Machine) bool {
 func makeConfig(machines []db.Machine, minionMachine db.Machine,
 	blueprint string) pb.MinionConfig {
 
-	minionIPToPublicKey := map[string]string{}
 	var etcdIPs []string
 	for _, m := range machines {
 		if m.Role == db.Master && m.PrivateIP != "" {
 			etcdIPs = append(etcdIPs, m.PrivateIP)
 		}
-
-		if m.PrivateIP != "" && m.PublicKey != "" {
-			minionIPToPublicKey[m.PrivateIP] = m.PublicKey
-		}
 	}
 
 	return pb.MinionConfig{
-		FloatingIP:          minionMachine.FloatingIP,
-		PrivateIP:           minionMachine.PrivateIP,
-		Blueprint:           blueprint,
-		Provider:            string(minionMachine.Provider),
-		Size:                minionMachine.Size,
-		Region:              minionMachine.Region,
-		EtcdMembers:         etcdIPs,
-		AuthorizedKeys:      minionMachine.SSHKeys,
-		MinionIPToPublicKey: minionIPToPublicKey,
+		FloatingIP:     minionMachine.FloatingIP,
+		PrivateIP:      minionMachine.PrivateIP,
+		Blueprint:      blueprint,
+		Provider:       string(minionMachine.Provider),
+		Size:           minionMachine.Size,
+		Region:         minionMachine.Region,
+		EtcdMembers:    etcdIPs,
+		AuthorizedKeys: minionMachine.SSHKeys,
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	apiUtil "github.com/kelda/kelda/api/util"
 	"github.com/kelda/kelda/cli/ssh"
 	"github.com/kelda/kelda/db"
+	"github.com/kelda/kelda/minion/supervisor"
 	"github.com/kelda/kelda/util"
 
 	log "github.com/sirupsen/logrus"
@@ -65,26 +66,47 @@ func (lCmd *Log) Parse(args []string) error {
 
 // Run finds the target container or machine minion and outputs logs.
 func (lCmd *Log) Run() int {
-	i, host, err := apiUtil.FuzzyLookup(lCmd.client, lCmd.target)
+	i, err := apiUtil.FuzzyLookup(lCmd.client, lCmd.target)
 	if err != nil {
 		log.WithError(err).Errorf("Failed to lookup %s", lCmd.target)
 		return 1
 	}
 
-	cmd := []string{"docker", "logs"}
-	if lCmd.shouldTail {
-		cmd = append(cmd, "--follow")
-	}
-
+	var host string
+	var cmd []string
 	switch t := i.(type) {
 	case db.Machine:
+		host = t.PublicIP
+		cmd = []string{"docker", "logs"}
+		if lCmd.shouldTail {
+			cmd = append(cmd, "--follow")
+		}
 		cmd = append(cmd, "minion")
 	case db.Container:
-		if t.DockerID == "" {
+		if t.PodName == "" {
 			log.Error("Container not yet running")
 			return 1
 		}
-		cmd = append(cmd, t.DockerID)
+
+		machines, err := lCmd.client.QueryMachines()
+		if err != nil {
+			log.WithError(err).Error("Failed to query machines")
+			return 1
+		}
+
+		host, err = getLeaderIP(machines, lCmd.creds)
+		if err != nil {
+			log.WithError(err).Error("Failed to find leader machine")
+			return 1
+		}
+
+		cmd = []string{
+			"docker", "exec", supervisor.KubeAPIServerName, "kubectl", "logs",
+		}
+		if lCmd.shouldTail {
+			cmd = append(cmd, "--follow")
+		}
+		cmd = append(cmd, t.PodName)
 	default:
 		panic("Not Reached")
 	}

@@ -120,7 +120,7 @@ func execCmd(cmd *exec.Cmd, logLineTitle string, l fileLogger) (string, string, 
 }
 
 func queryMachines() ([]db.Machine, error) {
-	c, err := testerUtil.GetDefaultDaemonClient()
+	c, _, err := testerUtil.GetDefaultDaemonClient()
 	if err != nil {
 		return []db.Machine{}, err
 	}

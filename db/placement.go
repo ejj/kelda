@@ -76,3 +76,13 @@ func (ps PlacementSlice) Get(ii int) interface{} {
 func (ps PlacementSlice) Len() int {
 	return len(ps)
 }
+
+// Less implements less than for sort.Interface.
+func (ps PlacementSlice) Less(i, j int) bool {
+	return ps[i].less(ps[j])
+}
+
+// Swap implements swapping for sort.Interface.
+func (ps PlacementSlice) Swap(i, j int) {
+	ps[i], ps[j] = ps[j], ps[i]
+}

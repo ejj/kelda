@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	dkc "github.com/fsouza/go-dockerclient"
-	"github.com/kelda/kelda/minion/network/plugin"
 	"github.com/satori/go.uuid"
 )
 
@@ -201,11 +200,12 @@ func (dk MockClient) PushImage(opts dkc.PushImageOptions, _ dkc.AuthConfiguratio
 		imgWithTag += ":" + opts.Tag
 	}
 
-	_, ok := dk.Images[imgWithTag]
+	img, ok := dk.Images[imgWithTag]
 	if !ok {
 		return errors.New("image does not exist")
 	}
 
+	img.RepoDigests = []string{"repo-digest-" + img.ID}
 	dk.Pushed[opts] = struct{}{}
 	return nil
 }
@@ -320,20 +320,12 @@ func (dk *MockClient) CreateContainer(opts dkc.CreateContainerOptions) (*dkc.Con
 
 	id := uuid.NewV4().String()
 
-	var ip string
-	if opts.NetworkingConfig != nil {
-		ip = opts.NetworkingConfig.EndpointsConfig[plugin.NetworkName].
-			IPAMConfig.IPv4Address
-	}
 	container := &dkc.Container{
 		ID:         id,
 		Name:       opts.Name,
 		Args:       opts.Config.Cmd,
 		Config:     opts.Config,
 		HostConfig: opts.HostConfig,
-		NetworkSettings: &dkc.NetworkSettings{
-			IPAddress: ip,
-		},
 	}
 	if img, ok := dk.Images[image]; ok {
 		container.Image = img.ID

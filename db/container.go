@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/kelda/kelda/blueprint"
-	"github.com/kelda/kelda/util"
 )
 
 // A Container row is created for each container specified by the policy.  Each row will
@@ -17,9 +16,8 @@ type Container struct {
 
 	IP                string                              `json:",omitempty"`
 	Minion            string                              `json:",omitempty"`
-	EndpointID        string                              `json:",omitempty"`
 	BlueprintID       string                              `json:",omitempty"`
-	DockerID          string                              `json:",omitempty"`
+	PodName           string                              `json:",omitempty"`
 	Status            string                              `json:",omitempty"`
 	Command           []string                            `json:",omitempty"`
 	Env               map[string]blueprint.ContainerValue `json:",omitempty"`
@@ -28,7 +26,6 @@ type Container struct {
 	Created           time.Time                           `json:","`
 
 	Image      string `json:",omitempty"`
-	ImageID    string `json:",omitempty"`
 	Dockerfile string `json:"-"`
 }
 
@@ -88,14 +85,8 @@ func (c Container) String() string {
 	cmdStr := strings.Join(append([]string{"run", c.Image}, c.Command...), " ")
 	tags := []string{cmdStr}
 
-	if c.ImageID != "" {
-		id := util.ShortUUID(c.ImageID)
-		tags = append(tags, fmt.Sprintf("ImageID: %s", id))
-	}
-
-	if c.DockerID != "" {
-		id := util.ShortUUID(c.DockerID)
-		tags = append(tags, fmt.Sprintf("DockerID: %s", id))
+	if c.PodName != "" {
+		tags = append(tags, fmt.Sprintf("PodName: %s", c.PodName))
 	}
 
 	if c.Minion != "" {

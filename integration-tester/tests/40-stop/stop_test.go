@@ -9,7 +9,6 @@ import (
 
 	"github.com/kelda/kelda/integration-tester/util"
 	"github.com/kelda/kelda/minion/supervisor"
-	"github.com/kelda/kelda/minion/vault"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -19,7 +18,7 @@ func TestStopContainer(t *testing.T) {
 		t.Fatalf("couldn't run stop command: %s", err.Error())
 	}
 
-	c, err := util.GetDefaultDaemonClient()
+	c, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err.Error())
 	}
@@ -74,14 +73,17 @@ func TestStopContainer(t *testing.T) {
 }
 
 var keldaContainers = map[string]struct{}{
-	supervisor.EtcdName:          {},
-	supervisor.OvncontrollerName: {},
-	supervisor.OvnnorthdName:     {},
-	supervisor.OvsdbName:         {},
-	supervisor.OvsvswitchdName:   {},
-	supervisor.RegistryName:      {},
-	vault.ContainerName:          {},
-	"minion":                     {},
+	supervisor.EtcdName:                  {},
+	supervisor.OvncontrollerName:         {},
+	supervisor.OvnnorthdName:             {},
+	supervisor.OvsdbName:                 {},
+	supervisor.OvsvswitchdName:           {},
+	supervisor.KubeAPIServerName:         {},
+	supervisor.KubeControllerManagerName: {},
+	supervisor.KubeletName:               {},
+	supervisor.KubeSchedulerName:         {},
+	supervisor.RegistryName:              {},
+	"minion":                             {},
 }
 
 func filterKeldaContainers(containers []string) (filtered []string) {

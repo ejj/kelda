@@ -16,7 +16,7 @@ import (
 // that they have the right hostname prefix. Both are based on the command
 // line arguments passed to the blueprint with kelda run.
 func TestCmdLineArgs(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatal("couldn't get api client")
 	}

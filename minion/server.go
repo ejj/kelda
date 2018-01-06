@@ -39,7 +39,6 @@ func (s server) GetMinionConfig(cts context.Context,
 	cfg.Size = m.Size
 	cfg.Region = m.Region
 	cfg.AuthorizedKeys = strings.Split(m.AuthorizedKeys, "\n")
-	cfg.MinionIPToPublicKey = m.MinionIPToPublicKey
 
 	s.Txn(db.EtcdTable).Run(func(view db.Database) error {
 		if etcdRow, err := view.GetEtcd(); err == nil {
@@ -64,7 +63,6 @@ func (s server) SetMinionConfig(ctx context.Context,
 		minion.Region = msg.Region
 		minion.FloatingIP = msg.FloatingIP
 		minion.AuthorizedKeys = strings.Join(msg.AuthorizedKeys, "\n")
-		minion.MinionIPToPublicKey = msg.MinionIPToPublicKey
 		minion.Self = true
 		view.Commit(minion)
 

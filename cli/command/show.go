@@ -85,10 +85,8 @@ func (pCmd *Show) run() (err error) {
 
 	var connections []db.Connection
 	var containers []db.Container
-	var images []db.Image
 	connectionErr := make(chan error)
 	containerErr := make(chan error)
-	imagesErr := make(chan error)
 
 	go func() {
 		connections, err = pCmd.client.QueryConnections()
@@ -100,23 +98,14 @@ func (pCmd *Show) run() (err error) {
 		containerErr <- err
 	}()
 
-	go func() {
-		images, err = pCmd.client.QueryImages()
-		imagesErr <- err
-	}()
-
 	if err := <-connectionErr; err != nil {
 		return fmt.Errorf("unable to query connections: %s", err)
 	}
 	if err := <-containerErr; err != nil {
 		return fmt.Errorf("unable to query containers: %s", err)
 	}
-	if err := <-imagesErr; err != nil {
-		return fmt.Errorf("unable to query images: %s", err)
-	}
 
-	writeContainers(os.Stdout, containers, machines, connections, images,
-		!pCmd.noTruncate)
+	writeContainers(os.Stdout, containers, machines, connections, !pCmd.noTruncate)
 
 	return nil
 }
@@ -140,7 +129,7 @@ func writeMachines(fd io.Writer, machines []db.Machine) {
 }
 
 func writeContainers(fd io.Writer, containers []db.Container, machines []db.Machine,
-	connections []db.Connection, images []db.Image, truncate bool) {
+	connections []db.Connection, truncate bool) {
 	w := tabwriter.NewWriter(fd, 0, 0, 4, ' ', 0)
 	defer w.Flush()
 	fmt.Fprintln(w, "CONTAINER\tMACHINE\tCOMMAND\tHOSTNAME"+
@@ -167,11 +156,6 @@ func writeContainers(fd io.Writer, containers []db.Container, machines []db.Mach
 	}
 	sort.Strings(machineIDs)
 
-	imageStatusMap := map[string]string{}
-	for _, img := range images {
-		imageStatusMap[img.Name] = img.Status
-	}
-
 	for i, machineID := range machineIDs {
 		if i > 0 {
 			// Insert a blank line between each machine.
@@ -184,18 +168,6 @@ func writeContainers(fd io.Writer, containers []db.Container, machines []db.Mach
 		sort.Sort(db.ContainerSlice(dbcs))
 		for _, dbc := range dbcs {
 			container := containerStr(dbc.Image, dbc.Command, truncate)
-
-			var status string
-			switch {
-			case dbc.Status != "":
-				status = dbc.Status
-			case dbc.Minion != "":
-				status = "scheduled"
-			default:
-				if imgStatus, ok := imageStatusMap[dbc.Image]; ok {
-					status = imgStatus
-				}
-			}
 
 			created := ""
 			if !dbc.Created.IsZero() {
@@ -210,7 +182,7 @@ func writeContainers(fd io.Writer, containers []db.Container, machines []db.Mach
 			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
 				util.ShortUUID(dbc.BlueprintID),
 				util.ShortUUID(machineID),
-				container, dbc.Hostname, status, created, publicIP)
+				container, dbc.Hostname, dbc.Status, created, publicIP)
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -105,7 +106,7 @@ func NewCertificateAuthority() (KeyPair, error) {
 }
 
 // NewSigned generates a KeyPair signed by `signer`.
-func NewSigned(signer KeyPair, ips ...net.IP) (KeyPair, error) {
+func NewSigned(signer KeyPair, subject pkix.Name, ips ...net.IP) (KeyPair, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return KeyPair{}, fmt.Errorf("create key: %s", err)
@@ -120,6 +121,7 @@ func NewSigned(signer KeyPair, ips ...net.IP) (KeyPair, error) {
 		x509.ExtKeyUsageServerAuth,
 	}
 	template.IPAddresses = ips
+	template.Subject = subject
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, &template,
 		signer.cert, key.Public(), signer.key)

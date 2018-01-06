@@ -13,7 +13,7 @@ import (
 )
 
 func TestCustomImages(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err)
 	}

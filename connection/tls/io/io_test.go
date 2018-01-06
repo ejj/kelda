@@ -1,6 +1,7 @@
 package io
 
 import (
+	"crypto/x509/pkix"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -39,7 +40,7 @@ func TestWriteAndReadMinionCerts(t *testing.T) {
 	ca, err := rsa.NewCertificateAuthority()
 	assert.NoError(t, err)
 
-	signed, err := rsa.NewSigned(ca)
+	signed, err := rsa.NewSigned(ca, pkix.Name{})
 	assert.NoError(t, err)
 
 	testDir := "/tls"
@@ -58,7 +59,7 @@ func TestReadDaemonCerts(t *testing.T) {
 	ca, err := rsa.NewCertificateAuthority()
 	assert.NoError(t, err)
 
-	signed, err := rsa.NewSigned(ca)
+	signed, err := rsa.NewSigned(ca, pkix.Name{})
 	assert.NoError(t, err)
 
 	testDir := "/tls"

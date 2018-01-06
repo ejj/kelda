@@ -18,7 +18,7 @@ func TestMinionLogs(t *testing.T) {
 		t.Errorf("failed to print kelda ps: %s", err.Error())
 	}
 
-	c, err := util.GetDefaultDaemonClient()
+	c, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err.Error())
 	}

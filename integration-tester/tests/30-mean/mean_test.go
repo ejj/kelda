@@ -21,7 +21,7 @@ type Response struct {
 }
 
 func TestMean(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatal("couldn't get api client")
 	}

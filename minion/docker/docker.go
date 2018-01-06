@@ -11,7 +11,6 @@ import (
 
 	"github.com/kelda/kelda/counter"
 	"github.com/kelda/kelda/minion/ipdef"
-	"github.com/kelda/kelda/minion/network/plugin"
 	"github.com/kelda/kelda/util"
 
 	dkc "github.com/fsouza/go-dockerclient"
@@ -135,21 +134,8 @@ func (dk Client) Run(opts RunOptions) (string, error) {
 		Mounts:      opts.Mounts,
 	}
 
-	var nc *dkc.NetworkingConfig
-	if opts.IP != "" {
-		nc = &dkc.NetworkingConfig{
-			EndpointsConfig: map[string]*dkc.EndpointConfig{
-				plugin.NetworkName: {
-					IPAMConfig: &dkc.EndpointIPAMConfig{
-						IPv4Address: opts.IP,
-					},
-				},
-			},
-		}
-	}
-
 	id, err := dk.create(opts.Name, opts.Image, opts.Hostname, opts.Args,
-		opts.Labels, env, opts.FilepathToContent, hc, nc)
+		opts.Labels, env, opts.FilepathToContent, hc, nil)
 	if err != nil {
 		return "", err
 	}
@@ -210,32 +196,21 @@ func (dk Client) RemoveID(id string) error {
 	return nil
 }
 
-// Build builds an image with the given name and Dockerfile, and returns the
-// ID of the resulting image.
-func (dk Client) Build(name, dockerfile string, useCache bool) (id string, err error) {
+// Build builds an image with the given name and Dockerfile.
+func (dk Client) Build(name, dockerfile string, useCache bool) error {
 	c.Inc("Build")
 	tarBuf, err := util.ToTar("Dockerfile", 0644, dockerfile)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	err = dk.BuildImage(dkc.BuildImageOptions{
+	return dk.BuildImage(dkc.BuildImageOptions{
 		NetworkMode:  "host",
 		Name:         name,
 		InputStream:  tarBuf,
 		OutputStream: ioutil.Discard,
 		NoCache:      !useCache,
 	})
-	if err != nil {
-		return "", err
-	}
-
-	img, err := dk.InspectImage(name)
-	if err != nil {
-		return "", err
-	}
-
-	return img.ID, nil
 }
 
 // Pull retrieves the given docker image from an image cache.
@@ -285,14 +260,30 @@ func (dk Client) getCacheEntry(repo, tag string) *cacheEntry {
 }
 
 // Push pushes the given image to the registry.
-func (dk Client) Push(registry, image string) error {
+func (dk Client) Push(registry, image string) (string, error) {
 	c.Inc("Push")
 	repo, tag := dkc.ParseRepositoryTag(image)
-	return dk.PushImage(dkc.PushImageOptions{
+	err := dk.PushImage(dkc.PushImageOptions{
 		Registry: registry,
 		Name:     repo,
 		Tag:      tag,
 	}, dkc.AuthConfiguration{})
+	if err != nil {
+		return "", err
+	}
+
+	img, err := dk.InspectImage(image)
+	if err != nil {
+		return "", err
+	}
+
+	if len(img.RepoDigests) != 1 {
+		return "", fmt.Errorf(
+			"unexpected number of repo digests (expected exactly one): %v",
+			img.RepoDigests)
+	}
+
+	return img.RepoDigests[0], nil
 }
 
 // List returns a slice of all running containers.  The List can be be filtered with the
@@ -344,9 +335,6 @@ func (dk Client) Get(id string) (Container, error) {
 		Name:     dkc.Name,
 		ID:       dkc.ID,
 		Hostname: dkc.Config.Hostname,
-		IP:       dkc.NetworkSettings.IPAddress,
-		Mac:      dkc.NetworkSettings.MacAddress,
-		EID:      dkc.NetworkSettings.EndpointID,
 		Image:    dkc.Config.Image,
 		ImageID:  dkc.Image,
 		Path:     dkc.Path,
@@ -356,16 +344,6 @@ func (dk Client) Get(id string) (Container, error) {
 		Labels:   dkc.Config.Labels,
 		Status:   dkc.State.Status,
 		Created:  dkc.Created,
-	}
-
-	networks := keys(dkc.NetworkSettings.Networks)
-	if len(networks) == 1 {
-		config := dkc.NetworkSettings.Networks[networks[0]]
-		c.IP = config.IPAddress
-		c.Mac = config.MacAddress
-		c.EID = config.EndpointID
-	} else if len(networks) > 1 {
-		log.Warnf("Multiple networks for container: %s", dkc.ID)
 	}
 
 	return c, nil

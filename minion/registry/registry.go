@@ -2,6 +2,7 @@ package registry
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -56,6 +57,7 @@ func syncImages(conn db.Conn, dk docker.Client) {
 	wg.Add(len(toBuild))
 	sema := make(chan struct{}, 8)
 
+	myIP := conn.MinionSelf().PrivateIP
 	builder := func(img db.Image) {
 		sema <- struct{}{}
 		defer func() {
@@ -68,7 +70,7 @@ func syncImages(conn db.Conn, dk docker.Client) {
 		writeImage(conn, img)
 
 		log.WithField("image", img.Name).Info("Building image...")
-		id, err := updateRegistry(dk, img)
+		repoDigest, err := updateRegistry(dk, myIP, img)
 		if err != nil {
 			img.Status = "" // Unset the building status.
 
@@ -77,7 +79,7 @@ func syncImages(conn db.Conn, dk docker.Client) {
 			return
 		}
 
-		img.DockerID = id
+		img.RepoDigest = repoDigest
 		img.Status = db.Built
 
 		log.WithField("image", img.Name).Info("Built image.")
@@ -89,13 +91,13 @@ func syncImages(conn db.Conn, dk docker.Client) {
 	wg.Wait()
 }
 
-func updateRegistry(dk docker.Client, img db.Image) (string, error) {
-	registryImg := "localhost:5000/" + img.Name
-	id, err := dk.Build(registryImg, img.Dockerfile, false)
-	if err == nil {
-		err = dk.Push("localhost:5000", registryImg)
+func updateRegistry(dk docker.Client, registryIP string, img db.Image) (string, error) {
+	registryImg := fmt.Sprintf("%s:5000/%s", registryIP, img.Name)
+	err := dk.Build(registryImg, img.Dockerfile, false)
+	if err != nil {
+		return "", err
 	}
-	return id, err
+	return dk.Push(registryIP+":5000", registryImg)
 }
 
 // writeImage updates the attributes of the image committed to the database that

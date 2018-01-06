@@ -10,7 +10,7 @@ import (
 // FuzzyLookup finds either a container or a machine that's called `name` by querying the
 // provided `client`.  `name` could be a container's hostname, the prefix of a
 // container's blueprint ID, or the prefix of a machine's cloud ID.
-func FuzzyLookup(client client.Client, name string) (interface{}, string, error) {
+func FuzzyLookup(client client.Client, name string) (interface{}, error) {
 	var machine db.Machine
 	machines, machineError := client.QueryMachines()
 	if machineError == nil {
@@ -27,24 +27,16 @@ func FuzzyLookup(client client.Client, name string) (interface{}, string, error)
 	resolvedContainer := containerError == nil
 	switch {
 	case !resolvedMachine && !resolvedContainer:
-		return nil, "", fmt.Errorf("%s, %s", machineError, containerError)
+		return nil, fmt.Errorf("%s, %s", machineError, containerError)
 	case resolvedMachine && resolvedContainer:
-		return nil, "", fmt.Errorf("ambiguous IDs: machine %q, container %q",
+		return nil, fmt.Errorf("ambiguous IDs: machine %q, container %q",
 			machine.CloudID, container.BlueprintID)
 	}
 
 	if resolvedMachine {
-		return machine, machine.PublicIP, nil
+		return machine, nil
 	}
-
-	privateIP := container.Minion
-	for _, m := range machines {
-		if m.PrivateIP == privateIP {
-			return container, m.PublicIP, nil
-		}
-	}
-
-	return nil, "", fmt.Errorf("no machine with private IP %s", privateIP)
+	return container, nil
 }
 
 func findContainer(containers []db.Container, id string) (db.Container, error) {

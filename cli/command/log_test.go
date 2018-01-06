@@ -2,6 +2,7 @@ package command
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,7 @@ import (
 	"github.com/kelda/kelda/api/client/mocks"
 	"github.com/kelda/kelda/cli/ssh"
 	mockSSH "github.com/kelda/kelda/cli/ssh/mocks"
+	"github.com/kelda/kelda/connection"
 	"github.com/kelda/kelda/db"
 )
 
@@ -47,17 +49,23 @@ type logTest struct {
 }
 
 func TestLog(t *testing.T) {
-	t.Parallel()
-
 	targetContainer := "1"
 	targetMachine := "a"
+	leaderHost := "leader"
+	targetContainerPodName := "podName"
+
+	getLeaderIP = func(_ []db.Machine, _ connection.Credentials) (string, error) {
+		return leaderHost, nil
+	}
 
 	tests := []logTest{
 		// Target container.
 		{
-			cmd:           Log{target: targetContainer},
-			expHost:       "container",
-			expSSHCommand: "docker logs foo",
+			cmd:     Log{target: targetContainer},
+			expHost: leaderHost,
+			expSSHCommand: fmt.Sprintf(
+				"docker exec kube-apiserver kubectl logs %s",
+				targetContainerPodName),
 		},
 		// Target machine.
 		{
@@ -71,8 +79,10 @@ func TestLog(t *testing.T) {
 				target:     targetContainer,
 				shouldTail: true,
 			},
-			expHost:       "container",
-			expSSHCommand: "docker logs --follow foo",
+			expHost: leaderHost,
+			expSSHCommand: fmt.Sprintf(
+				"docker exec kube-apiserver kubectl logs --follow %s",
+				targetContainerPodName),
 		},
 	}
 
@@ -86,7 +96,7 @@ func TestLog(t *testing.T) {
 	}}, nil)
 	mockLocalClient.On("QueryContainers").Return([]db.Container{{
 		BlueprintID: targetContainer,
-		DockerID:    "foo",
+		PodName:     targetContainerPodName,
 		Minion:      "containerPriv",
 	}}, nil)
 	mockLocalClient.On("Close").Return(nil)

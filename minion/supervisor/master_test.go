@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"testing"
 
+	cliPath "github.com/kelda/kelda/cli/path"
 	"github.com/kelda/kelda/db"
+	"github.com/kelda/kelda/util"
 
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMaster(t *testing.T) {
+	util.AppFs = afero.NewMemMapFs()
 	ctx := initTest()
 	ip := "1.2.3.4"
 	etcdIPs := []string{""}
@@ -58,6 +62,14 @@ func TestMaster(t *testing.T) {
 	assert.Equal(t, exp, ctx.fd.running())
 	assert.Empty(t, ctx.execs)
 
+	/* Get the etcd encryption key. */
+	util.WriteFile(cliPath.MinionKubeSecretPath, []byte("secret"), 0644)
+	runMasterOnce()
+	exp[KubeAPIServerName] = kubeAPIServerArgs(ip, etcdIPs)
+	exp[KubeControllerManagerName] = kubeControllerManagerArgs()
+	exp[KubeSchedulerName] = kubeSchedulerArgs()
+	assert.Equal(t, exp, ctx.fd.running())
+
 	/* Lose leadership. */
 	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
 		e := view.SelectFromEtcd(nil)[0]
@@ -67,11 +79,7 @@ func TestMaster(t *testing.T) {
 	})
 	runMasterOnce()
 
-	exp = map[string][]string{
-		EtcdName:     etcdArgsMaster(ip, etcdIPs),
-		OvsdbName:    {"ovsdb-server"},
-		RegistryName: nil,
-	}
+	delete(exp, OvnnorthdName)
 	assert.Equal(t, exp, ctx.fd.running())
 	assert.Empty(t, ctx.execs)
 }
@@ -93,9 +101,12 @@ func TestEtcdAdd(t *testing.T) {
 	runMasterOnce()
 
 	exp := map[string][]string{
-		EtcdName:     etcdArgsMaster(ip, etcdIPs),
-		OvsdbName:    {"ovsdb-server"},
-		RegistryName: nil,
+		EtcdName:                  etcdArgsMaster(ip, etcdIPs),
+		OvsdbName:                 {"ovsdb-server"},
+		RegistryName:              nil,
+		KubeAPIServerName:         kubeAPIServerArgs(ip, etcdIPs),
+		KubeControllerManagerName: kubeControllerManagerArgs(),
+		KubeSchedulerName:         kubeSchedulerArgs(),
 	}
 	assert.Equal(t, exp, ctx.fd.running())
 
@@ -112,11 +123,8 @@ func TestEtcdAdd(t *testing.T) {
 	})
 	runMasterOnce()
 
-	exp = map[string][]string{
-		EtcdName:     etcdArgsMaster(ip, etcdIPs),
-		OvsdbName:    {"ovsdb-server"},
-		RegistryName: nil,
-	}
+	exp[EtcdName] = etcdArgsMaster(ip, etcdIPs)
+	exp[KubeAPIServerName] = kubeAPIServerArgs(ip, etcdIPs)
 	assert.Equal(t, exp, ctx.fd.running())
 }
 
@@ -137,9 +145,12 @@ func TestEtcdRemove(t *testing.T) {
 	runMasterOnce()
 
 	exp := map[string][]string{
-		EtcdName:     etcdArgsMaster(ip, etcdIPs),
-		OvsdbName:    {"ovsdb-server"},
-		RegistryName: nil,
+		EtcdName:                  etcdArgsMaster(ip, etcdIPs),
+		OvsdbName:                 {"ovsdb-server"},
+		RegistryName:              nil,
+		KubeAPIServerName:         kubeAPIServerArgs(ip, etcdIPs),
+		KubeControllerManagerName: kubeControllerManagerArgs(),
+		KubeSchedulerName:         kubeSchedulerArgs(),
 	}
 	assert.Equal(t, exp, ctx.fd.running())
 
@@ -156,11 +167,8 @@ func TestEtcdRemove(t *testing.T) {
 	})
 	runMasterOnce()
 
-	exp = map[string][]string{
-		EtcdName:     etcdArgsMaster(ip, etcdIPs),
-		OvsdbName:    {"ovsdb-server"},
-		RegistryName: nil,
-	}
+	exp[EtcdName] = etcdArgsMaster(ip, etcdIPs)
+	exp[KubeAPIServerName] = kubeAPIServerArgs(ip, etcdIPs)
 	assert.Equal(t, exp, ctx.fd.running())
 }
 

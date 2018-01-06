@@ -26,7 +26,7 @@ const (
 var connectedSlavesRegex = regexp.MustCompile(`connected_slaves:(\d+)`)
 
 func TestRedis(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err)
 	}

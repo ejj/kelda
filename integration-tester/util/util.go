@@ -15,6 +15,7 @@ import (
 	"github.com/kelda/kelda/api/client"
 	"github.com/kelda/kelda/blueprint"
 	cliPath "github.com/kelda/kelda/cli/path"
+	"github.com/kelda/kelda/connection"
 	tlsIO "github.com/kelda/kelda/connection/tls/io"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/join"
@@ -24,17 +25,22 @@ import (
 
 // GetDefaultDaemonClient gets an API client connected to the daemon on the
 // default socket with the default TLS credentials.
-func GetDefaultDaemonClient() (client.Client, error) {
+func GetDefaultDaemonClient() (client.Client, connection.Credentials, error) {
 	creds, err := tlsIO.ReadCredentials(cliPath.DefaultTLSDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	socket := os.Getenv("KELDA_HOST")
 	if socket == "" {
 		socket = api.DefaultSocket
 	}
-	return client.New(socket, creds)
+
+	c, err := client.New(socket, creds)
+	if err != nil {
+		return nil, nil, err
+	}
+	return c, creds, err
 }
 
 // CheckPublicConnections test that HTTP GETs against all ports that are
@@ -70,7 +76,7 @@ func CheckPublicConnections(t *testing.T, machines []db.Machine,
 // WaitForContainers blocks until either all containers in the given blueprint
 // have been booted, or 10 minutes have passed.
 func WaitForContainers(bp blueprint.Blueprint) error {
-	c, err := GetDefaultDaemonClient()
+	c, _, err := GetDefaultDaemonClient()
 	if err != nil {
 		return err
 	}

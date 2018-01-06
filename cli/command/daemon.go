@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	goRSA "crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
 	"flag"
@@ -80,6 +81,16 @@ func (dCmd *Daemon) Run() int {
 		}
 	}
 
+	if _, err := util.Stat(cliPath.DefaultKubeSecretPath); os.IsNotExist(err) {
+		log.WithField("path", cliPath.DefaultKubeSecretPath).Info(
+			"Auto-generating encryption key for Kubernetes resources")
+		if err := setupKubeSecret(cliPath.DefaultKubeSecretPath); err != nil {
+			log.WithError(err).Error(
+				"Kubernetes encryption key generation failed")
+			return 1
+		}
+	}
+
 	if _, err := util.Stat(cliPath.DefaultSSHKeyPath); os.IsNotExist(err) {
 		log.WithField("path", cliPath.DefaultSSHKeyPath).Info(
 			"Auto-generating Kelda SSH key")
@@ -102,6 +113,12 @@ func (dCmd *Daemon) Run() int {
 		return 1
 	}
 
+	kubeSecret, err := util.ReadFile(cliPath.DefaultKubeSecretPath)
+	if err != nil {
+		log.WithError(err).Error("Failed to read Kubernetes encryption key")
+		return 1
+	}
+
 	conn := db.New()
 	go server.Run(conn, dCmd.host, true, creds)
 
@@ -113,7 +130,7 @@ func (dCmd *Daemon) Run() int {
 	}
 
 	go foreman.Run(conn, creds)
-	go cloud.SyncCredentials(conn, sshKey, ca)
+	go cloud.SyncCredentials(conn, sshKey, ca, kubeSecret)
 	cloud.Run(conn, getPublicKey(sshKey))
 	return 0
 }
@@ -148,7 +165,8 @@ func setupTLS(outDir string) error {
 
 	// Generate a signed certificate for use by the Daemon server, and client
 	// connections.
-	signed, err := rsa.NewSigned(ca)
+	subject := pkix.Name{CommonName: "kelda:daemon"}
+	signed, err := rsa.NewSigned(ca, subject)
 	if err != nil {
 		return fmt.Errorf("failed to create signed key pair: %s", err)
 	}
@@ -183,4 +201,14 @@ func setupSSHKey(outPath string) error {
 		return fmt.Errorf("failed to write to disk: %s", err)
 	}
 	return nil
+}
+
+func setupKubeSecret(outPath string) error {
+	secret := make([]byte, 32)
+	_, err := rand.Read(secret)
+	if err != nil {
+		return err
+	}
+	secretBase64 := base64.StdEncoding.EncodeToString(secret)
+	return util.WriteFile(outPath, []byte(secretBase64), 0400)
 }

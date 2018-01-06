@@ -18,6 +18,11 @@ func TestSyncImages(t *testing.T) {
 		im := view.InsertImage()
 		im.Name = "image"
 		view.Commit(im)
+
+		m := view.InsertMinion()
+		m.Self = true
+		m.PrivateIP = "myIP"
+		view.Commit(m)
 		return nil
 	})
 
@@ -26,7 +31,7 @@ func TestSyncImages(t *testing.T) {
 	syncImages(conn, dk)
 	images := getImages(conn)
 	assert.Len(t, images, 1)
-	assert.Empty(t, images[0].DockerID)
+	assert.Empty(t, images[0].RepoDigest)
 	assert.Empty(t, images[0].Status)
 
 	// Test successfully building an image.
@@ -34,8 +39,8 @@ func TestSyncImages(t *testing.T) {
 	syncImages(conn, dk)
 	images = getImages(conn)
 	assert.Len(t, images, 1)
-	builtID := images[0].DockerID
-	assert.NotEmpty(t, builtID, "should save ID of built image")
+	builtDigest := images[0].RepoDigest
+	assert.NotEmpty(t, builtDigest, "should save repo digest of built image")
 	assert.Equal(t, db.Built, images[0].Status)
 
 	// Test ignoring already-built image.
@@ -44,7 +49,8 @@ func TestSyncImages(t *testing.T) {
 
 	images = getImages(conn)
 	assert.Len(t, images, 1)
-	assert.Equal(t, builtID, images[0].DockerID, "should not change image ID")
+	assert.Equal(t, builtDigest, images[0].RepoDigest,
+		"should not change repo digest")
 	assert.Equal(t, md.Built, map[docker.BuildImageOptions]struct{}{},
 		"should not attempt to rebuild")
 }
@@ -52,7 +58,7 @@ func TestSyncImages(t *testing.T) {
 func TestUpdateRegistry(t *testing.T) {
 	md, dk := docker.NewMock()
 
-	_, err := updateRegistry(dk, db.Image{
+	_, err := updateRegistry(dk, "myIP", db.Image{
 		Name:       "mean:tag",
 		Dockerfile: "dockerfile",
 	})
@@ -60,7 +66,7 @@ func TestUpdateRegistry(t *testing.T) {
 
 	assert.Equal(t, map[docker.BuildImageOptions]struct{}{
 		{
-			Name:       "localhost:5000/mean:tag",
+			Name:       "myIP:5000/mean:tag",
 			Dockerfile: "dockerfile",
 			NoCache:    true,
 		}: {},
@@ -68,8 +74,8 @@ func TestUpdateRegistry(t *testing.T) {
 
 	assert.Equal(t, map[dkc.PushImageOptions]struct{}{
 		{
-			Registry: "localhost:5000",
-			Name:     "localhost:5000/mean",
+			Registry: "myIP:5000",
+			Name:     "myIP:5000/mean",
 			Tag:      "tag",
 		}: {},
 	}, md.Pushed)

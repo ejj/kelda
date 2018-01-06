@@ -15,6 +15,7 @@ import (
 	"github.com/kelda/kelda/api/client/mocks"
 	"github.com/kelda/kelda/cli/ssh"
 	mockSSH "github.com/kelda/kelda/cli/ssh/mocks"
+	"github.com/kelda/kelda/connection"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/util"
 )
@@ -135,6 +136,10 @@ func TestDebug(t *testing.T) {
 		execCmd = exec.Command
 	}()
 
+	getLeaderIP = func(_ []db.Machine, _ connection.Credentials) (string, error) {
+		return "leader", nil
+	}
+
 	tests := []debugTest{
 		// Check that all logs are fetched.
 		{
@@ -157,8 +162,8 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
 			},
 			expSSH:    true,
 			expReturn: 0,
@@ -184,8 +189,8 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
 			},
 			expSSH:    true,
 			expReturn: 0,
@@ -209,8 +214,8 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
 			},
 			expSSH:    true,
 			expReturn: 0,
@@ -239,8 +244,8 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "8.7.6.5"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "8.7.6.5"},
 			},
 			expSSH:    true,
 			expReturn: 0,
@@ -263,10 +268,10 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
-				{Hostname: "4", DockerID: "c", Minion: "4.3.2.1"},
-				{Hostname: "5", DockerID: "d", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
+				{Hostname: "4", PodName: "c", Minion: "4.3.2.1"},
+				{Hostname: "5", PodName: "d", Minion: "4.3.2.1"},
 			},
 			expSSH:    true,
 			expReturn: 0,
@@ -290,10 +295,10 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
-				{Hostname: "4", DockerID: "c", Minion: "4.3.2.1"},
-				{Hostname: "5", DockerID: "d", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
+				{Hostname: "4", PodName: "c", Minion: "4.3.2.1"},
+				{Hostname: "5", PodName: "d", Minion: "4.3.2.1"},
 			},
 			expSSH:    true,
 			expReturn: 0,
@@ -317,10 +322,10 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
-				{Hostname: "41", DockerID: "c", Minion: "4.3.2.1"},
-				{Hostname: "5", DockerID: "d", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
+				{Hostname: "41", PodName: "c", Minion: "4.3.2.1"},
+				{Hostname: "5", PodName: "d", Minion: "4.3.2.1"},
 			},
 			expSSH:    false,
 			expReturn: 1,
@@ -340,10 +345,10 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
-				{Hostname: "41", DockerID: "c", Minion: "4.3.2.1"},
-				{Hostname: "5", DockerID: "d", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
+				{Hostname: "41", PodName: "c", Minion: "4.3.2.1"},
+				{Hostname: "5", PodName: "d", Minion: "4.3.2.1"},
 			},
 			expSSH:    false,
 			expReturn: 1,
@@ -363,10 +368,10 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
-				{Hostname: "4", DockerID: "c", Minion: "4.3.2.1"},
-				{Hostname: "5", DockerID: "d", Minion: ""},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
+				{Hostname: "4", PodName: "c", Minion: "4.3.2.1"},
+				{Hostname: "5", PodName: "d", Minion: ""},
 			},
 			expSSH:    true,
 			expReturn: 0,
@@ -396,7 +401,7 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
 			},
 			expSSH:    true,
 			expReturn: 0,
@@ -419,8 +424,8 @@ func TestDebug(t *testing.T) {
 				},
 			},
 			containers: []db.Container{
-				{Hostname: "2", DockerID: "a", Minion: "4.3.2.1"},
-				{Hostname: "3", DockerID: "b", Minion: "4.3.2.1"},
+				{Hostname: "2", PodName: "a", Minion: "4.3.2.1"},
+				{Hostname: "3", PodName: "b", Minion: "4.3.2.1"},
 			},
 			expSSH:    true,
 			expReturn: 0,

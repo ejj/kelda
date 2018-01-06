@@ -10,6 +10,7 @@ import (
 	"github.com/kelda/kelda/api/client/mocks"
 	"github.com/kelda/kelda/cli/ssh"
 	mockSSH "github.com/kelda/kelda/cli/ssh/mocks"
+	"github.com/kelda/kelda/connection"
 	"github.com/kelda/kelda/db"
 )
 
@@ -93,6 +94,12 @@ type sshTest struct {
 
 func TestSSH(t *testing.T) {
 	isTerminal = func() bool { return true }
+
+	leaderHost := "leader"
+	getLeaderIP = func(_ []db.Machine, _ connection.Credentials) (string, error) {
+		return leaderHost, nil
+	}
+
 	tests := []sshTest{
 		// Machine with login shell.
 		{
@@ -125,11 +132,12 @@ func TestSSH(t *testing.T) {
 			containers: []db.Container{{
 				Minion:      "priv",
 				BlueprintID: "tgt",
-				DockerID:    "dockerID",
+				PodName:     "podName",
 			}},
 			expAllocatePTY: true,
-			expHost:        "host",
-			expRunArgs:     "docker exec -it dockerID sh",
+			expHost:        leaderHost,
+			expRunArgs: "docker exec -it kube-apiserver " +
+				"kubectl exec -it podName -- sh",
 		},
 		// Container with exec.
 		{
@@ -142,10 +150,11 @@ func TestSSH(t *testing.T) {
 			containers: []db.Container{{
 				Minion:      "priv",
 				BlueprintID: "tgt",
-				DockerID:    "dockerID",
+				PodName:     "podName",
 			}},
-			expHost:    "host",
-			expRunArgs: "docker exec  dockerID foo bar",
+			expHost: leaderHost,
+			expRunArgs: "docker exec  kube-apiserver " +
+				"kubectl exec  podName -- foo bar",
 		},
 		// Container with exec and PTY.
 		{
@@ -159,11 +168,12 @@ func TestSSH(t *testing.T) {
 			containers: []db.Container{{
 				Minion:      "priv",
 				BlueprintID: "tgt",
-				DockerID:    "dockerID",
+				PodName:     "podName",
 			}},
 			expAllocatePTY: true,
-			expHost:        "host",
-			expRunArgs:     "docker exec -it dockerID foo bar",
+			expHost:        leaderHost,
+			expRunArgs: "docker exec -it kube-apiserver " +
+				"kubectl exec -it podName -- foo bar",
 		},
 	}
 	for _, test := range tests {

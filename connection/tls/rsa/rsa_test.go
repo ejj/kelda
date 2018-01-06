@@ -2,6 +2,7 @@ package rsa
 
 import (
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"testing"
 
 	"github.com/kelda/kelda/connection/tls"
@@ -53,6 +54,6 @@ func newCAAndSigned() (KeyPair, KeyPair, error) {
 		return KeyPair{}, KeyPair{}, err
 	}
 
-	signed, err := NewSigned(ca)
+	signed, err := NewSigned(ca, pkix.Name{})
 	return ca, signed, err
 }

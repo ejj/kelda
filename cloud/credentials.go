@@ -1,6 +1,7 @@
 package cloud
 
 import (
+	"crypto/x509/pkix"
 	"fmt"
 	"io"
 	"net"
@@ -20,7 +21,11 @@ import (
 	"github.com/kelda/kelda/db"
 )
 
-var credentialsCounter = counter.New("Cloud Credentials")
+var (
+	machinesWithTLS        = map[string]struct{}{}
+	machinesWithKubeSecret = map[string]struct{}{}
+	credentialsCounter     = counter.New("Cloud Credentials")
+)
 
 // SyncCredentials installs TLS certificates on all machines. It generates
 // the certificates using the given certificate authority, and copies them
@@ -28,39 +33,43 @@ var credentialsCounter = counter.New("Cloud Credentials")
 // certificates are in place on a machine, they are left alone. SyncCredentials
 // also writes the installed signed certificate for each machine into the
 // database.
-func SyncCredentials(conn db.Conn, sshKey ssh.Signer, ca rsa.KeyPair) {
+func SyncCredentials(conn db.Conn, sshKey ssh.Signer, ca rsa.KeyPair, kubeSecret string) {
 	for range conn.TriggerTick(30, db.MachineTable).C {
-		syncCredentialsOnce(conn, sshKey, ca)
+		syncCredentialsOnce(conn, sshKey, ca, kubeSecret)
 	}
 }
 
-func syncCredentialsOnce(conn db.Conn, sshKey ssh.Signer, ca rsa.KeyPair) {
+func syncCredentialsOnce(conn db.Conn, sshKey ssh.Signer, ca rsa.KeyPair,
+	kubeSecret string) {
 	credentialsCounter.Inc("Install to cluster")
 
 	// Only attempt to install certificates on machines that are running, and
 	// that do not already have certificates.
-	machines := conn.SelectFromMachine(func(m db.Machine) bool {
-		return m.Status != db.Stopping && m.PublicIP != "" && m.PublicKey == ""
-	})
-
-	ipCertMap := map[string]string{}
-	for _, m := range machines {
-		credentialsCounter.Inc("Install " + m.PublicIP)
-		publicKey, ok := generateAndInstallCerts(m, sshKey, ca)
-		if ok {
-			ipCertMap[m.PublicIP] = publicKey
+	needsTLS := func(m db.Machine) bool {
+		_, ok := machinesWithTLS[m.CloudID]
+		return !ok && m.Status != db.Stopping && m.PublicIP != ""
+	}
+	for _, m := range conn.SelectFromMachine(needsTLS) {
+		credentialsCounter.Inc("Install TLS " + m.PublicIP)
+		if generateAndInstallCerts(m, sshKey, ca) {
+			machinesWithTLS[m.CloudID] = struct{}{}
 		}
 	}
 
-	conn.Txn(db.MachineTable).Run(func(view db.Database) error {
-		for _, dbm := range view.SelectFromMachine(nil) {
-			if cert, ok := ipCertMap[dbm.PublicIP]; ok {
-				dbm.PublicKey = cert
-				view.Commit(dbm)
-			}
+	needsKubeSecret := func(m db.Machine) bool {
+		_, ok := machinesWithKubeSecret[m.CloudID]
+		return !ok && m.Status != db.Stopping && m.PublicIP != "" &&
+			m.Role == db.Master
+	}
+	for _, m := range conn.SelectFromMachine(needsKubeSecret) {
+		credentialsCounter.Inc("Install Kubernetes key " + m.PublicIP)
+		if err := installKubeSecret(m, sshKey, kubeSecret); err == nil {
+			machinesWithKubeSecret[m.CloudID] = struct{}{}
+		} else {
+			log.WithError(err).WithField("host", m.CloudID).Error(
+				"Failed to install Kubernetes secret")
 		}
-		return nil
-	})
+	}
 }
 
 // generateAndInstallCerts attempts to generate a certificate key pair and install
@@ -68,35 +77,35 @@ func syncCredentialsOnce(conn db.Conn, sshKey ssh.Signer, ca rsa.KeyPair) {
 // returns the contents of the previously installed certificate. Returns the
 // public key of the installed certificate, and whether it was successful.
 func generateAndInstallCerts(machine db.Machine, sshKey ssh.Signer,
-	ca rsa.KeyPair) (string, bool) {
+	ca rsa.KeyPair) bool {
 	fs, err := getSftpFs(machine.PublicIP, sshKey)
 	if err != nil {
 		// This error is probably benign because failures to SSH are expected
 		// while the machine is still booting.
 		log.WithError(err).WithField("host", machine.PublicIP).
 			Debug("Failed to get SFTP client. Retrying.")
-		return "", false
+		return false
 	}
 	defer fs.Close()
 
 	certPath := tlsIO.SignedCertPath(cliPath.MinionTLSDir)
 	if _, err := fs.Stat(certPath); err == nil {
-		existingCert, err := afero.Afero{Fs: fs}.ReadFile(certPath)
-		if err != nil {
-			log.WithError(err).WithField("host", machine.PublicIP).Error(
-				"Failed to read existing certificate")
-			return "", false
-		}
-		return string(existingCert), true
+		return true
 	}
 
 	// Generate new certificates signed by the CA for use by the minion for all
 	// communication.
-	signed, err := rsa.NewSigned(ca, net.ParseIP(machine.PrivateIP))
+	// The certificate CommonName and Organization is configured to allow
+	// Kubelets to authenticate with the Kubernetes API server.
+	subject := pkix.Name{
+		CommonName:   "system:node:" + machine.PrivateIP,
+		Organization: []string{"system:nodes"},
+	}
+	signed, err := rsa.NewSigned(ca, subject, net.ParseIP(machine.PrivateIP))
 	if err != nil {
 		log.WithError(err).WithField("host", machine.PublicIP).
 			Error("Failed to generate certs. Retrying.")
-		return "", false
+		return false
 	}
 
 	// Create the directory in which the credentials will be installed. This is
@@ -105,7 +114,7 @@ func generateAndInstallCerts(machine db.Machine, sshKey ssh.Signer,
 	if err := fs.MkdirAll(cliPath.MinionTLSDir, 0755); err != nil {
 		log.WithError(err).WithField("host", machine.PublicIP).Error(
 			"Failed to create TLS directory. Retrying.")
-		return "", false
+		return false
 	}
 
 	for _, f := range tlsIO.MinionFiles(cliPath.MinionTLSDir, ca, signed) {
@@ -115,11 +124,25 @@ func generateAndInstallCerts(machine db.Machine, sshKey ssh.Signer,
 				"path":  f.Path,
 				"host":  machine.PublicIP,
 			}).Error("Failed to write file")
-			return "", false
+			return false
 		}
 	}
 
-	return signed.CertString(), true
+	return true
+}
+
+func installKubeSecret(machine db.Machine, sshKey ssh.Signer, kubeSecret string) error {
+	fs, err := getSftpFs(machine.PublicIP, sshKey)
+	if err != nil {
+		return err
+	}
+	defer fs.Close()
+
+	// If a secret already exists, don't do anything.
+	if _, err := fs.Stat(cliPath.MinionKubeSecretPath); err == nil {
+		return nil
+	}
+	return write(fs, cliPath.MinionKubeSecretPath, kubeSecret, 0400)
 }
 
 func write(fs afero.Fs, path, contents string, mode os.FileMode) error {

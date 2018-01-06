@@ -186,6 +186,26 @@ func NewString(str string) ContainerValue {
 	return ContainerValue{str}
 }
 
+// DivideContainerValues divides a map of ContainerValues into two maps -- one
+// of string values, and one of secrets.
+func DivideContainerValues(vals map[string]ContainerValue) (
+	rawStrings, secrets map[string]string) {
+
+	rawStrings = map[string]string{}
+	secrets = map[string]string{}
+	for name, valIntf := range vals {
+		switch val := valIntf.Value.(type) {
+		case string:
+			rawStrings[name] = val
+		case Secret:
+			secrets[name] = val.NameOfSecret
+		default:
+			panic("unreached")
+		}
+	}
+	return
+}
+
 // String returns a human-readable representation of the ContainerValue. This
 // makes the database logs easier to read.
 func (cv ContainerValue) String() string {

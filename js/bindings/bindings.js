@@ -1055,8 +1055,9 @@ class Container {
    *   the path on the container where the text file should be installed, and
    *   the value is the contents of the text file. If the file content specified
    *   by this argument changes and the blueprint is re-run, Kelda will re-start
-   *   the container using the new files.  Files are installed with permissions
-   *   0644 and parent directories are automatically created.
+   *   the container using the new files. Files are installed with permissions
+   *   0444 in a read-only filesystem, and parent directories are automatically
+   *   created.
    */
   constructor(args) {
     // refID is used to distinguish infrastructures with multiple references to the

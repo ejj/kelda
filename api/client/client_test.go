@@ -83,7 +83,7 @@ func TestUnmarshalContainer(t *testing.T) {
 
 	apiClient := mockAPIClient{
 		mockResponse: `[{"ID":1,"Pid":0,"IP":"","Mac":"","Minion":"",` +
-			`"DockerID":"docker-id","BlueprintID":"","Image":"image",` +
+			`"PodName":"pod-name","BlueprintID":"","Image":"image",` +
 			`"Command":["cmd","arg"],"Env":null}]`,
 	}
 	c := clientImpl{pbClient: apiClient}
@@ -92,9 +92,9 @@ func TestUnmarshalContainer(t *testing.T) {
 
 	exp := []db.Container{
 		{
-			DockerID: "docker-id",
-			Image:    "image",
-			Command:  []string{"cmd", "arg"},
+			PodName: "pod-name",
+			Image:   "image",
+			Command: []string{"cmd", "arg"},
 		},
 	}
 	assert.Equal(t, exp, res)
@@ -105,7 +105,7 @@ func TestUnmarshalImage(t *testing.T) {
 
 	apiClient := mockAPIClient{
 		mockResponse: `[{"ID":1,"Name":"foo","Dockerfile":"bar",` +
-			`"DockerID":"","Status":"building"}]`,
+			`"RepoDigest":"","Status":"building"}]`,
 	}
 	c := clientImpl{pbClient: apiClient}
 	res, err := c.QueryImages()

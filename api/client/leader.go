@@ -12,8 +12,17 @@ import (
 
 // Leader obtains a Client connected to the Leader of the cluster.
 func Leader(machines []db.Machine, creds connection.Credentials) (Client, error) {
+	leaderIP, err := GetLeaderIP(machines, creds)
+	if err != nil {
+		return nil, err
+	}
+	return newClient(api.RemoteAddress(leaderIP), creds)
+}
+
+// GetLeaderIP queries the given machines for the IP of the leader of cluster.
+func GetLeaderIP(machines []db.Machine, creds connection.Credentials) (string, error) {
 	if len(machines) == 0 {
-		return nil, errors.New("no machines to query")
+		return "", errors.New("no machines to query")
 	}
 
 	// A list of errors from attempting to query the leader's IP.
@@ -27,12 +36,12 @@ func Leader(machines []db.Machine, creds connection.Credentials) (Client, error)
 
 		ip, err := getLeaderIP(machines, m.PublicIP, creds)
 		if err == nil {
-			return newClient(api.RemoteAddress(ip), creds)
+			return ip, nil
 		}
 		errorStrs = append(errorStrs, fmt.Sprintf("%s - %s", m.PublicIP, err))
 	}
 
-	return nil, NoLeaderError(errorStrs)
+	return "", NoLeaderError(errorStrs)
 }
 
 // NoLeaderError wraps the errors resulting from trying to find the leader of

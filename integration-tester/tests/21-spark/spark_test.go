@@ -13,7 +13,7 @@ import (
 )
 
 func TestRunShuffleJob(t *testing.T) {
-	clnt, err := testerUtil.GetDefaultDaemonClient()
+	clnt, _, err := testerUtil.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err.Error())
 	}
@@ -75,7 +75,7 @@ func TestRunShuffleJob(t *testing.T) {
 }
 
 func TestReadFromS3(t *testing.T) {
-	clnt, err := testerUtil.GetDefaultDaemonClient()
+	clnt, _, err := testerUtil.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get api client: %s", err.Error())
 	}

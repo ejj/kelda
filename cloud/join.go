@@ -90,7 +90,6 @@ func (cld *cloud) syncDBWithCloud(view db.Database, cloudMachines []db.Machine) 
 		cm.ID = dbm.ID
 		cm.Status = dbm.Status
 		cm.SSHKeys = dbm.SSHKeys
-		cm.PublicKey = dbm.PublicKey
 		view.Commit(cm)
 	}
 }

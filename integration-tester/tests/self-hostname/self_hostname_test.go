@@ -18,7 +18,7 @@ import (
 // (with the hostname prefix "web") that return their hostname when queried,
 // and a fetcher container that is connected to all the web containers.
 func TestSelfHostname(t *testing.T) {
-	clnt, err := util.GetDefaultDaemonClient()
+	clnt, _, err := util.GetDefaultDaemonClient()
 	assert.NoError(t, err)
 	defer clnt.Close()
 

@@ -16,7 +16,7 @@ import (
 // been deployed, or 10 minutes have passed. This way, the rest of the test
 // suites will not have to account for booting the machines.
 func TestInfrastructureSetup(t *testing.T) {
-	clnt, err := testerUtil.GetDefaultDaemonClient()
+	clnt, _, err := testerUtil.GetDefaultDaemonClient()
 	assert.NoError(t, err)
 
 	bp, err := testerUtil.GetCurrentBlueprint(clnt)

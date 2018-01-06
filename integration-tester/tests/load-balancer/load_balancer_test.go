@@ -17,7 +17,7 @@ const (
 )
 
 func TestLoadBalancer(t *testing.T) {
-	c, err := util.GetDefaultDaemonClient()
+	c, creds, err := util.GetDefaultDaemonClient()
 	if err != nil {
 		t.Fatalf("couldn't get local client: %s", err)
 	}
@@ -38,7 +38,7 @@ func TestLoadBalancer(t *testing.T) {
 		t.Fatalf("couldn't get machines: %s", err)
 	}
 
-	sshUtil, err := util.NewSSHUtil(machines)
+	sshUtil, err := util.NewSSHUtil(machines, creds)
 	if err != nil {
 		t.Fatalf("failed to create SSH util client: %s", err)
 	}

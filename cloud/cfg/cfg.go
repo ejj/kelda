@@ -13,19 +13,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	keldaImage = "keldaio/kelda"
-)
-
 // Allow mocking out for the unit tests.
-var ver = version.Version
+var image = version.Image
 
 // Ubuntu generates a cloud config file for the Ubuntu operating system with the
 // corresponding `version`.
 func Ubuntu(m db.Machine, inboundPublic string) string {
 	t := template.Must(template.New("cloudConfig").Parse(cfgTemplate))
-
-	img := fmt.Sprintf("%s:%s", keldaImage, ver)
 
 	var cloudConfigBytes bytes.Buffer
 	err := t.Execute(&cloudConfigBytes, struct {
@@ -33,13 +27,13 @@ func Ubuntu(m db.Machine, inboundPublic string) string {
 		SSHKeys    string
 		LogLevel   string
 		MinionOpts string
-		TLSDir     string
+		KeldaHome  string
 	}{
-		KeldaImage: img,
+		KeldaImage: image,
 		SSHKeys:    strings.Join(m.SSHKeys, "\n"),
 		LogLevel:   log.GetLevel().String(),
 		MinionOpts: minionOptions(m.Role, inboundPublic),
-		TLSDir:     cliPath.MinionTLSDir,
+		KeldaHome:  cliPath.MinionHome,
 	})
 	if err != nil {
 		panic(err)

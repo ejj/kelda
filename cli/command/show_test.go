@@ -43,7 +43,6 @@ func TestShowErrors(t *testing.T) {
 	mockClient.On("QueryConnections").Return(nil, nil)
 	mockClient.On("QueryMachines").Return([]db.Machine{{Status: db.Connected}}, nil)
 	mockClient.On("QueryContainers").Return(nil, mockErr)
-	mockClient.On("QueryImages").Return(nil, nil)
 	cmd := &Show{false, connectionHelper{client: mockClient}}
 	assert.EqualError(t, cmd.run(), "unable to query containers: error")
 
@@ -52,7 +51,6 @@ func TestShowErrors(t *testing.T) {
 	mockClient.On("QueryContainers").Return(nil, nil)
 	mockClient.On("QueryMachines").Return([]db.Machine{{Status: db.Connected}}, nil)
 	mockClient.On("QueryConnections").Return(nil, mockErr)
-	mockClient.On("QueryImages").Return(nil, nil)
 	cmd = &Show{false, connectionHelper{client: mockClient}}
 	assert.EqualError(t, cmd.run(), "unable to query connections: error")
 }
@@ -88,7 +86,6 @@ func TestShowSuccess(t *testing.T) {
 	mockClient.On("QueryContainers").Return(nil, nil)
 	mockClient.On("QueryMachines").Return(nil, nil)
 	mockClient.On("QueryConnections").Return(nil, nil)
-	mockClient.On("QueryImages").Return(nil, nil)
 	cmd := &Show{false, connectionHelper{client: mockClient}}
 	assert.Equal(t, 0, cmd.Run())
 }
@@ -135,11 +132,10 @@ func TestMachineOutput(t *testing.T) {
 }
 
 func checkContainerOutput(t *testing.T, containers []db.Container,
-	machines []db.Machine, connections []db.Connection, images []db.Image,
-	truncate bool, exp string) {
+	machines []db.Machine, connections []db.Connection, truncate bool, exp string) {
 
 	var b bytes.Buffer
-	writeContainers(&b, containers, machines, connections, images, truncate)
+	writeContainers(&b, containers, machines, connections, truncate)
 
 	/* By replacing space with underscore, we make the spaces explicit and whitespace
 	* errors easier to debug. */
@@ -162,7 +158,8 @@ func TestContainerOutput(t *testing.T) {
 			Status:   "scheduled"},
 		{ID: 4, BlueprintID: "7", Minion: "2.2.2.2", Image: "image1",
 			Command:  []string{"cmd", "3", "4"},
-			Hostname: "frompublic3"},
+			Hostname: "frompublic3",
+			Status:   "scheduled"},
 		{ID: 5, BlueprintID: "8", Image: "image1"},
 	}
 	machines := []db.Machine{
@@ -194,7 +191,7 @@ ________________________________________________________________________________
 _________________________________________________________________________________
 8____________7__________image1___________________________________________________
 `
-	checkContainerOutput(t, containers, machines, connections, nil, true, expected)
+	checkContainerOutput(t, containers, machines, connections, true, expected)
 
 	// Testing writeContainers with created time values.
 	mockTime := time.Now()
@@ -215,7 +212,7 @@ ________________________________________________________________________________
 3_______________________image1_cmd_1________________running____` +
 		mockCreatedString + `____
 `
-	checkContainerOutput(t, containers, machines, connections, nil, true, expected)
+	checkContainerOutput(t, containers, machines, connections, true, expected)
 
 	// Testing writeContainers with longer durations.
 	mockDuration := time.Hour
@@ -237,7 +234,7 @@ ________________________________________________________________________________
 3_______________________image1_cmd_1________________running____` +
 		mockCreatedString + `____
 `
-	checkContainerOutput(t, containers, machines, connections, nil, true, expected)
+	checkContainerOutput(t, containers, machines, connections, true, expected)
 
 	// Test that long outputs are truncated when `truncate` is true
 	containers = []db.Container{
@@ -254,7 +251,7 @@ ________________________________________________________________________________
 3_______________________image1_cmd_1_&&_cmd_9128340347...________________running____` +
 		mockCreatedString + `____
 `
-	checkContainerOutput(t, containers, machines, connections, nil, true, expected)
+	checkContainerOutput(t, containers, machines, connections, true, expected)
 
 	// Test that long outputs are not truncated when `truncate` is false
 	expected = `CONTAINER____MACHINE____COMMAND_________________________________` +
@@ -263,7 +260,7 @@ ________________________________________________________________________________
 3_______________________image1_cmd_1_&&_cmd_912834034729038472930143209847239084` +
 		`73248-23843984________________running____` + mockCreatedString + `____
 `
-	checkContainerOutput(t, containers, machines, connections, nil, false, expected)
+	checkContainerOutput(t, containers, machines, connections, false, expected)
 
 	// Test writing container that has multiple connections to the public
 	// internet.
@@ -272,6 +269,7 @@ ________________________________________________________________________________
 		Minion:      "1.1.1.1",
 		Image:       "image1",
 		Hostname:    "frompub",
+		Status:      "scheduled",
 	}}
 	machines = []db.Machine{
 		{CloudID: "5", PublicIP: "7.7.7.7", PrivateIP: "1.1.1.1"},
@@ -288,58 +286,7 @@ ________________________________________________________________________________
 3____________5__________image1_____frompub_____scheduled_______________` +
 		`7.7.7.7:[80,100-101]
 `
-	checkContainerOutput(t, containers, machines, connections, nil, true, expected)
-}
-
-func TestContainerOutputCustomImage(t *testing.T) {
-	t.Parallel()
-
-	// Building.
-	containers := []db.Container{
-		{BlueprintID: "3", Image: "custom-dockerfile"},
-	}
-	images := []db.Image{
-		{Name: "custom-dockerfile", Status: db.Building},
-	}
-
-	exp := `CONTAINER____MACHINE____COMMAND_______________HOSTNAME____STATUS` +
-		`______CREATED____PUBLIC_IP
-3_______________________custom-dockerfile_________________building_______________
-`
-	checkContainerOutput(t, containers, nil, nil, images, true, exp)
-
-	// Built, but not scheduled.
-	images = []db.Image{
-		{Name: "custom-dockerfile", Status: db.Built},
-	}
-	exp = `CONTAINER____MACHINE____COMMAND_______________HOSTNAME____STATUS` +
-		`____CREATED____PUBLIC_IP
-3_______________________custom-dockerfile_________________built________________
-`
-	checkContainerOutput(t, containers, nil, nil, images, true, exp)
-
-	// We only have image data on a different image, so we can't update the status.
-	images = []db.Image{
-		{Name: "ignoreme", Status: db.Built},
-	}
-	exp = `CONTAINER____MACHINE____COMMAND_______________HOSTNAME____STATUS` +
-		`____CREATED____PUBLIC_IP
-3_______________________custom-dockerfile______________________________________
-`
-	checkContainerOutput(t, containers, nil, nil, images, true, exp)
-
-	// Built and scheduled.
-	images = []db.Image{
-		{Name: "custom-dockerfile", Status: db.Built},
-	}
-	containers = []db.Container{
-		{BlueprintID: "3", Image: "custom-dockerfile", Minion: "foo"},
-	}
-	exp = `CONTAINER____MACHINE____COMMAND_______________HOSTNAME____STATUS` +
-		`_______CREATED____PUBLIC_IP
-3_______________________custom-dockerfile_________________scheduled_______________
-`
-	checkContainerOutput(t, containers, nil, nil, images, true, exp)
+	checkContainerOutput(t, containers, machines, connections, true, expected)
 }
 
 func TestContainerStr(t *testing.T) {

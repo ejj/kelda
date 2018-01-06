@@ -9,9 +9,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
 
+	"github.com/kelda/kelda/api/client"
 	"github.com/kelda/kelda/api/util"
 	"github.com/kelda/kelda/cli/ssh"
 	"github.com/kelda/kelda/db"
+	"github.com/kelda/kelda/minion/supervisor"
 	keldaUtil "github.com/kelda/kelda/util"
 )
 
@@ -75,68 +77,93 @@ func (sCmd SSH) Run() int {
 		return 1
 	}
 
-	i, host, err := util.FuzzyLookup(sCmd.client, sCmd.target)
+	i, err := util.FuzzyLookup(sCmd.client, sCmd.target)
 	if err != nil {
 		log.WithError(err).Errorf("Failed to lookup %s", sCmd.target)
 		return 1
 	}
 
-	sshClient, err := sCmd.sshGetter(host, sCmd.privateKey)
-	if err != nil {
-		log.WithError(err).Error("Failed to set up SSH connection")
-		return 1
-	}
-	defer sshClient.Close()
-
 	cmd := strings.Join(sCmd.args, " ")
 	shouldLogin := cmd == ""
 
+	var cmdErr error
 	switch t := i.(type) {
 	case db.Machine:
+		sshClient, err := sCmd.sshGetter(t.PublicIP, sCmd.privateKey)
+		if err != nil {
+			log.WithError(err).Error("Failed to set up SSH connection")
+			return 1
+		}
+		defer sshClient.Close()
+
 		if shouldLogin {
-			err = sshClient.Shell()
+			cmdErr = sshClient.Shell()
 		} else {
-			err = sshClient.Run(sCmd.allocatePTY, cmd)
+			cmdErr = sshClient.Run(sCmd.allocatePTY, cmd)
 		}
 	case db.Container:
-		if t.DockerID == "" {
+		if t.PodName == "" {
 			log.Error("Container not yet running")
 			return 1
 		}
 
-		if shouldLogin {
-			err = containerExec(sshClient, t.DockerID, true, "sh")
-		} else {
-			err = containerExec(sshClient, t.DockerID, sCmd.allocatePTY, cmd)
+		machines, err := sCmd.client.QueryMachines()
+		if err != nil {
+			log.WithError(err).Error("Failed to query machines")
+			return 1
 		}
+
+		leaderIP, err := getLeaderIP(machines, sCmd.creds)
+		if err != nil {
+			log.WithError(err).Error("Failed to find leader machine")
+			return 1
+		}
+
+		sshClient, err := sCmd.sshGetter(leaderIP, sCmd.privateKey)
+		if err != nil {
+			log.WithError(err).Error("Failed to set up SSH connection")
+			return 1
+		}
+		defer sshClient.Close()
+
+		if shouldLogin {
+			sCmd.allocatePTY = true
+			cmd = "sh"
+		}
+		cmdErr = containerExec(sshClient, t.PodName, sCmd.allocatePTY, cmd)
 	default:
 		panic("Not Reached")
 	}
 
-	if err != nil {
-		if exitErr, ok := err.(exitError); ok {
-			log.WithError(err).Debug(
+	if cmdErr != nil {
+		if exitErr, ok := cmdErr.(exitError); ok {
+			log.WithError(cmdErr).Debug(
 				"SSH command returned a nonzero exit code")
 			return exitErr.ExitStatus()
 		}
 
-		log.WithError(err).Error("Error running command")
+		log.WithError(cmdErr).Error("Error running command")
 		return 1
 	}
 
 	return 0
 }
 
-func containerExec(c ssh.Client, dockerID string, allocatePTY bool, cmd string) error {
+func containerExec(c ssh.Client, podName string, allocatePTY bool, cmd string) error {
 	var flags string
 	if allocatePTY {
 		flags = "-it"
 	}
 
-	command := strings.Join([]string{"docker exec", flags, dockerID, cmd}, " ")
-	return c.Run(allocatePTY, command)
+	command := []string{
+		"docker", "exec", flags, supervisor.KubeAPIServerName,
+		"kubectl", "exec", flags, podName, "--", cmd,
+	}
+
+	return c.Run(allocatePTY, strings.Join(command, " "))
 }
 
+var getLeaderIP = client.GetLeaderIP
 var isTerminal = func() bool {
 	return terminal.IsTerminal(int(os.Stdout.Fd()))
 }

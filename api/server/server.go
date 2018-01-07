@@ -21,9 +21,8 @@ import (
 	"github.com/kelda/kelda/version"
 
 	"github.com/docker/distribution/reference"
-	"golang.org/x/net/context"
-
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
 )
 
 var errDaemonOnlyRPC = errors.New("only defined on the daemon")

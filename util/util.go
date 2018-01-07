@@ -181,11 +181,9 @@ func BackoffWaitFor(pred func() bool, cap time.Duration, timeout time.Duration) 
 // PrintUsageString formats and prints usage strings for cli commands.
 func PrintUsageString(commands string, explanation string, flags *flag.FlagSet) {
 	fmt.Println("\nUsage: " + commands + "\n\n" + explanation + "\n")
-	fmt.Println("Options:")
 	if flags != nil {
+		fmt.Println("Options:")
 		flags.PrintDefaults()
-	} else {
-		flag.PrintDefaults()
 	}
 }
 

@@ -29,21 +29,30 @@ Commands:
 `
 
 func main() {
-	flag.Usage = printUsageString
+	flags := flag.NewFlagSet("kelda", flag.ExitOnError)
+	flags.Usage = func() {
+		subcommands := strings.Join(cli.GetSubcommands(), ", ")
+		subcommands = wordwrap.WrapString(subcommands, 78)
+		subcommands = strings.Replace(subcommands, "\n", "\n  ", -1)
+
+		explanation := keldaExplanation + "  " + subcommands
+		util.PrintUsageString(keldaCommands, explanation, flags)
+	}
 	var logLevelInfo = "logging level (debug, info, warn, error, fatal, or panic)"
 	var debugInfo = "turn on debug logging"
 
-	var logOut = flag.String("log-file", "", "log output file (will be overwritten)")
-	var logLevel = flag.String("log-level", "info", logLevelInfo)
-	var debugOn = flag.Bool("verbose", false, debugInfo)
-	flag.StringVar(logLevel, "l", "info", logLevelInfo)
-	flag.BoolVar(debugOn, "v", false, debugInfo)
-	flag.Parse()
+	var logOut = flags.String("log-file", "", "log output file (will be overwritten)")
+	var logLevel = flags.String("log-level", "info", logLevelInfo)
+	var debugOn = flags.Bool("verbose", false, debugInfo)
+	flags.StringVar(logLevel, "l", "info", logLevelInfo)
+	flags.BoolVar(debugOn, "v", false, debugInfo)
+	flags.Parse(os.Args[1:])
 
 	level, err := parseLogLevel(*logLevel, *debugOn)
 	if err != nil {
 		fmt.Println(err)
-		usage()
+		flags.Usage()
+		os.Exit(1)
 	}
 	log.SetLevel(level)
 	log.SetFormatter(util.Formatter{})
@@ -61,32 +70,18 @@ func main() {
 	// GRPC spews a lot of useless log messages so we discard its logs.
 	grpclog.SetLogger(l_mod.New(ioutil.Discard, "", 0))
 
-	if len(flag.Args()) == 0 {
-		usage()
+	if len(flags.Args()) == 0 {
+		flags.Usage()
+		os.Exit(1)
 	}
 
-	subcommand := flag.Arg(0)
+	subcommand := flags.Arg(0)
 	if cli.HasSubcommand(subcommand) {
-		cli.Run(subcommand, flag.Args()[1:])
+		cli.Run(subcommand, flags.Args()[1:])
 	} else {
-		usage()
+		flags.Usage()
+		os.Exit(1)
 	}
-}
-
-// printUsageString generates and prints a usage string based off of the
-// subcommands defined in cli.go.
-func printUsageString() {
-	subcommands := strings.Join(cli.GetSubcommands(), ", ")
-	subcommands = wordwrap.WrapString(subcommands, 78)
-	subcommands = strings.Replace(subcommands, "\n", "\n  ", -1)
-
-	explanation := keldaExplanation + "  " + subcommands
-	util.PrintUsageString(keldaCommands, explanation, nil)
-}
-
-func usage() {
-	flag.Usage()
-	os.Exit(1)
 }
 
 // parseLogLevel returns the log.Level type corresponding to the given string

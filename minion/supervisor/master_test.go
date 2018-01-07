@@ -10,38 +10,6 @@ import (
 	"github.com/kelda/kelda/minion/supervisor/images"
 )
 
-func TestNone(t *testing.T) {
-	ctx := initTest(db.Master)
-
-	if len(ctx.fd.running()) > 0 {
-		t.Errorf("fd.running = %s; want <empty>", spew.Sdump(ctx.fd.running()))
-	}
-
-	if len(ctx.execs) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
-	}
-
-	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
-		m := view.MinionSelf()
-		e := view.SelectFromEtcd(nil)[0]
-		m.PrivateIP = "1.2.3.4"
-		e.Leader = false
-		e.LeaderIP = "5.6.7.8"
-		view.Commit(m)
-		view.Commit(e)
-		return nil
-	})
-	ctx.run()
-
-	if len(ctx.fd.running()) > 0 {
-		t.Errorf("fd.running = %s; want <none>", spew.Sdump(ctx.fd.running()))
-	}
-
-	if len(ctx.execs) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
-	}
-}
-
 func TestMaster(t *testing.T) {
 	ctx := initTest(db.Master)
 	ip := "1.2.3.4"

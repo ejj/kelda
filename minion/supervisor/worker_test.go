@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/ipdef"
 	"github.com/kelda/kelda/minion/nl"
@@ -39,13 +37,8 @@ func TestWorker(t *testing.T) {
 		images.Ovsdb:       {"ovsdb-server"},
 		images.Ovsvswitchd: {"ovs-vswitchd"},
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
-	if len(ctx.execs) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
+	assert.Empty(t, ctx.execs)
 
 	leaderIP := "5.6.7.8"
 	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
@@ -67,16 +60,10 @@ func TestWorker(t *testing.T) {
 		images.Ovncontroller: {"ovn-controller"},
 		images.Ovsvswitchd:   {"ovs-vswitchd"},
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
 
 	execExp := ovsExecArgs(ip, leaderIP)
-	if !reflect.DeepEqual(ctx.execs, execExp) {
-		t.Errorf("execs = %s\n\nwant %s", spew.Sdump(ctx.execs),
-			spew.Sdump(execExp))
-	}
+	assert.Equal(t, execExp, ctx.execs)
 }
 
 func TestSetupWorker(t *testing.T) {
@@ -88,17 +75,8 @@ func TestSetupWorker(t *testing.T) {
 		images.Ovsdb:       {"ovsdb-server"},
 		images.Ovsvswitchd: {"ovs-vswitchd"},
 	}
-
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
-
-	execExp := setupArgs()
-	if !reflect.DeepEqual(ctx.execs, execExp) {
-		t.Errorf("execs = %s\n\nwant %s", spew.Sdump(ctx.execs),
-			spew.Sdump(execExp))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
+	assert.Equal(t, setupArgs(), ctx.execs)
 }
 
 func TestCfgGateway(t *testing.T) {

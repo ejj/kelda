@@ -2,12 +2,12 @@ package supervisor
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/kelda/kelda/db"
 	"github.com/kelda/kelda/minion/supervisor/images"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMaster(t *testing.T) {
@@ -31,14 +31,8 @@ func TestMaster(t *testing.T) {
 		images.Ovsdb:    {"ovsdb-server"},
 		images.Registry: nil,
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
-
-	if len(ctx.execs) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
+	assert.Empty(t, ctx.execs)
 
 	/* Change IP, etcd IPs, and become the leader. */
 	ip = "8.8.8.8"
@@ -62,13 +56,8 @@ func TestMaster(t *testing.T) {
 		images.Ovnnorthd: {"ovn-northd"},
 		images.Registry:  nil,
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
-	if len(ctx.execs) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
+	assert.Empty(t, ctx.execs)
 
 	/* Lose leadership. */
 	ctx.conn.Txn(db.AllTables...).Run(func(view db.Database) error {
@@ -84,13 +73,8 @@ func TestMaster(t *testing.T) {
 		images.Ovsdb:    {"ovsdb-server"},
 		images.Registry: nil,
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
-	if len(ctx.execs) > 0 {
-		t.Errorf("exec = %s; want <empty>", spew.Sdump(ctx.execs))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
+	assert.Empty(t, ctx.execs)
 }
 
 func TestEtcdAdd(t *testing.T) {
@@ -114,10 +98,7 @@ func TestEtcdAdd(t *testing.T) {
 		images.Ovsdb:    {"ovsdb-server"},
 		images.Registry: nil,
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
 
 	// Add a new master
 	etcdIPs = append(etcdIPs, "9.10.11.12")
@@ -137,10 +118,7 @@ func TestEtcdAdd(t *testing.T) {
 		images.Ovsdb:    {"ovsdb-server"},
 		images.Registry: nil,
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
 }
 
 func TestEtcdRemove(t *testing.T) {
@@ -164,10 +142,7 @@ func TestEtcdRemove(t *testing.T) {
 		images.Ovsdb:    {"ovsdb-server"},
 		images.Registry: nil,
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
 
 	// Remove a master
 	etcdIPs = etcdIPs[1:]
@@ -187,10 +162,7 @@ func TestEtcdRemove(t *testing.T) {
 		images.Ovsdb:    {"ovsdb-server"},
 		images.Registry: nil,
 	}
-	if !reflect.DeepEqual(ctx.fd.running(), exp) {
-		t.Errorf("fd.running = %s\n\nwant %s", spew.Sdump(ctx.fd.running()),
-			spew.Sdump(exp))
-	}
+	assert.Equal(t, exp, ctx.fd.running())
 }
 
 func etcdArgsMaster(ip string, etcdIPs []string) []string {

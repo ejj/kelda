@@ -19,8 +19,6 @@ func checkLogParsing(t *testing.T, args []string, exp Log, expErr error) {
 	assert.Equal(t, expErr, err)
 	assert.Equal(t, exp.target, logsCmd.target)
 	assert.Equal(t, exp.privateKey, logsCmd.privateKey)
-	assert.Equal(t, exp.sinceTimestamp, logsCmd.sinceTimestamp)
-	assert.Equal(t, exp.showTimestamps, logsCmd.showTimestamps)
 	assert.Equal(t, exp.shouldTail, logsCmd.shouldTail)
 }
 
@@ -37,14 +35,6 @@ func TestLogFlags(t *testing.T) {
 	checkLogParsing(t, []string{"-f", "1"}, Log{
 		target:     "1",
 		shouldTail: true,
-	}, nil)
-	checkLogParsing(t, []string{"-t", "1"}, Log{
-		target:         "1",
-		showTimestamps: true,
-	}, nil)
-	checkLogParsing(t, []string{"--since=07/27/2016", "1"}, Log{
-		target:         "1",
-		sinceTimestamp: "07/27/2016",
 	}, nil)
 	checkLogParsing(t, []string{}, Log{},
 		errors.New("must specify a target container or machine"))
@@ -83,24 +73,6 @@ func TestLog(t *testing.T) {
 			},
 			expHost:       "container",
 			expSSHCommand: "docker logs --follow foo",
-		},
-		// Show timestamps flag
-		{
-			cmd: Log{
-				target:         targetContainer,
-				showTimestamps: true,
-			},
-			expHost:       "container",
-			expSSHCommand: "docker logs --timestamps foo",
-		},
-		// Since timestamp flag
-		{
-			cmd: Log{
-				target:         targetContainer,
-				sinceTimestamp: "2006-01-02T15:04:05",
-			},
-			expHost:       "container",
-			expSSHCommand: "docker logs --since=2006-01-02T15:04:05 foo",
 		},
 	}
 

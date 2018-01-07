@@ -3,7 +3,6 @@ package command
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"strings"
 
 	apiUtil "github.com/kelda/kelda/api/util"
@@ -16,10 +15,8 @@ import (
 
 // Log is the structure for the `kelda logs` command.
 type Log struct {
-	privateKey     string
-	sinceTimestamp string
-	showTimestamps bool
-	shouldTail     bool
+	privateKey string
+	shouldTail bool
 
 	target string
 
@@ -49,10 +46,7 @@ func (lCmd *Log) InstallFlags(flags *flag.FlagSet) {
 
 	flags.StringVar(&lCmd.privateKey, "i", "",
 		"path to the private key to use when connecting to the host")
-	flags.StringVar(&lCmd.sinceTimestamp, "since", "", "show logs since timestamp"+
-		" (e.g. 2017-07-01T13:23:37) or relative time (e.g. 1h40m, 40s)")
 	flags.BoolVar(&lCmd.shouldTail, "f", false, "follow log output")
-	flags.BoolVar(&lCmd.showTimestamps, "t", false, "show timestamps")
 
 	flags.Usage = func() {
 		util.PrintUsageString(logCommands, logExplanation, flags)
@@ -78,12 +72,6 @@ func (lCmd *Log) Run() int {
 	}
 
 	cmd := []string{"docker", "logs"}
-	if lCmd.sinceTimestamp != "" {
-		cmd = append(cmd, fmt.Sprintf("--since=%s", lCmd.sinceTimestamp))
-	}
-	if lCmd.showTimestamps {
-		cmd = append(cmd, "--timestamps")
-	}
 	if lCmd.shouldTail {
 		cmd = append(cmd, "--follow")
 	}

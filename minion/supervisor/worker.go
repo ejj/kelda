@@ -146,7 +146,7 @@ func runWorkerOnce() {
 					Type:   "bind",
 				}, {
 					Source: "/sys",
-					Target: "/syso",
+					Target: "/sys",
 					Type:   "bind",
 				}, {
 					Source: "/var/run",

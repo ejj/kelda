@@ -32,7 +32,6 @@ Kevin will rebase this branch.
 
 ### Feature Complete
 Missing features supported by the current scheduler implementation:
-- Placement
 - Container.filepathToContent
 - Support environment variable values other than String
   - Secret
@@ -55,4 +54,3 @@ reasonable to run in production.
   - Containers should continue running if the leader dies
   - If a container dies, Kube should restart it
   - If a worker dies, containers should be rescheduled
-- Look into delay from containers booting to them showing up in `kelda show`

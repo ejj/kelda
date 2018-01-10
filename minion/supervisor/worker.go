@@ -130,8 +130,7 @@ func runWorkerOnce() {
 				"--user %s", user),
 			"kubectl config use-context default",
 			"kubelet --pod-cidr=10.0.0.0/24 --network-plugin=kubenet " +
-				"--runtime-cgroups=/systemd/system.slice --kubelet-cgroups=/systemd/system.slice " +
-				"--cgroups-per-qos=false --enforce-node-allocatable=\"\" --kubeconfig ~/.kube/config",
+				"--kubeconfig ~/.kube/config",
 		}
 		desiredContainers = append(desiredContainers, docker.RunOptions{
 			PidMode:     "host",

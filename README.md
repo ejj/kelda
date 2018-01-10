@@ -56,4 +56,3 @@ reasonable to run in production.
   - If a container dies, Kube should restart it
   - If a worker dies, containers should be rescheduled
 - Look into delay from containers booting to them showing up in `kelda show`
-- Fix log message warnings in kubelet

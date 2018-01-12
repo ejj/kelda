@@ -159,6 +159,13 @@ func runWorkerOnce() {
 					Source: "/var/lib/kubelet/",
 					Target: "/var/lib/kubelet",
 					Type:   "bind",
+					// Kubelet sometimes creates mounts inside /var/lib/kubelet
+					// (e.g. it creates a tmpfs mount for secret volumes). In
+					// order for the mount to propagate to within the Kubelet
+					// container, the propagation type must be set to "shared".
+					BindOptions: &dkc.BindOptions{
+						Propagation: "shared",
+					},
 				}, {
 					Source: tlsIO.MinionTLSDir,
 					Target: tlsIO.MinionTLSDir,

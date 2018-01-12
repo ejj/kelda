@@ -87,19 +87,19 @@ func Run(role db.Role, inboundPubIntf, outboundPubIntf string) {
 	go apiServer.Run(conn, fmt.Sprintf("tcp://0.0.0.0:%d", api.DefaultRemotePort),
 		false, creds)
 
-	go syncPolicy(conn)
-
 	// Vault must be started after the credentials are resolved because it also
 	// makes use of the credentials.
 	if role == db.Master {
 		vaultClient := vault.Start(conn, dk)
 		go vault.Run(conn, dk, vaultClient)
-	}
 
-	// Don't start scheduling containers until after Vault has booted (i.e.
-	// until after vault.Start has returned). This way, workers never attempt
-	// to access secrets before Vault has started.
-	scheduler.Run(conn, dk)
+		// Don't start scheduling containers until after Vault has booted (i.e.
+		// until after vault.Start has returned). This way, workers never
+		// attempt to access secrets before Vault has started.
+		go scheduler.Run(conn, dk)
+	}
+	syncPolicy(conn)
+
 }
 
 func runProfiler(duration time.Duration) {

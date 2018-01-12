@@ -55,6 +55,8 @@ func updateContainers(conn db.Conn, deploymentsClient clientv1.DeploymentInterfa
 
 	for _, intf := range toDelete {
 		deployment := intf.(appsv1.Deployment)
+		log.WithField("deployment", deployment.Name).
+			Info("Deleting deployment")
 		err := deploymentsClient.Delete(deployment.Name, &metav1.DeleteOptions{})
 		if err != nil {
 			log.WithError(err).WithField("deployment", deployment.Name).

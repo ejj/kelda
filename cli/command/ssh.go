@@ -156,7 +156,7 @@ func containerExec(c ssh.Client, podID string, allocatePTY bool, cmd string) err
 
 	command := []string{
 		"docker", "exec", flags, images.KubeAPIServer,
-		"kubectl", "exec", flags, podID, cmd,
+		"kubectl", "exec", flags, podID, "--", cmd,
 	}
 
 	return c.Run(allocatePTY, strings.Join(command, " "))

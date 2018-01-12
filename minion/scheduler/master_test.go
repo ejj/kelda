@@ -46,14 +46,14 @@ func TestCleanup(t *testing.T) {
 
 	containers := []db.Container{
 		{
-			ID:          1,
-			BlueprintID: "1",
-			Minion:      "1",
+			ID:       1,
+			Hostname: "1",
+			Minion:   "1",
 		},
 		{
-			ID:          2,
-			BlueprintID: "2",
-			Minion:      "1",
+			ID:       2,
+			Hostname: "2",
+			Minion:   "1",
 		},
 	}
 
@@ -87,9 +87,9 @@ func TestCleanup(t *testing.T) {
 
 	expUnassigned := []*db.Container{
 		{
-			ID:          1,
-			BlueprintID: "1",
-			Minion:      "",
+			ID:       1,
+			Hostname: "1",
+			Minion:   "",
 		},
 	}
 	assert.Equal(t, expUnassigned, ctx.unassigned)
@@ -103,19 +103,19 @@ func TestCleanupContainerRule(t *testing.T) {
 
 	containers := []db.Container{
 		{
-			ID:          1,
-			BlueprintID: "1",
-			Minion:      "1",
+			ID:       1,
+			Hostname: "1",
+			Minion:   "1",
 		},
 		{
-			ID:          2,
-			BlueprintID: "2",
-			Minion:      "1",
+			ID:       2,
+			Hostname: "2",
+			Minion:   "1",
 		},
 		{
-			ID:          3,
-			BlueprintID: "3",
-			Minion:      "2",
+			ID:       3,
+			Hostname: "3",
+			Minion:   "2",
 		},
 	}
 
@@ -201,16 +201,16 @@ func TestPlaceUnassigned(t *testing.T) {
 	}
 	containers := []db.Container{
 		{
-			ID:          1,
-			BlueprintID: "1",
+			ID:       1,
+			Hostname: "1",
 		},
 		{
-			ID:          2,
-			BlueprintID: "2",
+			ID:       2,
+			Hostname: "2",
 		},
 		{
-			ID:          3,
-			BlueprintID: "3",
+			ID:       3,
+			Hostname: "3",
 		},
 	}
 	placements := []db.Placement{
@@ -347,7 +347,7 @@ func TestMakeContext(t *testing.T) {
 func TestValidPlacementTwoWay(t *testing.T) {
 	t.Parallel()
 
-	dbc := &db.Container{ID: 1, BlueprintID: "red"}
+	dbc := &db.Container{ID: 1, Hostname: "red"}
 	m := minion{
 		db.Minion{
 			PrivateIP: "1.2.3.4",
@@ -355,10 +355,10 @@ func TestValidPlacementTwoWay(t *testing.T) {
 			Size:      "Size",
 			Region:    "Region",
 		},
-		[]*db.Container{{ID: 2, BlueprintID: "blue"}},
+		[]*db.Container{{ID: 2, Hostname: "blue"}},
 	}
 
-	dbc1 := &db.Container{ID: 4, BlueprintID: "blue"}
+	dbc1 := &db.Container{ID: 4, Hostname: "blue"}
 	m1 := minion{
 		db.Minion{
 			PrivateIP: "1.2.3.4",
@@ -366,7 +366,7 @@ func TestValidPlacementTwoWay(t *testing.T) {
 			Size:      "Size",
 			Region:    "Region",
 		},
-		[]*db.Container{{ID: 3, BlueprintID: "red"}},
+		[]*db.Container{{ID: 3, Hostname: "red"}},
 	}
 
 	constraints := []db.Placement{
@@ -390,8 +390,8 @@ func TestValidPlacementTwoWay(t *testing.T) {
 			testCase.dbc)
 		if res {
 			t.Fatalf("Succeeded with bad placement: %s on %s",
-				testCase.dbc.BlueprintID,
-				testCase.m.containers[0].BlueprintID)
+				testCase.dbc.Hostname,
+				testCase.m.containers[0].Hostname)
 		}
 	}
 }
@@ -400,8 +400,8 @@ func TestValidPlacementContainer(t *testing.T) {
 	t.Parallel()
 
 	dbc := &db.Container{
-		ID:          1,
-		BlueprintID: "red",
+		ID:       1,
+		Hostname: "red",
 	}
 
 	m := minion{}
@@ -412,12 +412,12 @@ func TestValidPlacementContainer(t *testing.T) {
 	m.containers = []*db.Container{
 		dbc,
 		{
-			ID:          2,
-			BlueprintID: "blue",
+			ID:       2,
+			Hostname: "blue",
 		},
 		{
-			ID:          3,
-			BlueprintID: "yellow",
+			ID:       3,
+			Hostname: "yellow",
 		},
 	}
 
@@ -482,7 +482,7 @@ func TestValidPlacementMachine(t *testing.T) {
 	var constraints []db.Placement
 
 	dbc := &db.Container{
-		BlueprintID: "red",
+		Hostname: "red",
 	}
 
 	m := minion{}

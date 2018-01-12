@@ -27,7 +27,7 @@ type Blueprint struct {
 // A Placement constraint guides on what type of machine a container can be
 // scheduled.
 type Placement struct {
-	TargetContainerID string `json:",omitempty"`
+	TargetContainer string `json:",omitempty"`
 
 	Exclusive bool `json:",omitempty"`
 

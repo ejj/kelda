@@ -110,7 +110,7 @@ func updatePlacements(view db.Database, bp blueprint.Blueprint) {
 	placements := db.PlacementSlice(portPlacements(connections, containers))
 	for _, sp := range bp.Placements {
 		placements = append(placements, db.Placement{
-			TargetContainer: sp.TargetContainerID,
+			TargetContainer: sp.TargetContainer,
 			Exclusive:       sp.Exclusive,
 			Provider:        sp.Provider,
 			Size:            sp.Size,

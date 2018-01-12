@@ -653,7 +653,7 @@ describe('Bindings', () => {
         provider: 'Amazon',
       });
       checkPlacements([{
-        targetContainerID: '293fc7ad8a799d3cf2619a3db7124b0459f395cb',
+        targetContainer: 'host',
         exclusive: false,
         region: 'us-west-2',
         provider: 'Amazon',
@@ -666,7 +666,7 @@ describe('Bindings', () => {
         provider: 'Amazon',
       });
       checkPlacements([{
-        targetContainerID: '293fc7ad8a799d3cf2619a3db7124b0459f395cb',
+        targetContainer: 'host',
         exclusive: false,
         provider: 'Amazon',
         size: 'm4.large',
@@ -677,7 +677,7 @@ describe('Bindings', () => {
         floatingIp: 'xxx.xxx.xxx.xxx',
       });
       checkPlacements([{
-        targetContainerID: '293fc7ad8a799d3cf2619a3db7124b0459f395cb',
+        targetContainer: 'host',
         exclusive: false,
         floatingIp: 'xxx.xxx.xxx.xxx',
       }]);

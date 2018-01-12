@@ -1150,6 +1150,7 @@ class Container {
    */
   placeOn(machineAttrs) {
     this.placements.push({
+      targetContainer: this.hostname,
       exclusive: false,
       provider: getString('provider', machineAttrs.provider),
       size: getString('size', machineAttrs.size),

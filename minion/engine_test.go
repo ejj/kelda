@@ -403,7 +403,7 @@ func TestPlacementTxn(t *testing.T) {
 
 	// Machine placement
 	bp.Placements = []blueprint.Placement{
-		{TargetContainerID: "foo", Exclusive: false, Size: "m4.large"},
+		{TargetContainer: "foo", Exclusive: false, Size: "m4.large"},
 	}
 	checkPlacement(bp,
 		db.Placement{

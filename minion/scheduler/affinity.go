@@ -34,7 +34,7 @@ func toAffinities(placements []db.Placement) map[string]*corev1.Affinity {
 				req := corev1.PodAffinityTerm{
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							blueprintIDKey: plcm.OtherContainer,
+							hostnameKey: plcm.OtherContainer,
 						},
 					},
 					TopologyKey: "kubernetes.io/hostname",

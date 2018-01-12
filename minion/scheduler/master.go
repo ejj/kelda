@@ -63,7 +63,7 @@ func updateContainers(conn db.Conn, deploymentsClient clientv1.DeploymentInterfa
 	}
 }
 
-const blueprintIDKey = "blueprintID"
+const hostnameKey = "hostname"
 
 func makeDesiredDeployments(conn db.Conn) (deployments []appsv1.Deployment) {
 	var containers []db.Container
@@ -119,10 +119,10 @@ func makeDesiredDeployments(conn db.Conn) (deployments []appsv1.Deployment) {
 					Env:     env,
 				},
 			},
-			Affinity: idToAffinity[dbc.BlueprintID],
+			Affinity: idToAffinity[dbc.Hostname],
 		}
 
-		blueprintLabel := map[string]string{blueprintIDKey: dbc.BlueprintID}
+		hostnameLabel := map[string]string{hostnameKey: dbc.Hostname}
 		deployments = append(deployments, appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: dbc.Hostname,
@@ -131,12 +131,12 @@ func makeDesiredDeployments(conn db.Conn) (deployments []appsv1.Deployment) {
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   dbc.Hostname,
-						Labels: blueprintLabel,
+						Labels: hostnameLabel,
 					},
 					Spec: pod,
 				},
 				Selector: &metav1.LabelSelector{
-					MatchLabels: blueprintLabel,
+					MatchLabels: hostnameLabel,
 				},
 			},
 		})

@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/util/retry"
 )
 
 const providerKey = "kelda.io/host.provider"
@@ -134,7 +135,15 @@ func updateNodeLabels(nodes []db.Minion, nodesClient clientv1.NodeInterface) {
 			log.WithField("node", node.Name).WithField("labels", labels).
 				Info("Updating node labels")
 			node.Labels = labels
-			if _, err := nodesClient.Update(&node); err != nil {
+			// Retry updating the labels if the apiserver reports that there's
+			// a conflict. Conflicts are benign -- for example, there might be
+			// a conflict if Kubernetes updated the node to change its
+			// connection status.
+			err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+				_, err := nodesClient.Update(&node)
+				return err
+			})
+			if err != nil {
 				log.WithError(err).Error("Failed to update node labels")
 			}
 		}

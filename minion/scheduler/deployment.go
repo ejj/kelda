@@ -129,7 +129,11 @@ func makeDesiredDeployments(conn db.Conn) (deployments []appsv1.Deployment) {
 			pod.Containers[0].VolumeMounts = fm.volumeMounts()
 		}
 
-		hostnameLabel := map[string]string{hostnameKey: dbc.Hostname}
+		// TODO rename this.
+		hostnameLabel := map[string]string{
+			hostnameKey: dbc.Hostname,
+			"keldaIP":   dbc.IP,
+		}
 		deployments = append(deployments, appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: dbc.Hostname,

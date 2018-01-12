@@ -11,7 +11,6 @@ import (
 
 	"github.com/kelda/kelda/counter"
 	"github.com/kelda/kelda/minion/ipdef"
-	"github.com/kelda/kelda/minion/network/plugin"
 	"github.com/kelda/kelda/util"
 
 	dkc "github.com/fsouza/go-dockerclient"
@@ -135,21 +134,8 @@ func (dk Client) Run(opts RunOptions) (string, error) {
 		Mounts:      opts.Mounts,
 	}
 
-	var nc *dkc.NetworkingConfig
-	if opts.IP != "" {
-		nc = &dkc.NetworkingConfig{
-			EndpointsConfig: map[string]*dkc.EndpointConfig{
-				plugin.NetworkName: {
-					IPAMConfig: &dkc.EndpointIPAMConfig{
-						IPv4Address: opts.IP,
-					},
-				},
-			},
-		}
-	}
-
 	id, err := dk.create(opts.Name, opts.Image, opts.Hostname, opts.Args,
-		opts.Labels, env, opts.FilepathToContent, hc, nc)
+		opts.Labels, env, opts.FilepathToContent, hc, nil)
 	if err != nil {
 		return "", err
 	}

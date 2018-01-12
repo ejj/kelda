@@ -21,4 +21,6 @@ RUN ln -s /hyperkube /apiserver \
 
 Copy ./buildinfo /buildinfo
 Copy ./kelda_linux /usr/bin/kelda
+Copy ./minion/network/cni/kelda.sh /opt/cni/bin/kelda
+Copy ./minion/network/cni/*.conf /etc/cni/net.d/
 ENTRYPOINT []

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/kelda/kelda/cli"
+	"github.com/kelda/kelda/minion/network/cni"
 	"github.com/kelda/kelda/util"
 
 	"google.golang.org/grpc/grpclog"
@@ -76,7 +77,11 @@ func main() {
 	}
 
 	subcommand := flags.Arg(0)
-	if cli.HasSubcommand(subcommand) {
+	if subcommand == "cni" {
+		// CNI is a special subcommand with it's own parsing and running
+		// mechanisms. Thus it's handled as a special case.
+		cni.Main()
+	} else if cli.HasSubcommand(subcommand) {
 		cli.Run(subcommand, flags.Args()[1:])
 	} else {
 		flags.Usage()

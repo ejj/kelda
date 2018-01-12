@@ -130,7 +130,7 @@ func runWorkerOnce() {
 			fmt.Sprintf("kubectl config set-context default --cluster=kelda "+
 				"--user %s", user),
 			"kubectl config use-context default",
-			"kubelet --pod-cidr=10.0.0.0/24 --network-plugin=kubenet " +
+			"kubelet --pod-cidr=10.0.0.0/24 --network-plugin=cni " +
 				"--kubeconfig ~/.kube/config",
 		}
 		desiredContainers = append(desiredContainers, docker.RunOptions{
@@ -139,6 +139,7 @@ func runWorkerOnce() {
 			Image:       version.Image,
 			NetworkMode: "host",
 			Privileged:  true,
+			VolumesFrom: []string{"minion"},
 			Mounts: []dkc.HostMount{
 				{
 					Source: "/dev",

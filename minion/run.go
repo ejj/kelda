@@ -15,7 +15,6 @@ import (
 	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/etcd"
 	"github.com/kelda/kelda/minion/network"
-	"github.com/kelda/kelda/minion/network/plugin"
 	"github.com/kelda/kelda/minion/pprofile"
 	"github.com/kelda/kelda/minion/registry"
 	"github.com/kelda/kelda/minion/scheduler"
@@ -53,9 +52,6 @@ func Run(role db.Role, inboundPubIntf, outboundPubIntf string) {
 		// master can make informed IP allocations.
 		go network.WriteSubnets(conn)
 	}
-
-	// Not in a goroutine, want the plugin to start before the scheduler
-	plugin.Run()
 
 	supervisor.Run(conn, dk, role)
 

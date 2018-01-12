@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/util/retry"
 )
 
-func updateContainers(conn db.Conn, deploymentsClient clientv1.DeploymentInterface) {
+func updateDeployments(conn db.Conn, deploymentsClient clientv1.DeploymentInterface) {
 	currentDeployments, err := deploymentsClient.List(metav1.ListOptions{})
 	if err != nil {
 		log.WithError(err).Error("Failed to list current deployments")
@@ -113,7 +113,6 @@ func makeDesiredDeployments(conn db.Conn) (deployments []appsv1.Deployment) {
 			Hostname: dbc.Hostname,
 			Containers: []corev1.Container{
 				{
-					// TODO: Respect filepathToContent
 					Name:  dbc.Hostname,
 					Image: image,
 					// TODO: Command vs Args?
@@ -122,6 +121,12 @@ func makeDesiredDeployments(conn db.Conn) (deployments []appsv1.Deployment) {
 				},
 			},
 			Affinity: idToAffinity[dbc.Hostname],
+		}
+
+		if len(dbc.FilepathToContent) != 0 {
+			fm := newFileMap(dbc.FilepathToContent)
+			pod.Volumes = []corev1.Volume{fm.volume()}
+			pod.Containers[0].VolumeMounts = fm.volumeMounts()
 		}
 
 		hostnameLabel := map[string]string{hostnameKey: dbc.Hostname}

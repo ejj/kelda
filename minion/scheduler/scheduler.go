@@ -49,12 +49,19 @@ func Run(conn db.Conn, dk docker.Client) {
 		time.Sleep(5 * time.Second)
 	}
 
+	configMapsClient := clientset.CoreV1().ConfigMaps(corev1.NamespaceDefault)
+	deploymentsClient := clientset.AppsV1().Deployments(corev1.NamespaceDefault)
+	nodesClient := clientset.CoreV1().Nodes()
+	podsClient := clientset.CoreV1().Pods(corev1.NamespaceDefault)
 	go func() {
 		loopLog := util.NewEventTimer("Update containers")
 		for range conn.TriggerTick(60, db.ContainerTable, db.PlacementTable,
 			db.EtcdTable, db.ImageTable).C {
 			loopLog.LogStart()
-			updateContainers(conn, clientset.AppsV1().Deployments(corev1.NamespaceDefault))
+
+			if updateConfigMaps(conn, configMapsClient) {
+				updateDeployments(conn, deploymentsClient)
+			}
 			loopLog.LogEnd()
 		}
 	}()
@@ -63,7 +70,7 @@ func Run(conn db.Conn, dk docker.Client) {
 		loopLog := util.NewEventTimer("Update node labels")
 		for range conn.TriggerTick(60, db.MinionTable, db.EtcdTable).C {
 			loopLog.LogStart()
-			updateNodeLabels(conn.SelectFromMinion(nil), clientset.CoreV1().Nodes())
+			updateNodeLabels(conn.SelectFromMinion(nil), nodesClient)
 			loopLog.LogEnd()
 		}
 	}()
@@ -71,7 +78,7 @@ func Run(conn db.Conn, dk docker.Client) {
 	loopLog := util.NewEventTimer("Update container statuses")
 	for range watchClient.ResultChan() {
 		loopLog.LogStart()
-		updateContainerStatuses(conn, clientset.CoreV1().Pods(corev1.NamespaceDefault))
+		updateContainerStatuses(conn, podsClient)
 		loopLog.LogEnd()
 	}
 }

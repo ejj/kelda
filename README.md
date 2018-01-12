@@ -32,7 +32,6 @@ Kevin will rebase this branch.
 
 ### Feature Complete
 Missing features supported by the current scheduler implementation:
-- Container.filepathToContent
 - Support environment variable values other than String
   - Secret
   - RuntimeInfo

@@ -9,6 +9,7 @@ import (
 	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/supervisor/images"
 	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/version"
 
 	dkc "github.com/fsouza/go-dockerclient"
 )
@@ -68,7 +69,7 @@ func runMasterOnce() {
 			"--election-timeout="+etcdElectionTimeout,
 		), docker.RunOptions{
 			Name:        images.KubeAPIServer,
-			Image:       kubeImage,
+			Image:       version.Image,
 			NetworkMode: "host",
 			Mounts: []dkc.HostMount{
 				{
@@ -88,7 +89,7 @@ func runMasterOnce() {
 			},
 		}, docker.RunOptions{
 			Name:        "kube-controller-manager",
-			Image:       kubeImage,
+			Image:       version.Image,
 			NetworkMode: "host",
 			Mounts: []dkc.HostMount{
 				{
@@ -102,7 +103,7 @@ func runMasterOnce() {
 			},
 		}, docker.RunOptions{
 			Name:        "kube-scheduler",
-			Image:       kubeImage,
+			Image:       version.Image,
 			NetworkMode: "host",
 			Args: []string{
 				"kube-scheduler", "--master", "http://localhost:8080",

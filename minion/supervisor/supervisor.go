@@ -10,12 +10,12 @@ import (
 	"github.com/kelda/kelda/minion/docker"
 	"github.com/kelda/kelda/minion/supervisor/images"
 	"github.com/kelda/kelda/util/str"
+	"github.com/kelda/kelda/version"
 
 	log "github.com/sirupsen/logrus"
 )
 
 const ovsImage = "keldaio/ovs"
-const kubeImage = "gcr.io/google_containers/hyperkube-amd64:v1.9.1"
 
 // The tunneling protocol to use between machines.
 // "stt" and "geneve" are supported.
@@ -28,7 +28,7 @@ var imageMap = map[string]string{
 	images.Ovsdb:         ovsImage,
 	images.Ovsvswitchd:   ovsImage,
 	images.Registry:      "registry:2.6.2",
-	images.KubeAPIServer: kubeImage,
+	images.KubeAPIServer: version.Image,
 	// TODO: Add other Kube images, and think through whether this map is
 	// actually useful.
 }

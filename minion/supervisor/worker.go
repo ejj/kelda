@@ -13,6 +13,7 @@ import (
 	"github.com/kelda/kelda/minion/nl"
 	"github.com/kelda/kelda/minion/supervisor/images"
 	"github.com/kelda/kelda/util"
+	"github.com/kelda/kelda/version"
 
 	dkc "github.com/fsouza/go-dockerclient"
 	log "github.com/sirupsen/logrus"
@@ -135,7 +136,7 @@ func runWorkerOnce() {
 		desiredContainers = append(desiredContainers, docker.RunOptions{
 			PidMode:     "host",
 			Name:        "kubelet",
-			Image:       kubeImage,
+			Image:       version.Image,
 			NetworkMode: "host",
 			Privileged:  true,
 			Mounts: []dkc.HostMount{

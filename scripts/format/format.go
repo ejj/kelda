@@ -23,7 +23,7 @@ func checkFile(path string) bool {
 	for scanner.Scan() {
 		lnum++
 		line := strings.Replace(scanner.Text(), "\t", "        ", -1)
-		if len(line) > (maxLength + 1) {
+		if len(line) > (maxLength+1) && !strings.Contains(line, "go:generate") {
 			msg := fmt.Sprintf("  %d (len %d > %d): %s", lnum, len(line),
 				maxLength, line)
 			messages = append(messages, msg)

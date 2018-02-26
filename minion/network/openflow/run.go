@@ -7,7 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Run ... TODO Ethan: Document this.
+// Run occaisionally updates the OpenFlow tables based on the containers in the database.
 func Run(conn db.Conn) {
 	for range conn.TriggerTick(30, db.MinionTable, db.ContainerTable).C {
 		self := conn.MinionSelf()

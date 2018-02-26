@@ -308,7 +308,7 @@ func setupOVS(outerName string, ip net.IP, mac net.HardwareAddr,
 	return nil
 }
 
-// Main ... TODO Ethan: Document this.
-func Main() {
+// Run executes the CNI plugin code, exiting when finished.
+func Run() {
 	skel.PluginMain(cmdAdd, cmdDel, version.PluginSupports(version.Current()))
 }

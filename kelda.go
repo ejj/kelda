@@ -80,7 +80,7 @@ func main() {
 	if subcommand == "cni" {
 		// CNI is a special subcommand with it's own parsing and running
 		// mechanisms. Thus it's handled as a special case.
-		cni.Main()
+		cni.Run()
 	} else if cli.HasSubcommand(subcommand) {
 		cli.Run(subcommand, flags.Args()[1:])
 	} else {

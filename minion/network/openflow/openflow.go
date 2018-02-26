@@ -141,8 +141,6 @@ Table_3 {
 */
 
 // A Container that needs OpenFlow rules installed for it.
-// TODO Ethan, still make sense to export this?
-// TODO Ethan, do we still need both Container and container?
 type Container struct {
 	Veth  string
 	Patch string

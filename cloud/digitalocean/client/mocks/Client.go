@@ -239,13 +239,13 @@ func (_m *Client) GetDroplet(_a0 int) (*godo.Droplet, *godo.Response, error) {
 	return r0, r1, r2
 }
 
-// ListDroplets provides a mock function with given fields: _a0, _a1
-func (_m *Client) ListDroplets(_a0 *godo.ListOptions, _a1 string) ([]godo.Droplet, *godo.Response, error) {
-	ret := _m.Called(_a0, _a1)
+// ListDroplets provides a mock function with given fields: _a0
+func (_m *Client) ListDroplets(_a0 *godo.ListOptions) ([]godo.Droplet, *godo.Response, error) {
+	ret := _m.Called(_a0)
 
 	var r0 []godo.Droplet
-	if rf, ok := ret.Get(0).(func(*godo.ListOptions, string) []godo.Droplet); ok {
-		r0 = rf(_a0, _a1)
+	if rf, ok := ret.Get(0).(func(*godo.ListOptions) []godo.Droplet); ok {
+		r0 = rf(_a0)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]godo.Droplet)
@@ -253,8 +253,8 @@ func (_m *Client) ListDroplets(_a0 *godo.ListOptions, _a1 string) ([]godo.Drople
 	}
 
 	var r1 *godo.Response
-	if rf, ok := ret.Get(1).(func(*godo.ListOptions, string) *godo.Response); ok {
-		r1 = rf(_a0, _a1)
+	if rf, ok := ret.Get(1).(func(*godo.ListOptions) *godo.Response); ok {
+		r1 = rf(_a0)
 	} else {
 		if ret.Get(1) != nil {
 			r1 = ret.Get(1).(*godo.Response)
@@ -262,8 +262,8 @@ func (_m *Client) ListDroplets(_a0 *godo.ListOptions, _a1 string) ([]godo.Drople
 	}
 
 	var r2 error
-	if rf, ok := ret.Get(2).(func(*godo.ListOptions, string) error); ok {
-		r2 = rf(_a0, _a1)
+	if rf, ok := ret.Get(2).(func(*godo.ListOptions) error); ok {
+		r2 = rf(_a0)
 	} else {
 		r2 = ret.Error(2)
 	}

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/digitalocean/godo"
 
@@ -79,7 +81,7 @@ func New(namespace, region string) (*Provider, error) {
 		return prvdr, err
 	}
 
-	_, _, err = prvdr.ListDroplets(&godo.ListOptions{}, prvdr.getTag())
+	_, _, err = prvdr.ListDroplets(&godo.ListOptions{})
 	return prvdr, err
 }
 
@@ -104,8 +106,46 @@ var newDigitalOcean = func(namespace, region string) (*Provider, error) {
 	return prvdr, nil
 }
 
+var listAllMutex sync.Mutex
+var listAllTimeout time.Time
+var listAllMachines []taggedMachine
+var listAllErr error
+
 // List will fetch all droplets that have the same name as the cluster namespace.
 func (prvdr Provider) List() (machines []db.Machine, err error) {
+	listAllMutex.Lock()
+	if time.Now().After(listAllTimeout) {
+		listAllMachines, listAllErr = prvdr.listAll()
+		listAllTimeout = time.Now().Add(1 * second)
+	} else {
+		c.Inc("List Cache Hit")
+	}
+	taggedMachines, err := listAllMachines, listAllErr
+	listAllMutex.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+
+	myTag := prvdr.getTag()
+	for _, tm := range taggedMachines {
+		for _, tag := range tm.tags {
+			if tag == myTag {
+				machines = append(machines, tm.Machine)
+				break
+			}
+		}
+	}
+
+	return machines, err
+}
+
+type taggedMachine struct {
+	db.Machine
+	tags []string
+}
+
+func (prvdr Provider) listAll() (machines []taggedMachine, err error) {
 	floatingIPs, err := prvdr.getFloatingIPs()
 	if err != nil {
 		return nil, err
@@ -115,7 +155,7 @@ func (prvdr Provider) List() (machines []db.Machine, err error) {
 	// DigitalOcean's API has a paginated list of droplets.
 	dropletListOpt := &godo.ListOptions{Page: 1, PerPage: 200}
 	for {
-		droplets, resp, err := prvdr.ListDroplets(dropletListOpt, prvdr.getTag())
+		droplets, resp, err := prvdr.ListDroplets(dropletListOpt)
 		if err != nil {
 			return nil, fmt.Errorf("list droplets: %s", err)
 		}
@@ -131,15 +171,18 @@ func (prvdr Provider) List() (machines []db.Machine, err error) {
 				return nil, fmt.Errorf("get private IP: %s", err)
 			}
 
-			machine := db.Machine{
-				Provider:    db.DigitalOcean,
-				Region:      prvdr.region,
-				CloudID:     strconv.Itoa(d.ID),
-				PublicIP:    pubIP,
-				PrivateIP:   privIP,
-				FloatingIP:  floatingIPs[d.ID],
-				Size:        d.SizeSlug,
-				Preemptible: false,
+			machine := taggedMachine{
+				Machine: db.Machine{
+					Provider:    db.DigitalOcean,
+					Region:      d.Region.Slug,
+					CloudID:     strconv.Itoa(d.ID),
+					PublicIP:    pubIP,
+					PrivateIP:   privIP,
+					FloatingIP:  floatingIPs[d.ID],
+					Size:        d.SizeSlug,
+					Preemptible: false,
+				},
+				tags: d.Tags,
 			}
 			machines = append(machines, machine)
 		}
@@ -518,3 +561,5 @@ func (slc inboundRuleSlice) Get(ii int) interface{} {
 func (slc inboundRuleSlice) Len() int {
 	return len(slc)
 }
+
+var second = time.Second // Mockable for unit tests

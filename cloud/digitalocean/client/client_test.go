@@ -28,9 +28,9 @@ func TestError(t *testing.T) {
 	_, _, err = c.GetDroplet(3)
 	assert.EqualError(t, err, "Get https://api.digitalocean.com/v2/droplets/3: test")
 
-	_, _, err = c.ListDroplets(&godo.ListOptions{}, "tag")
+	_, _, err = c.ListDroplets(&godo.ListOptions{})
 	assert.EqualError(t, err,
-		"Get https://api.digitalocean.com/v2/droplets?tag_name=tag: test")
+		"Get https://api.digitalocean.com/v2/droplets: test")
 
 	_, _, err = c.ListFloatingIPs(&godo.ListOptions{})
 	assert.EqualError(t, err,

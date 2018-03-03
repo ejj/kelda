@@ -54,10 +54,12 @@ func init() {
 	util.AppFs = afero.NewMemMapFs()
 	keyFile := filepath.Join(os.Getenv("HOME"), apiKeyPath)
 	util.WriteFile(keyFile, []byte("foo"), 0666)
+	second = 0
 }
 
 func TestList(t *testing.T) {
 	mc := new(mocks.Client)
+	tag := fmt.Sprintf("%s-%s", testNamespace, testRegion)
 	// Create a list of Droplets, that are paginated.
 	dropFirst := []godo.Droplet{
 		{
@@ -65,7 +67,15 @@ func TestList(t *testing.T) {
 			Networks:  network,
 			SizeSlug:  "size",
 			VolumeIDs: []string{"foo"},
-			Region:    godoRegion}}
+			Region:    godoRegion,
+			Tags:      []string{tag},
+		}, {
+			ID:       124,
+			Networks: network,
+			SizeSlug: "size",
+			Region:   godoRegion,
+			Tags:     []string{"wrong-region"},
+		}}
 
 	dropLast := []godo.Droplet{
 		{
@@ -73,7 +83,9 @@ func TestList(t *testing.T) {
 			Networks:  network,
 			SizeSlug:  "size",
 			VolumeIDs: []string{"foo"},
-			Region:    godoRegion}}
+			Region:    godoRegion,
+			Tags:      []string{tag},
+		}}
 
 	respFirst := &godo.Response{
 		Links: &godo.Links{
@@ -88,14 +100,14 @@ func TestList(t *testing.T) {
 	}
 
 	reqFirst := &godo.ListOptions{Page: 1, PerPage: 200}
-	mc.On("ListDroplets", reqFirst, "namespace-region").Return(
+	mc.On("ListDroplets", reqFirst).Return(
 		dropFirst, respFirst, nil).Once()
 
 	reqLast := &godo.ListOptions{
 		Page:    reqFirst.Page + 1,
 		PerPage: 200,
 	}
-	mc.On("ListDroplets", reqLast, "namespace-region").Return(
+	mc.On("ListDroplets", reqLast).Return(
 		dropLast, respLast, nil).Once()
 
 	floatingIPsFirst := []godo.FloatingIP{
@@ -143,7 +155,7 @@ func TestList(t *testing.T) {
 
 	// Error ListDroplets.
 	mc.On("ListFloatingIPs", mock.Anything).Return(nil, &godo.Response{}, nil).Once()
-	mc.On("ListDroplets", mock.Anything, mock.Anything).Return(
+	mc.On("ListDroplets", mock.Anything).Return(
 		nil, nil, errMock).Once()
 	machines, err = doPrvdr.List()
 	assert.Nil(t, machines)
@@ -166,7 +178,7 @@ func TestList(t *testing.T) {
 			Region:    godoRegion,
 		},
 	}
-	mc.On("ListDroplets", mock.Anything, mock.Anything).Return(
+	mc.On("ListDroplets", mock.Anything).Return(
 		droplets, respLast, nil).Once()
 	mc.On("ListFloatingIPs", mock.Anything).Return(nil, &godo.Response{}, nil).Once()
 	machines, err = doPrvdr.List()
@@ -636,13 +648,13 @@ func TestNew(t *testing.T) {
 	newDigitalOcean = func(namespace, region string) (*Provider, error) {
 		return client, nil
 	}
-	mc.On("ListDroplets", mock.Anything, mock.Anything).Return(nil, nil, nil).Once()
+	mc.On("ListDroplets", mock.Anything).Return(nil, nil, nil).Once()
 	outClient, err = New(testNamespace, testRegion)
 	assert.Nil(t, err)
 	assert.Equal(t, client, outClient)
 
 	// ListDroplets throws an error.
-	mc.On("ListDroplets", mock.Anything, mock.Anything).Return(nil, nil, errMock)
+	mc.On("ListDroplets", mock.Anything).Return(nil, nil, errMock)
 	outClient, err = New(testNamespace, testRegion)
 	assert.Equal(t, client, outClient)
 	assert.EqualError(t, err, errMsg)

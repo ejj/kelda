@@ -16,7 +16,7 @@ type Client interface {
 		[]godo.Droplet, *godo.Response, error)
 	DeleteDroplet(int) (*godo.Response, error)
 	GetDroplet(int) (*godo.Droplet, *godo.Response, error)
-	ListDroplets(*godo.ListOptions, string) ([]godo.Droplet, *godo.Response, error)
+	ListDroplets(*godo.ListOptions) ([]godo.Droplet, *godo.Response, error)
 
 	CreateTag(string) (*godo.Tag, *godo.Response, error)
 
@@ -58,10 +58,10 @@ func (client client) GetDroplet(id int) (*godo.Droplet, *godo.Response, error) {
 	return client.droplets.Get(context.Background(), id)
 }
 
-func (client client) ListDroplets(opt *godo.ListOptions, tag string) ([]godo.Droplet,
+func (client client) ListDroplets(opt *godo.ListOptions) ([]godo.Droplet,
 	*godo.Response, error) {
 	c.Inc("List Droplets")
-	return client.droplets.ListByTag(context.Background(), tag, opt)
+	return client.droplets.List(context.Background(), opt)
 }
 
 func (client client) CreateTag(name string) (*godo.Tag, *godo.Response, error) {

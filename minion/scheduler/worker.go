@@ -144,7 +144,7 @@ func runWorker(conn db.Conn, dk docker.Client, myPrivIP string) {
 				for _, mount := range dbc.VolumeMounts {
 					volume, ok := volumeByName[mount.VolumeName]
 					if !ok {
-						log.Warn("Container %s references an "+
+						log.Warnf("Container %s references an "+
 							"undefined volume: %s. Ignoring.",
 							dbc.Hostname, mount.VolumeName)
 						continue

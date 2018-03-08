@@ -189,15 +189,23 @@ func machineScore(left, right interface{}) int {
 	}
 
 	score := 10
-	// Pairs with matching roles should be prioritized over pairs with matching
-	// floating IPs.
-	if l.Role != db.None && r.Role != db.None {
+
+	// Moving a floating IP is a major change, so strongly prefer leaving it.
+	// There's some risk that the floating IP is attached to a machine with the wrong
+	// role.  Normally that would be fine because the above switch statement would
+	// disqualify the match, but if we don't know the machine's role yet, an
+	// erroneous match could be made.  In rare cases, this could cause us to stop
+	// machines unnecessarily as the mismatched role would make proper matches
+	// impossible down the line.  Currently, we find this trade-off acceptable as
+	// practically speaking floating IPs are always assigned to workers, and the join
+	// code doesn't guarantee optimal matches anyways.
+	if l.FloatingIP != "" && r.FloatingIP != "" && l.FloatingIP == r.FloatingIP {
 		score -= 2
 	}
 
-	// Given that the role matches, pairs with matching floating IPs are valued
-	// more.
-	if l.FloatingIP != "" && r.FloatingIP != "" && l.FloatingIP == r.FloatingIP {
+	// Pairs with matching roles should be prioritized over pairs with matching
+	// floating IPs.
+	if l.Role != db.None && r.Role != db.None {
 		score--
 	}
 	return score

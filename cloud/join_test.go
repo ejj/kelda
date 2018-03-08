@@ -233,7 +233,7 @@ func TestMachineScore(t *testing.T) {
 	// Wrong ID, but an assigned role.
 	m1 = m
 	m1.CloudID = "5"
-	assert.Equal(t, 8, machineScore(m, m2))
+	assert.Equal(t, 9, machineScore(m, m2))
 
 	// Wrong ID, but no Role.
 	m1 = m
@@ -267,9 +267,9 @@ func TestMachineScore(t *testing.T) {
 	m1.Preemptible = true
 	assert.Equal(t, -1, machineScore(m, m1))
 
-	// Prefer matching roles over floating IPs. The desired machine is a worker
+	// Prefer matching floating IPs over roles. The desired machine is a worker
 	// with a floating IP -- the match with a worker with the wrong IP should
-	// be better than a match with a machine with an unknown role, but the same
+	// be worse than a match with a machine with an unknown role, but the same
 	// floating IP.
 	desired := db.Machine{
 		Provider:   db.Amazon,
@@ -287,7 +287,7 @@ func TestMachineScore(t *testing.T) {
 	workerWithBadIP.Role = db.Worker
 	workerWithBadIP.FloatingIP = "wrong"
 
-	assert.True(t, machineScore(desired, workerWithBadIP) <
+	assert.True(t, machineScore(desired, workerWithBadIP) >
 		machineScore(desired, masterToBeWithCorrectIP))
 }
 

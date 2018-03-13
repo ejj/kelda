@@ -37,6 +37,7 @@ type awsMachine struct {
 
 const (
 	spotPrice   = "0.5"
+	vpcBlock    = "172.31.0.0/16"
 	subnetBlock = "172.31.0.0/20"
 )
 
@@ -91,6 +92,7 @@ func newAmazon(namespace, region string) *Provider {
 }
 
 type bootReq struct {
+	subnetID    string
 	groupID     string
 	cfg         string
 	size        string
@@ -104,7 +106,12 @@ func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
 		return nil, nil
 	}
 
-	groupID, _, err := prvdr.getCreateSecurityGroup()
+	vpcID, groupID, _, err := prvdr.setupNetwork()
+	if err != nil {
+		return nil, err
+	}
+
+	subnetID, err := prvdr.getSubnetID(vpcID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +119,7 @@ func (prvdr *Provider) Boot(bootSet []db.Machine) ([]string, error) {
 	bootReqMap := make(map[bootReq]int64) // From boot request to an instance count.
 	for _, m := range bootSet {
 		br := bootReq{
+			subnetID:    subnetID,
 			groupID:     groupID,
 			cfg:         cfg.Ubuntu(m, ""),
 			size:        m.Size,
@@ -146,6 +154,7 @@ func (prvdr *Provider) bootReserved(br bootReq, count int64) ([]string, error) {
 		ImageId:          aws.String(amis[prvdr.region]),
 		InstanceType:     aws.String(br.size),
 		UserData:         &cloudConfig64,
+		SubnetId:         &br.subnetID,
 		SecurityGroupIds: []*string{aws.String(br.groupID)},
 		BlockDeviceMappings: []*ec2.BlockDeviceMapping{
 			blockDevice(br.diskSize)},
@@ -170,6 +179,7 @@ func (prvdr *Provider) bootSpot(br bootReq, count int64) ([]string, error) {
 			ImageId:          aws.String(amis[prvdr.region]),
 			InstanceType:     aws.String(br.size),
 			UserData:         &cloudConfig64,
+			SubnetId:         &br.subnetID,
 			SecurityGroupIds: []*string{aws.String(br.groupID)},
 			BlockDeviceMappings: []*ec2.BlockDeviceMapping{
 				blockDevice(br.diskSize)}})
@@ -462,7 +472,7 @@ func (prvdr Provider) getInstanceID(spotID string) (string, error) {
 
 // SetACLs adds and removes acls in `prvdr` so that it conforms to `acls`.
 func (prvdr *Provider) SetACLs(acls []acl.ACL) error {
-	groupID, ingress, err := prvdr.getCreateSecurityGroup()
+	_, groupID, ingress, err := prvdr.setupNetwork()
 	if err != nil {
 		return err
 	}
@@ -494,25 +504,137 @@ func (prvdr *Provider) SetACLs(acls []acl.ACL) error {
 	return nil
 }
 
-func (prvdr *Provider) getCreateSecurityGroup() (
-	string, []*ec2.IpPermission, error) {
+func (prvdr *Provider) getSubnetID(vpcID string) (string, error) {
+	subnets, err := prvdr.DescribeSubnets()
+	if err != nil {
+		return "", err
+	}
+
+	for _, subnet := range subnets {
+		if *subnet.VpcId == vpcID {
+			return *subnet.SubnetId, nil
+		}
+	}
+	return "", fmt.Errorf("missing subnet in VPC %s", vpcID)
+}
+
+func (prvdr *Provider) setupNetwork() (
+	vpcID, sgID string, ingress []*ec2.IpPermission, err error) {
 
 	groups, err := prvdr.DescribeSecurityGroup(prvdr.namespace)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	} else if len(groups) > 1 {
 		err := errors.New("Multiple Security Groups with the same name: " +
 			prvdr.namespace)
-		return "", nil, err
+		return "", "", nil, err
 	} else if len(groups) == 1 {
-		return *groups[0].GroupId, groups[0].IpPermissions, nil
+		g := groups[0]
+		return *g.VpcId, *g.GroupId, g.IpPermissions, nil
 	}
 
-	id, err := prvdr.CreateSecurityGroup(prvdr.namespace, "Kelda Group")
-	return id, nil, err
+	var routeTables []*ec2.RouteTable
+	var ig *ec2.InternetGateway
+	var subnet *ec2.Subnet
+	var igID string
+	var vpc *ec2.Vpc
+
+	vpc, err = prvdr.CreateVpc(vpcBlock)
+	if err != nil {
+		goto rollback
+	}
+	vpcID = *vpc.VpcId
+
+	ig, err = prvdr.CreateInternetGateway()
+	if err != nil {
+		goto rollback
+	}
+	igID = *ig.InternetGatewayId
+
+	if err := prvdr.AttachInternetGateway(igID, vpcID); err != nil {
+		goto rollback
+	}
+
+	routeTables, err = prvdr.DescribeRouteTables(vpcID)
+	if err != nil {
+		goto rollback
+	}
+
+	if len(routeTables) != 1 {
+		err = fmt.Errorf("expected 1 route table, found %d", len(routeTables))
+		goto rollback
+	}
+
+	err = prvdr.CreateRoute(*routeTables[0].RouteTableId, "0.0.0.0/0", igID)
+	if err != nil {
+		goto rollback
+	}
+
+	subnet, err = prvdr.CreateSubnet(vpcID, subnetBlock)
+	if err != nil {
+		goto rollback
+	}
+
+	if err = prvdr.SubnetMapPublicIPOnLaunch(*subnet.SubnetId, true); err != nil {
+		goto rollback
+	}
+
+	sgID, err = prvdr.CreateSecurityGroup(prvdr.namespace, vpcID, "Kelda Group")
+	if err != nil {
+		goto rollback
+	}
+
+	err = prvdr.CreateTags([]*string{&vpcID, &igID}, prvdr.tagKey(), "")
+	if err != nil {
+		goto rollback
+	}
+
+	/* TODO test me again
+	err = errors.New("TODO")
+	goto rollback // TODO, test that rollback works */
+
+	return vpcID, sgID, nil, err
+
+rollback:
+	var vpcs []*ec2.Vpc
+	if vpc != nil {
+		vpcs = append(vpcs, vpc)
+	}
+
+	var igs []*ec2.InternetGateway
+	if ig != nil {
+		if vpc != nil {
+			// `ig` was defined at the time of the Internet Gateway's
+			// creation.  At this time the attachment wouldn't have been made
+			// yet, so it's attachemnts field will be empty.  To make sure
+			// the attachments are dealt with in cleanup(), we retroactively
+			// add it here.
+			ig.Attachments = append(ig.Attachments,
+				&ec2.InternetGatewayAttachment{
+					VpcId: vpc.VpcId,
+				})
+		}
+
+		igs = append(igs, ig)
+	}
+
+	var subnets []*ec2.Subnet
+	if subnet != nil {
+		subnets = append(subnets, subnet)
+	}
+
+	var sgIDs []string
+	if sgID != "" {
+		sgIDs = append(sgIDs, sgID)
+	}
+
+	if tmpErr := prvdr.cleanup(vpcs, igs, subnets, sgIDs); tmpErr != nil {
+		log.WithError(tmpErr).Warn("failed to rollback failed network setup")
+	}
+	return "", "", nil, err
 }
 
-// syncACLs returns the permissions that need to be removed and added in order
+// joinACLs returns the permissions that need to be removed and added in order
 // for the cloud ACLs to match the policy.
 // rangesToAdd is guaranteed to always have exactly one item in the IpRanges slice.
 func joinACLs(desiredACLs []acl.ACL, current []*ec2.IpPermission) (
@@ -610,23 +732,120 @@ func logACLs(add bool, perms []*ec2.IpPermission) {
 // Cleanup removes unnecessary detritus from this provider.  It's intended to be called
 // when there are no VMs running or expected to be running soon.
 func (prvdr *Provider) Cleanup() error {
+	vpcs, err := prvdr.DescribeVpcs(prvdr.tagKey())
+	if err != nil {
+		return err
+	}
+
+	igs, err := prvdr.DescribeInternetGateways(prvdr.tagKey())
+	if err != nil {
+		return err
+	}
+
+	subnets, err := prvdr.DescribeSubnets()
+	if err != nil {
+		return err
+	}
+
 	groups, err := prvdr.DescribeSecurityGroup(prvdr.namespace)
 	if err != nil {
 		return err
 	}
 
+	var sgIDs []string
 	for _, group := range groups {
-		log.WithFields(log.Fields{
-			"name":   *group.GroupName,
-			"id":     *group.GroupId,
-			"region": prvdr.region,
-		}).Debug("Amazon Delete Security Group")
-
-		if err := prvdr.DeleteSecurityGroup(*group.GroupId); err != nil {
-			return err
-		}
+		sgIDs = append(sgIDs, *group.GroupId)
 	}
 
+	return prvdr.cleanup(vpcs, igs, subnets, sgIDs)
+}
+
+// Cleanup network resources that are no longer needed.
+//
+// Note: CreateSecurityGroup() returns just the ID, not the full security group.  To make
+// cleanup() work when rolling back a faile create, this function just takes IDs as well.
+func (prvdr *Provider) cleanup(vpcs []*ec2.Vpc, igs []*ec2.InternetGateway,
+	subnets []*ec2.Subnet, sgIDs []string) error {
+
+	var failure bool
+
+	for _, sgID := range sgIDs {
+		fields := log.Fields{
+			"id":        sgID,
+			"namespace": prvdr.namespace,
+			"region":    prvdr.region,
+		}
+		if err := prvdr.DeleteSecurityGroup(sgID); err != nil {
+			fields["error"] = err
+			failure = true
+		}
+		log.WithFields(fields).Debug("Amazon Delete Security Group")
+	}
+
+	for _, ig := range igs {
+		fields := log.Fields{
+			"id":        *ig.InternetGatewayId,
+			"namespace": prvdr.namespace,
+			"region":    prvdr.region,
+		}
+
+		for _, attachment := range ig.Attachments {
+			err := prvdr.DetachInternetGateway(*ig.InternetGatewayId,
+				*attachment.VpcId)
+			if err != nil {
+				fields["error"] = err
+				failure = true
+			}
+		}
+
+		err := prvdr.DeleteInternetGateway(*ig.InternetGatewayId)
+		if err != nil {
+			fields["error"] = err
+			failure = true
+		}
+
+		log.WithFields(fields).Debug("Amazon Delete Internet Gateway")
+	}
+
+	vpcToSubnets := map[string][]string{}
+
+	for _, subnet := range subnets {
+		vpcID := *subnet.VpcId
+		subnetID := *subnet.SubnetId
+		vpcToSubnets[vpcID] = append(vpcToSubnets[vpcID], subnetID)
+	}
+
+	for _, vpc := range vpcs {
+		vpcID := *vpc.VpcId
+		for _, subnetID := range vpcToSubnets[vpcID] {
+			fields := log.Fields{
+				"id":        subnetID,
+				"namespace": prvdr.namespace,
+				"region":    prvdr.region,
+			}
+			if err := prvdr.DeleteSubnet(subnetID); err != nil {
+				fields["error"] = err
+				failure = true
+			}
+			log.WithFields(fields).Debug("Amazon Delete Subnet")
+		}
+
+		fields := log.Fields{
+			"id":        vpcID,
+			"namespace": prvdr.namespace,
+			"region":    prvdr.region,
+		}
+		if err := prvdr.DeleteVpc(vpcID); err != nil {
+			fields["error"] = err
+			failure = true
+		}
+		log.WithFields(fields).Debug("Amazon Delete Vpc")
+	}
+
+	if failure {
+		return fmt.Errorf("error cleaning up Amazon %s, %s",
+			prvdr.region, prvdr.namespace)
+	}
 	return nil
 }
 
@@ -688,6 +907,10 @@ func permToACLKey(permIntf interface{}) interface{} {
 	}
 
 	return key
+}
+
+func (prvdr *Provider) tagKey() string {
+	return fmt.Sprintf("kelda-%s", prvdr.namespace)
 }
 
 type ipPermSlice []*ec2.IpPermission

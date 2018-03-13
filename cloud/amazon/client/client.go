@@ -22,16 +22,37 @@ type Client interface {
 		[]*ec2.SpotInstanceRequest, error)
 	CancelSpotInstanceRequests(ids []string) error
 
+	DescribeVpcs(tagKey string) ([]*ec2.Vpc, error)
+	CreateVpc(cidrBlock string) (*ec2.Vpc, error)
+	DeleteVpc(vpcID string) error
+
+	DescribeInternetGateways(tagKey string) ([]*ec2.InternetGateway, error)
+	CreateInternetGateway() (*ec2.InternetGateway, error)
+	AttachInternetGateway(igID, vpcID string) error
+	DetachInternetGateway(igID, vpcID string) error
+	DeleteInternetGateway(igID string) error
+
+	DescribeRouteTables(vpcID string) ([]*ec2.RouteTable, error)
+	CreateRoute(rtID, cidrBlock, igID string) error
+
+	DescribeSubnets() ([]*ec2.Subnet, error)
+	CreateSubnet(vpcID, cidrBlock string) (*ec2.Subnet, error)
+	SubnetMapPublicIPOnLaunch(subnetID string, val bool) error
+	DeleteSubnet(subnetID string) error
+
 	DescribeSecurityGroup(name string) ([]*ec2.SecurityGroup, error)
-	CreateSecurityGroup(name, description string) (string, error)
+	CreateSecurityGroup(name, vpcID, description string) (string, error)
 	DeleteSecurityGroup(id string) error
 	AuthorizeSecurityGroup(groupID string, ranges []*ec2.IpPermission) error
 	RevokeSecurityGroup(groupID string, ranges []*ec2.IpPermission) error
+
 	DescribeAddresses() ([]*ec2.Address, error)
 	AssociateAddress(id, allocationID string) error
 	DisassociateAddress(associationID string) error
 
 	DescribeVolumes() ([]*ec2.Volume, error)
+
+	CreateTags(ids []*string, key, value string) error
 }
 
 type awsClient struct {
@@ -90,6 +111,145 @@ func (ac awsClient) CancelSpotInstanceRequests(ids []string) error {
 	return err
 }
 
+func (ac awsClient) DescribeSubnets() ([]*ec2.Subnet, error) {
+	c.Inc("Describe Subnets")
+	resp, err := ac.client.DescribeSubnets(nil)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Subnets, nil
+}
+
+func (ac awsClient) DescribeVpcs(tagKey string) ([]*ec2.Vpc, error) {
+	c.Inc("Describe Vpcs")
+	resp, err := ac.client.DescribeVpcs(&ec2.DescribeVpcsInput{
+		Filters: []*ec2.Filter{{
+			Name:   aws.String("tag-key"),
+			Values: []*string{&tagKey},
+		}}})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Vpcs, nil
+}
+
+func (ac awsClient) CreateVpc(cidrBlock string) (*ec2.Vpc, error) {
+	c.Inc("Create VPC")
+	resp, err := ac.client.CreateVpc(&ec2.CreateVpcInput{
+		CidrBlock: &cidrBlock,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Vpc, nil
+}
+func (ac awsClient) DeleteVpc(vpcID string) error {
+	c.Inc("Delete VPC")
+	_, err := ac.client.DeleteVpc(&ec2.DeleteVpcInput{
+		VpcId: &vpcID,
+	})
+	return err
+}
+
+func (ac awsClient) DescribeInternetGateways(tagKey string) (
+	[]*ec2.InternetGateway, error) {
+	c.Inc("Describe Internet Gateways")
+	resp, err := ac.client.DescribeInternetGateways(
+		&ec2.DescribeInternetGatewaysInput{
+			Filters: []*ec2.Filter{{
+				Name:   aws.String("tag-key"),
+				Values: []*string{&tagKey},
+			}}})
+	if err != nil {
+		return nil, err
+	}
+	return resp.InternetGateways, nil
+}
+
+func (ac awsClient) CreateInternetGateway() (*ec2.InternetGateway, error) {
+	c.Inc("Create Internet Gateway")
+	resp, err := ac.client.CreateInternetGateway(&ec2.CreateInternetGatewayInput{})
+	return resp.InternetGateway, err
+}
+
+func (ac awsClient) AttachInternetGateway(igID, vpcID string) error {
+	c.Inc("Attach Internet Gateway")
+	_, err := ac.client.AttachInternetGateway(&ec2.AttachInternetGatewayInput{
+		InternetGatewayId: &igID,
+		VpcId:             &vpcID,
+	})
+	return err
+}
+
+func (ac awsClient) DetachInternetGateway(igID, vpcID string) error {
+	c.Inc("Detach Internet Gateway")
+	_, err := ac.client.DetachInternetGateway(&ec2.DetachInternetGatewayInput{
+		InternetGatewayId: &igID,
+		VpcId:             &vpcID,
+	})
+	return err
+}
+
+func (ac awsClient) DescribeRouteTables(vpcID string) (
+	[]*ec2.RouteTable, error) {
+	c.Inc("Describe Route Tables")
+	resp, err := ac.client.DescribeRouteTables(
+		&ec2.DescribeRouteTablesInput{
+			Filters: []*ec2.Filter{{
+				Name:   aws.String("vpc-id"),
+				Values: []*string{&vpcID},
+			}}})
+	if err != nil {
+		return nil, err
+	}
+	return resp.RouteTables, nil
+}
+
+func (ac awsClient) CreateRoute(rtID, cidrBlock, igID string) error {
+	c.Inc("Create Internet Gateway")
+	_, err := ac.client.CreateRoute(&ec2.CreateRouteInput{
+		GatewayId:            &igID,
+		RouteTableId:         &rtID,
+		DestinationCidrBlock: &cidrBlock,
+	})
+	return err
+}
+
+func (ac awsClient) DeleteInternetGateway(igID string) error {
+	c.Inc("Delete Internet Gateway")
+	_, err := ac.client.DeleteInternetGateway(&ec2.DeleteInternetGatewayInput{
+		InternetGatewayId: &igID,
+	})
+	return err
+}
+
+func (ac awsClient) CreateSubnet(vpcID, cidrBlock string) (*ec2.Subnet, error) {
+	c.Inc("Create Subnet")
+	resp, err := ac.client.CreateSubnet(&ec2.CreateSubnetInput{
+		CidrBlock: &cidrBlock,
+		VpcId:     &vpcID,
+	})
+	return resp.Subnet, err
+}
+
+func (ac awsClient) SubnetMapPublicIPOnLaunch(subnetID string, val bool) error {
+	c.Inc("Modify Subnet Attribute")
+	_, err := ac.client.ModifySubnetAttribute(&ec2.ModifySubnetAttributeInput{
+		SubnetId:            &subnetID,
+		MapPublicIpOnLaunch: &ec2.AttributeBooleanValue{Value: &val},
+	})
+	return err
+}
+
+func (ac awsClient) DeleteSubnet(subnetID string) error {
+	c.Inc("Delete Subnet")
+	_, err := ac.client.DeleteSubnet(&ec2.DeleteSubnetInput{
+		SubnetId: &subnetID,
+	})
+	return err
+}
+
 func (ac awsClient) DescribeSecurityGroup(name string) ([]*ec2.SecurityGroup, error) {
 	c.Inc("List Security Groups")
 	resp, err := ac.client.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
@@ -102,11 +262,12 @@ func (ac awsClient) DescribeSecurityGroup(name string) ([]*ec2.SecurityGroup, er
 	return resp.SecurityGroups, err
 }
 
-func (ac awsClient) CreateSecurityGroup(name, description string) (string, error) {
+func (ac awsClient) CreateSecurityGroup(name, vpcID, desc string) (string, error) {
 	c.Inc("Create Security Group")
 	csgResp, err := ac.client.CreateSecurityGroup(&ec2.CreateSecurityGroupInput{
 		GroupName:   &name,
-		Description: &description})
+		VpcId:       &vpcID,
+		Description: &desc})
 	if err != nil {
 		return "", err
 	}
@@ -172,6 +333,15 @@ func (ac awsClient) DescribeVolumes() ([]*ec2.Volume, error) {
 		return nil, err
 	}
 	return resp.Volumes, err
+}
+
+func (ac awsClient) CreateTags(ids []*string, key, value string) error {
+	c.Inc("Create Tags")
+	_, err := ac.client.CreateTags(&ec2.CreateTagsInput{
+		Resources: ids,
+		Tags:      []*ec2.Tag{{Key: &key, Value: &value}},
+	})
+	return err
 }
 
 // New creates a new Client.

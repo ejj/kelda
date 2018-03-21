@@ -36,7 +36,8 @@ type awsMachine struct {
 }
 
 const (
-	spotPrice = "0.5"
+	spotPrice   = "0.5"
+	subnetBlock = "172.31.0.0/20"
 )
 
 // Regions is the list of supported AWS regions.
@@ -466,21 +467,17 @@ func (prvdr *Provider) SetACLs(acls []acl.ACL) error {
 		return err
 	}
 
-	rangesToAdd, foundGroup, rulesToRemove := syncACLs(acls, groupID, ingress)
+	acls = append(acls, acl.ACL{
+		CidrIP:  subnetBlock,
+		MinPort: 0,
+		MaxPort: 65535,
+	})
+
+	rangesToAdd, rulesToRemove := joinACLs(acls, ingress)
 
 	if len(rangesToAdd) != 0 {
 		logACLs(true, rangesToAdd)
-		err = prvdr.AuthorizeSecurityGroup(
-			prvdr.namespace, "", rangesToAdd)
-		if err != nil {
-			return err
-		}
-	}
-
-	if !foundGroup {
-		log.WithField("Group", prvdr.namespace).Debug("Amazon: Add group")
-		err = prvdr.AuthorizeSecurityGroup(
-			prvdr.namespace, prvdr.namespace, nil)
+		err = prvdr.AuthorizeSecurityGroup(groupID, rangesToAdd)
 		if err != nil {
 			return err
 		}
@@ -488,7 +485,7 @@ func (prvdr *Provider) SetACLs(acls []acl.ACL) error {
 
 	if len(rulesToRemove) != 0 {
 		logACLs(false, rulesToRemove)
-		err = prvdr.RevokeSecurityGroup(prvdr.namespace, rulesToRemove)
+		err = prvdr.RevokeSecurityGroup(groupID, rulesToRemove)
 		if err != nil {
 			return err
 		}
@@ -518,9 +515,8 @@ func (prvdr *Provider) getCreateSecurityGroup() (
 // syncACLs returns the permissions that need to be removed and added in order
 // for the cloud ACLs to match the policy.
 // rangesToAdd is guaranteed to always have exactly one item in the IpRanges slice.
-func syncACLs(desiredACLs []acl.ACL, desiredGroupID string,
-	current []*ec2.IpPermission) (rangesToAdd []*ec2.IpPermission, foundGroup bool,
-	toRemove []*ec2.IpPermission) {
+func joinACLs(desiredACLs []acl.ACL, current []*ec2.IpPermission) (
+	toAdd, toRemove []*ec2.IpPermission) {
 
 	var currRangeRules []*ec2.IpPermission
 	for _, perm := range current {
@@ -533,17 +529,6 @@ func syncACLs(desiredACLs []acl.ACL, desiredGroupID string,
 					ipRange,
 				},
 			})
-		}
-		for _, pair := range perm.UserIdGroupPairs {
-			if *pair.GroupId != desiredGroupID {
-				toRemove = append(toRemove, &ec2.IpPermission{
-					UserIdGroupPairs: []*ec2.UserIdGroupPair{
-						pair,
-					},
-				})
-			} else {
-				foundGroup = true
-			}
 		}
 	}
 
@@ -579,16 +564,16 @@ func syncACLs(desiredACLs []acl.ACL, desiredGroupID string,
 		})
 	}
 
-	_, toAdd, rangesToRemove := join.HashJoin(ipPermSlice(desiredRangeRules),
+	_, rangesToAdd, rangesToRemove := join.HashJoin(ipPermSlice(desiredRangeRules),
 		ipPermSlice(currRangeRules), permToACLKey, permToACLKey)
-	for _, intf := range toAdd {
-		rangesToAdd = append(rangesToAdd, intf.(*ec2.IpPermission))
+	for _, intf := range rangesToAdd {
+		toAdd = append(toAdd, intf.(*ec2.IpPermission))
 	}
 	for _, intf := range rangesToRemove {
 		toRemove = append(toRemove, intf.(*ec2.IpPermission))
 	}
 
-	return rangesToAdd, foundGroup, toRemove
+	return toAdd, toRemove
 }
 
 func logACLs(add bool, perms []*ec2.IpPermission) {

@@ -25,8 +25,8 @@ type Client interface {
 	DescribeSecurityGroup(name string) ([]*ec2.SecurityGroup, error)
 	CreateSecurityGroup(name, description string) (string, error)
 	DeleteSecurityGroup(id string) error
-	AuthorizeSecurityGroup(name, src string, ranges []*ec2.IpPermission) error
-	RevokeSecurityGroup(name string, ranges []*ec2.IpPermission) error
+	AuthorizeSecurityGroup(groupID string, ranges []*ec2.IpPermission) error
+	RevokeSecurityGroup(groupID string, ranges []*ec2.IpPermission) error
 	DescribeAddresses() ([]*ec2.Address, error)
 	AssociateAddress(id, allocationID string) error
 	DisassociateAddress(associationID string) error
@@ -120,28 +120,23 @@ func (ac awsClient) DeleteSecurityGroup(id string) error {
 	return err
 }
 
-func (ac awsClient) AuthorizeSecurityGroup(name, src string,
+func (ac awsClient) AuthorizeSecurityGroup(groupID string,
 	ranges []*ec2.IpPermission) error {
 	c.Inc("Authorize Security Group")
 
-	var srcPtr *string
-	if src != "" {
-		srcPtr = &src
-	}
-
 	_, err := ac.client.AuthorizeSecurityGroupIngress(
 		&ec2.AuthorizeSecurityGroupIngressInput{
-			GroupName:               &name,
-			SourceSecurityGroupName: srcPtr,
-			IpPermissions:           ranges})
+			GroupId:       &groupID,
+			IpPermissions: ranges})
 	return err
 }
 
-func (ac awsClient) RevokeSecurityGroup(name string, ranges []*ec2.IpPermission) error {
+func (ac awsClient) RevokeSecurityGroup(groupID string,
+	ranges []*ec2.IpPermission) error {
 	c.Inc("Revoke Security Group")
 	_, err := ac.client.RevokeSecurityGroupIngress(
 		&ec2.RevokeSecurityGroupIngressInput{
-			GroupName:     &name,
+			GroupId:       &groupID,
 			IpPermissions: ranges})
 	return err
 }
